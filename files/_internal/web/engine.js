@@ -353,6 +353,16 @@ window.PBK = (function () {
     }
     return out;
   }
+  /* page.bg → `.pg` 에 붙일 인라인 style 문자열(없으면 빈 문자열) */
+  function pageBgStyle(page) {
+    var b = page && page.bg;
+    if (!b || typeof b !== 'object') return '';
+    var c = String(b.c || '');
+    if (!/^#[0-9a-fA-F]{6}$/.test(c)) return '';
+    /* 단축 속성으로 덮어써야 레이아웃이 깔아둔 그라데이션·이미지까지 확실히 치운다 */
+    return ' style="background:' + c + '"';
+  }
+
   function render(page, opts) {
     opts = opts || {};
     var def = byId(page.layout);
@@ -361,6 +371,12 @@ window.PBK = (function () {
     /* cqw 단위는 컨테이너(.sheet)의 "자손"에서만 확실히 풀리므로
        레이아웃 클래스는 내부 래퍼(.pg)에 얹는다 */
     var cls = 'pg ' + def.cls + (page.mir && def.mir ? ' mir' : '') + (def.dark ? ' dark' : '') + txoCls(page);
+    /* 페이지별 배경 오버라이드(page.bg) — 없으면 예전과 똑같이 동작한다.
+       ⚠ 반드시 `.pg` 자기 자신에 인라인으로 얹는다.
+          · 레이아웃 클래스(.cover{background:var(--cover)} 등)와 같은 엘리먼트라 인라인이 이긴다.
+          · 자식 요소로 넣으면 부분편집의 '자식 인덱스 경로'가 한 칸씩 밀려 다 깨진다. */
+    var bgSty = pageBgStyle(page);
+    if (bgSty) cls += ' pgbg';
     var inner = def.h(c);
     if (def.pnum !== false && opts.pnum != null) {
       inner += '<span class="pnum' + (def.pnumLeft ? ' pl' : '') + '">' +
@@ -368,7 +384,7 @@ window.PBK = (function () {
     }
     inner += freeTexts(page, c, opts.mode || 'edit'); /* 자유 텍스트는 항상 맨 뒤·맨 위 */
     inner += stickers(page); /* 소품은 그 뒤 — els 자식 인덱스 경로를 안 민다 */
-    var html = '<div class="sheet"><div class="' + cls + '">' + inner + '</div></div>';
+    var html = '<div class="sheet"><div class="' + cls + '"' + bgSty + '>' + inner + '</div></div>';
     return applyParts(html, page, opts.mode || 'edit');
   }
 
