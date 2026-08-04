@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-04_v6 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-05_v7 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -668,7 +668,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-04 v6</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-05 v7</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -3914,8 +3914,12 @@ window.gifenc=exports;})();
     for (var i = 0; i < boxes.length; i++) {
       var b = boxes[i];
       if (!b || b.getAttribute('data-page') !== String(pageIdx)) continue;
-      var im = b.querySelector('img[data-pi="' + slotIdx + '"]');
-      if (im) return im;
+      /* ⚠ 같은 사진을 여러 칸에 그리는 레이아웃이 있다(sf-blur 는 '흐린 배경'+'카드',
+         sf-idsheet 는 증명사진 4칸). 첫 노드를 잡으면 sf-blur 에서 페이지보다 큰
+         '흐린 배경칸' 을 집어서, 사진을 넣을 때 자동맞춤이 카드가 아니라 배경 기준으로
+         잡히고 선택 핸들도 엉뚱한 데 그려졌다. → 맨 위(문서상 마지막) 칸을 쓴다. */
+      var ims = b.querySelectorAll('img[data-pi="' + slotIdx + '"]');
+      if (ims.length) return ims[ims.length - 1];
     }
     /* 그 페이지가 지금 안 떠 있으면 없는 것으로 — 예전엔 여기서 아무 페이지의
        같은 번호 칸을 집어줘서 옆 페이지 칸 크기로 계산하는 사고가 났다.
@@ -16695,16 +16699,16 @@ window.gifenc=exports;})();
       $u('updTitle').textContent = (manual ? '새 버전이 나왔어요' : '새 업데이트가 있어요') +
         ' (' + (info.latest || '') + ')';
       if (manual) {
-        $u('updSub').textContent = (info.reason || '프로그램 본체가 바뀐 업데이트예요') +
-          ' — 프로그램이 켜져 있는 동안은 바꿀 수 없어요.' +
-          (info.page ? ' 받는 곳에서 받아 덮어써 주세요.'
-                     : ' 받는 곳 주소가 설정돼 있지 않아요 — 만드신 분께 문의해 주세요.');
+        $u('updSub').textContent = (info.reason || '자동으로 설치할 수 없는 상태예요') +
+          (info.page ? ' — 받는 곳에서 받아 덮어써 주세요.'
+                     : ' — 받는 곳 주소가 설정돼 있지 않아요. 만드신 분께 문의해 주세요.');
         $u('updGo').textContent = info.page ? '받는 곳 열기' : '닫기';
       } else {
         $u('updSub').textContent = '받을 용량 ' + mb(info.bytes || 0) +
           ' · 파일 ' + (info.files || []).length + '개' +
           ((info.delete || []).length ? (' · 지울 파일 ' + info.delete.length + '개') : '') +
-          ' · 지금 쓰는 버전 ' + (info.have || '알 수 없음');
+          ' · 지금 쓰는 버전 ' + (info.have || '알 수 없음') +
+          (info.needRestart ? '\n※ 프로그램 본체가 바뀌어요 — 받은 뒤 다시 시작해야 적용됩니다.' : '');
         $u('updGo').textContent = '지금 받기';
       }
       $u('updLater').textContent = '나중에';
@@ -16804,7 +16808,9 @@ window.gifenc=exports;})();
           $u('updSub').textContent = '다시 시작해야 적용돼요. (' + o.applied + '개 파일' +
             (o.removed ? (', 정리 ' + o.removed + '개') : '') + ')';
           $u('updNotes').textContent =
-            '⚠ 다시 시작하기 전까지는 화면이 아직 예전 코드예요.\n' +
+            (o.needRestart
+              ? '⚠ 프로그램 본체가 바뀌었어요 — 반드시 다시 시작해야 적용됩니다.\n'
+              : '⚠ 다시 시작하기 전까지는 화면이 아직 예전 코드예요.\n') +
             '이 상태로 내보내기를 하면 결과가 섞일 수 있으니, 지금 다시 시작하시는 걸 권해요.\n' +
             '저장 안 한 작업이 있으면 먼저 저장해 주세요.';
           $u('updLater').textContent = '나중에 하기';
