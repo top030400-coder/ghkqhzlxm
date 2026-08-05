@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-05_v13 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-05_v14 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -109,7 +109,19 @@
   #spreadNav button{width:34px;height:34px;border-radius:50%;font-size:17px;line-height:1;padding:0}
   #spLabel{font-size:12px;color:#6f6d63;letter-spacing:.12em;min-width:80px;text-align:center}
   .hint{font-size:11.5px;color:#98958a}
-    .hint.hintWarn{color:#a4521a;background:#fff4e6;border-radius:8px;padding:6px 10px}
+    .askOv{position:fixed;inset:0;z-index:9900;display:flex;align-items:center;justify-content:center;
+    background:rgba(24,26,31,.5)}
+  .askOv .askBox{width:min(400px,90vw);background:#faf9f4;color:#262623;border-radius:14px;
+    padding:20px 22px 16px;box-shadow:0 18px 50px rgba(0,0,0,.3);font-size:13px}
+  .askOv h3{margin:0 0 8px;font-size:15px}
+  .askOv .askHint{margin:0 0 12px;color:#6b675c;font-size:12px;line-height:1.6}
+  .askOv input{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #c9c6ba;
+    border-radius:8px;font-size:14px;background:#fff;color:#262623}
+  .askOv .askBtns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+  .askOv button{padding:8px 14px;border-radius:8px;border:1px solid #c9c6ba;background:#fff;
+    cursor:pointer;font-size:13px}
+  .askOv button.pri{background:#2b2f38;color:#f4f3ee;border-color:#2b2f38}
+  .hint.hintWarn{color:#a4521a;background:#fff4e6;border-radius:8px;padding:6px 10px}
 
   #inspector{width:300px;flex:none;background:#f7f5ee;border-left:1px solid #ddd9cd;
     display:flex;flex-direction:column;overflow-y:auto;padding:14px}
@@ -661,18 +673,6 @@
   ::-webkit-scrollbar-thumb:hover{background:#a5a193}
   #pageList ::-webkit-scrollbar-thumb,#inspector ::-webkit-scrollbar-thumb,
   #bnList ::-webkit-scrollbar-thumb,#bnInspector ::-webkit-scrollbar-thumb{border-color:var(--pp-panel)}
-  /* ── 본체 옛 판 안내 ── */
-  #obOv{position:fixed;inset:0;z-index:9800;display:flex;align-items:center;justify-content:center;
-    background:rgba(24,26,31,.5)}
-  #obOv .obBox{width:min(430px,90vw);background:#faf9f4;color:#262623;border-radius:14px;
-    padding:22px 24px 18px;box-shadow:0 18px 50px rgba(0,0,0,.3);font-size:13px;line-height:1.75}
-  #obOv h3{margin:0 0 10px;font-size:16px}
-  #obOv p{margin:0 0 10px}
-  #obOv .obDim{color:#6b675c;font-size:12px}
-  #obOv .obBtns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
-  #obOv button{padding:8px 14px;border-radius:8px;border:1px solid #c9c6ba;background:#fff;
-    cursor:pointer;font-size:13px}
-  #obOv button.pri{background:#2b2f38;color:#f4f3ee;border-color:#2b2f38}
 
 </style>
 </head>
@@ -682,7 +682,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-05 v13</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-05 v14</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -699,6 +699,7 @@
   <div class="tgroup">
     <button id="btnUndo" title="실행취소 (Ctrl+Z)" disabled>↶</button>
     <button id="btnRedo" title="다시실행 (Ctrl+Y)" disabled>↷</button>
+    <button id="btnRevert" title="마지막으로 저장한 상태로 되돌리기" disabled>↺ 저장 시점</button>
   </div>
   <div class="tsep"></div>
   <div class="tgroup" id="palGroup">
@@ -785,8 +786,8 @@
     <!-- 편집 탭 전용 — 캔버스 크기 패널 (editOn일 때만 보임 — CSS로 제어) -->
     <div id="edPanel">
       <div class="insSec" style="margin-top:0">캔버스 크기</div>
-      <div class="ckRow">가로 <input type="number" id="edW" min="64" max="4096" step="10" style="width:64px">
-        × 세로 <input type="number" id="edH" min="64" max="4096" step="10" style="width:64px"></div>
+      <div class="ckRow">가로 <input type="number" id="edW" min="16" max="4096" step="10" style="width:64px">
+        × 세로 <input type="number" id="edH" min="16" max="4096" step="10" style="width:64px"></div>
       <div id="edPre">
         <button data-s="420,420">⭕ 프사 420</button>
         <button data-s="2320,338">⬆ 상단 배너</button>
@@ -2148,11 +2149,40 @@ window.gifenc=exports;})();
   function fbase2(p) { return String(p || '').replace(/^.*[\\/]/, ''); }
   function fkey(f) { return (fbase(f.path) || String(f.path || '')) + '|' + (f.num || 0); }
   function kitFaceName(f) { return 'PBKF_' + fhash(fkey(f)); }
-  function famFor(f) {
+  /* 시스템 글꼴 목록의 이름은 '맑은 고딕 Bold' 처럼 패밀리+굵기가 붙은 라벨이다.
+     CSS 에 그런 패밀리는 없어서 그대로 쓰면 통째로 폴백된다 — 화면·PNG·배너·움짤은
+     바탕으로 그려지는데 EXE/HTML 만 제대로 나와서 결과가 서로 달라졌다.
+     파이썬이 fam_base(진짜 패밀리)와 sub(굵기/기울임)를 따로 내려주므로 그걸로 나눠 쓴다.
+     ⚠ Light·Semilight·Black 처럼 윈도우가 별도 패밀리로 쪼개주는 것은 지금도 잘 되므로
+        건드리지 않는다. 통째로 폴백되는 Bold / Italic / Bold Italic 만 나눈다. */
+  var SUB_SPLIT = /^(bold|italic|bold\s*italic)$/i;
+  function faceOf(f) {
     if (!f) return null;
-    var fam = f.src === 'kit' ? kitFaceName(f) : f.fam;
+    if (f.src === 'kit') return { fam: kitFaceName(f), w: '', st: '' };
+    var g = f;
+    /* 저장된 프로젝트엔 fam_base 가 없다(옛 스펙) → 목록에서 되찾아 보충한다 */
+    if (!g.fam_base) g = findFont(f) || f;
+    var sub = String(g.sub || '').trim();
+    if (g.fam_base && SUB_SPLIT.test(sub)) {
+      return { fam: g.fam_base,
+               w: /bold/i.test(sub) ? '700' : '',
+               st: /italic/i.test(sub) ? 'italic' : '' };
+    }
+    return { fam: g.fam || f.fam, w: '', st: '' };
+  }
+  function famFor(f) {
+    var fc = faceOf(f);
+    if (!fc) return null;
     /* 글꼴 이름에 따옴표가 든 폰트가 드물게 있다 — 안 지우면 style 속성이 중간에 끊긴다 */
-    return "'" + String(fam).replace(/['"]/g, '') + "','Noto Serif KR','Batang',serif";
+    return "'" + String(fc.fam).replace(/['"]/g, '') + "','Noto Serif KR','Batang',serif";
+  }
+  /* font-family 뒤에 같이 붙여야 하는 굵기·기울임.
+     ⚠ 완성본(EXE/HTML)에는 붙이지 않는다 — 거기선 굵은 글꼴 파일 자체를 심으므로
+        여기서 또 굵게 하면 이중으로 굵어진다(가짜 굵기). */
+  function faceExtra(f) {
+    var fc = faceOf(f);
+    if (!fc) return '';
+    return (fc.w ? ';font-weight:' + fc.w : '') + (fc.st ? ';font-style:' + fc.st : '');
   }
   /* 폰트 고르는 목록의 각 줄을 "그 글꼴로" 보여준다(서체 견본).
      시스템 폰트는 이름만 지정하면 웹뷰가 그 글꼴로 그린다.
@@ -2177,7 +2207,12 @@ window.gifenc=exports;})();
     } else {
       fam = ft.fam;
     }
+    var fc4 = faceOf(ft);
+    if (fc4) fam = fc4.fam;
     o.style.fontFamily = "'" + String(fam).replace(/'/g, '') + "','Malgun Gothic',sans-serif";
+    /* 견본도 실제 굵기·기울임으로 — 안 그러면 'X Bold' 줄이 전부 같아 보여 못 고른다 */
+    o.style.fontWeight = (fc4 && fc4.w) || '';
+    o.style.fontStyle = (fc4 && fc4.st) || '';
     o.style.fontSize = '14px';
   }
   function findFont(spec) {
@@ -2593,6 +2628,10 @@ window.gifenc=exports;})();
       if (f) {
         var fam = famResolve ? famResolve(f) : famFor(f);
         if (fam) parts.push('font-family:' + fam);
+        if (!famResolve) {                       /* 완성본이 아닐 때만 굵기·기울임을 얹는다 */
+          var ex = faceExtra(f);
+          if (ex) parts.push(ex.slice(1));
+        }
       }
       var sz = pg.tsizes && pg.tsizes[k];
       if (sz && sz !== 100) parts.push('font-size:' + (sz / 100) + 'em');
@@ -2811,6 +2850,33 @@ window.gifenc=exports;})();
     refreshThumb(cur);
     updatePartsPanel();
   }
+  /* 이름을 물어보는 작은 창. 웹뷰의 prompt() 는 임베드 환경에 따라 안 뜨거나
+     화면을 통째로 붙잡을 수 있어서, 화면 안에 직접 만든다. 약속(Promise)으로 답을 준다.
+     취소하면 null 을 돌려준다. */
+  function askName(title, hint, value) {
+    return new Promise(function (res) {
+      var ov = document.createElement('div');
+      ov.className = 'askOv';
+      ov.innerHTML = '<div class="askBox"><h3></h3><p class="askHint"></p>'
+        + '<input id="askInp" maxlength="80" spellcheck="false">'
+        + '<div class="askBtns"><button id="askNo">취소</button>'
+        + '<button id="askYes" class="pri">확인</button></div></div>';
+      ov.querySelector('h3').textContent = title;
+      ov.querySelector('.askHint').textContent = hint || '';
+      document.body.appendChild(ov);
+      var inp = ov.querySelector('#askInp');
+      inp.value = value == null ? '' : String(value);
+      function done(v) { if (ov.parentNode) ov.parentNode.removeChild(ov); res(v); }
+      ov.querySelector('#askNo').onclick = function () { done(null); };
+      ov.querySelector('#askYes').onclick = function () { done(inp.value); };
+      inp.onkeydown = function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); done(inp.value); }
+        else if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      };
+      setTimeout(function () { inp.focus(); inp.select(); }, 30);
+    });
+  }
+
   /* 잠깐 떴다 사라지는 알림 — 조용히 뭔가 해제할 때 사용자가 알 수 있게 */
   var toastT = null;
   function toast(msg) {
@@ -3300,7 +3366,8 @@ window.gifenc=exports;})();
         if (i < 0) { delete pg.tfonts[f.k]; fs.classList.remove('on'); }
         else {
           var ft = FONTS[i];
-          pg.tfonts[f.k] = { fam: ft.fam, path: ft.path, file: (ft.file || fbase2(ft.path)), num: ft.num || 0, src: ft.src };
+          pg.tfonts[f.k] = { fam: ft.fam, fam_base: ft.fam_base || '', sub: ft.sub || '',
+            path: ft.path, file: (ft.file || fbase2(ft.path)), num: ft.num || 0, src: ft.src };
           fs.classList.add('on');
         }
         applyFonts();
@@ -3465,7 +3532,8 @@ window.gifenc=exports;})();
       if (i < 0) { delete pg.tfonts[key]; fs.classList.remove('on'); }
       else {
         var ft = FONTS[i];
-        pg.tfonts[key] = { fam: ft.fam, path: ft.path, file: (ft.file || fbase2(ft.path)), num: ft.num || 0, src: ft.src };
+        pg.tfonts[key] = { fam: ft.fam, fam_base: ft.fam_base || '', sub: ft.sub || '',
+            path: ft.path, file: (ft.file || fbase2(ft.path)), num: ft.num || 0, src: ft.src };
         fs.classList.add('on');
       }
       applyFonts();
@@ -4821,8 +4889,12 @@ window.gifenc=exports;})();
       if (mode === 'export') {
         /* 오버라이드 폰트는 PBF_<해시> 가족명으로 — 파이썬이 서브셋해 임베드 */
         tstyle = tstyleOf(pg, function (f) {
-          var key = 'PBF_' + fhash(fkey(f));
-          if (extrasOut) extrasOut[key] = { path: f.path, num: f.num || 0 };
+          /* ⚠ 저장된 경로를 그대로 믿으면 안 된다. 폴더 이름을 바꾸거나 다른 PC 로 옮기면
+             그 경로가 없어서 파이썬이 글꼴을 못 심는데, 편집 화면·PNG 는 findFont 폴백으로
+             멀쩡히 보여서 "완성본만 글꼴이 빠졌다" 가 된다(경고도 안 뜬다). 여기서도 되찾는다. */
+          var g = findFont(f) || f;
+          var key = 'PBF_' + fhash(fkey(g));
+          if (extrasOut) extrasOut[key] = { path: g.path, num: g.num || 0 };
           return "'" + key + "',serif";
         });
       } else {
@@ -5043,7 +5115,8 @@ window.gifenc=exports;})();
     var fonts = {};
     ['disp', 'body'].forEach(function (slot) {
       var f = book.fonts[slot];
-      fonts[slot] = f ? { path: f.path, num: f.num || 0 } : null;
+      var g = f ? (findFont(f) || f) : null;   /* 옮긴 프로젝트도 글꼴을 되찾아 심는다 */
+      fonts[slot] = g ? { path: g.path, num: g.num || 0 } : null;
     });
     var extras = {};
     var html = buildBookHTML('export', '/*PBK_FONT_CSS*/', extras);
@@ -5079,13 +5152,97 @@ window.gifenc=exports;})();
   $('#btnExport').onclick = function () { doExport('exe'); };
   $('#btnExportHtml').onclick = function () { doExport('html'); };
 
-  /* ================= 저장 · 열기 · 새 책 ================= */
+  /* ================= 저장 · 열기 · 새 책 =================
+     ⚠ '마지막으로 저장한 상태' 를 따로 붙잡아 둔다. 예전엔 저장 뒤 30분을 만지다가
+        "아까가 나았다" 고 판단해도 돌아갈 방법이 없었다(Ctrl+Z 를 어디까지 눌러야
+        저장 시점인지 표시가 없고, 히스토리는 개수·용량으로 잘리기도 한다). */
+  var savedSnap = null;
+  function markSaved() {
+    markDirty(false);
+    savedSnap = histNow();
+    var rb = $('#btnRevert');
+    if (rb) rb.disabled = !savedSnap;
+    bakClear();            /* 저장했으면 비상 백업은 필요 없다 */
+  }
+
+  /* ── 비상 백업 (60초마다) ────────────────────────────────
+     앱이 죽거나 실수로 창을 닫으면 지금까지는 전부 사라졌다. 되살릴 수 있게
+     '틀'(레이아웃·문구·배치·소품)만 브라우저 저장소에 남긴다.
+     ⚠ 사진과 그린 그림(b64)은 담지 않는다 — 수백 MB라 저장소에 안 들어간다.
+        그래서 되살리면 사진칸은 비어 있다. 그 사실을 안내에 정직하게 적는다. */
+  var BAK_KEY = 'pbkCrashBak';
+  var BAK_MAX = 4 * 1024 * 1024;      /* 이보다 크면 아예 안 남긴다(거짓 안심 금지) */
+  function bakLight() {
+    try {
+      return JSON.stringify(book, function (k, v) {
+        if (k === 'b64' || k === 'ckFromB64') return undefined;
+        return v;
+      });
+    } catch (e) { return null; }
+  }
+  function bakSave() {
+    if (!book || !dirty) return;
+    var s = bakLight();
+    if (!s || s.length > BAK_MAX) return;
+    try {
+      localStorage.setItem(BAK_KEY, JSON.stringify({ t: Date.now(), pages: book.pages.length, book: s }));
+    } catch (e) {}       /* 저장소가 꽉 차도 편집은 계속 */
+  }
+  function bakClear() {
+    try { localStorage.removeItem(BAK_KEY); } catch (e) {}
+  }
+  setInterval(bakSave, 60000);
+  /* 켤 때 한 번 — 저장 안 하고 꺼진 작업이 있으면 물어본다 */
+  function bakOffer() {
+    var raw = null;
+    try { raw = localStorage.getItem(BAK_KEY); } catch (e) {}
+    if (!raw) return;
+    var d = null;
+    try { d = JSON.parse(raw); } catch (e) { bakClear(); return; }
+    if (!d || !d.book) { bakClear(); return; }
+    var mins = Math.max(1, Math.round((Date.now() - (d.t || 0)) / 60000));
+    var when = mins < 60 ? mins + '분 전' : Math.round(mins / 60) + '시간 전';
+    if (!confirm('저장하지 않고 종료된 작업이 있어요. (' + when + ' · ' + (d.pages || 0) + '쪽)\n\n'
+        + '되살릴까요?\n'
+        + '※ 레이아웃·글·배치·소품은 그대로 살아나지만,\n'
+        + '   사진과 그린 그림은 다시 넣으셔야 해요.')) { bakClear(); return; }
+    try {
+      book = normBook(JSON.parse(d.book));
+    } catch (e) { alert('되살리지 못했어요.'); bakClear(); return; }
+    cur = 0; bookSel = null; stkSel = null; freeSel = null; partSel = null;
+    prevPal = book._prevPal || null;
+    $('#autoPalChk').checked = !!book.autoPal;
+    bnUidCatchUp();
+    applyPalette(); applyFonts(); refreshAll(); refreshBnAll();
+    restoreArtLayers();
+    histReset();
+    markDirty(true);       /* 아직 파일로는 저장 안 된 상태다 */
+    savedSnap = null;
+    bakClear();
+    toast('되살렸어요 — 사진은 다시 넣어주세요.');
+  }
+  $('#btnRevert').onclick = function () {
+    if (!savedSnap) return;
+    if (histNow() === savedSnap) return alert('이미 저장한 상태와 같아요.');
+    if (!confirm('마지막으로 저장한 상태로 되돌릴까요?\n그 뒤에 한 작업은 사라져요.')) return;
+    try { book = normBook(JSON.parse(savedSnap)); } catch (e) { return alert('되돌리지 못했어요.'); }
+    cur = Math.min(cur, book.pages.length - 1);
+    bookSel = null; stkSel = null; freeSel = null; partSel = null;
+    prevPal = book._prevPal || null;
+    $('#autoPalChk').checked = !!book.autoPal;
+    bnUidCatchUp();
+    markSaved();
+    applyPalette(); applyFonts(); refreshAll(); refreshBnAll();
+    restoreArtLayers(); restoreChromaLayers();
+    histPush();            /* 되돌린 것 자체도 되돌릴 수 있게 */
+    toast('마지막 저장 시점으로 되돌렸어요.');
+  };
   $('#btnSave').onclick = function () {
     busy(true, '프로젝트 저장 중…');
     api.save_project(JSON.stringify(book)).then(function (res) {
       busy(false);
       res = typeof res === 'string' ? JSON.parse(res) : res;
-      if (res.ok) { markDirty(false); alert('저장했어요.\n' + res.path + (res.warn ? '\n\n⚠ ' + res.warn : '')); }
+      if (res.ok) { markSaved(); alert('저장했어요.\n' + res.path + (res.warn ? '\n\n⚠ ' + res.warn : '')); }
       else if (!res.cancel) apiErr('프로젝트를 저장하지 못했어요.', res.err);
     }).catch(function (e) { busy(false); apiErr('프로젝트를 저장하지 못했어요.', e); });
   };
@@ -5105,7 +5262,7 @@ window.gifenc=exports;})();
       prevPal = book._prevPal || null;
       $('#autoPalChk').checked = !!book.autoPal;
       bnUidCatchUp();        /* 레이어 일련번호 이어받기 — 안 하면 id 가 겹쳐 그림이 덮어써진다 */
-      markDirty(false);
+      markSaved();           /* 방금 연 상태가 곧 '저장 시점' 이다 */
       applyPalette(); applyFonts(); refreshAll(); refreshBnAll();
       restoreArtLayers();    /* 방셀 프레임·소품·테마 배경(앱 동봉 그림) 다시 읽기 */
       restoreChromaLayers(); /* 크로마키 레이어(파생 이미지) 재생성 */
@@ -5115,7 +5272,7 @@ window.gifenc=exports;})();
   $('#btnNew').onclick = function () {
     if (!confirm('지금 작업을 버리고 새 책을 시작할까요?\n(저장 안 한 내용은 사라져요)')) return;
     book = defaultBook(); thumbs = {}; cur = 0;
-    markDirty(false);
+    markSaved();           /* 새 책 = 되돌릴 기준도 새로 */
     prevPal = null;
     $('#autoPalChk').checked = false;
     applyPalette(); applyFonts(); refreshAll(); refreshBnAll();
@@ -7554,6 +7711,9 @@ window.gifenc=exports;})();
   var bnSel = null;       /* 선택 레이어: {kind:'bg'} | {kind:'char', idx} */
   var bnHBox = null;      /* 현재 핸들 박스 DOM(드래그 중 실시간 갱신용) */
 
+  /* 편집 캔버스 최소 크기. 예전엔 64 라서 '🔖 퍼스나콘 24'(24×24) 프리셋을 눌러도
+     64×64 가 만들어졌다(파일명까지 _64x64). 세 군데에 흩어져 있던 값을 하나로 묶는다. */
+  var ED_MINPX = 16;
   function clampN(v, d, lo, hi) {
     v = parseFloat(v);
     if (!isFinite(v)) v = d;
@@ -7734,8 +7894,8 @@ window.gifenc=exports;})();
       b.deco = b.deco || {}; /* 레이아웃 꾸밈 색 오버라이드 {a1,a2,w,k} */
       /* 편집 캔버스 — 저장된 크기(cw/ch)를 def.w/h로 동기화(렌더 전에 항상) */
       if (k === 'edit') {
-        def.w = Math.round(clampN(b.cw, 1280, 64, 4096));
-        def.h = Math.round(clampN(b.ch, 720, 64, 4096));
+        def.w = Math.round(clampN(b.cw, 1280, ED_MINPX, 4096));
+        def.h = Math.round(clampN(b.ch, 720, ED_MINPX, 4096));
       }
       /* 저장된 레이아웃 id가 목록에 없으면(옛 프로젝트) 첫 레이아웃으로 */
       if (!def.layouts.some(function (l) { return l.id === b.layout; })) b.layout = def.layouts[0].id;
@@ -8026,7 +8186,7 @@ window.gifenc=exports;})();
         ';transform:translate(-50%,-50%) rotate(' + rot + 'deg)' + (t.flip ? ' scaleX(-1)' : '');
       if (FX_HEX6.test(t.c || '')) st += ';color:' + t.c;
       /* 이 텍스트만의 폰트 */
-      if (t.font) { var tfam = famFor(t.font); if (tfam) st += ';font-family:' + tfam; }
+      if (t.font) { var tfam = famFor(t.font); if (tfam) st += ';font-family:' + tfam + faceExtra(t.font); }
       /* 폭 — 0/없음이면 지금까지처럼 글자 길이에 맞춘다(옛 프로젝트 무영향).
          값을 주면 그 폭에서 줄이 바뀌고, 그래야 정렬이 눈에 보인다.
          .btxt 는 기본이 white-space:pre 라 여기서만 pre-wrap 으로 바꾼다. */
@@ -9722,7 +9882,8 @@ window.gifenc=exports;})();
         if (i < 0) { delete t.font; fsel.classList.remove('on'); }
         else {
           var ft = FONTS[i];
-          t.font = { fam: ft.fam, path: ft.path, file: (ft.file || fbase2(ft.path)), num: ft.num || 0, src: ft.src };
+          t.font = { fam: ft.fam, fam_base: ft.fam_base || '', sub: ft.sub || '',
+            path: ft.path, file: (ft.file || fbase2(ft.path)), num: ft.num || 0, src: ft.src };
           fsel.classList.add('on');
         }
         applyFonts(); /* 키트폰트 @font-face 재생성(추가 텍스트 포함) */
@@ -9871,7 +10032,8 @@ window.gifenc=exports;})();
         if (i < 0) { delete b.tfonts[f.k]; fsel.classList.remove('on'); }
         else {
           var ft = FONTS[i];
-          b.tfonts[f.k] = { fam: ft.fam, path: ft.path, file: (ft.file || fbase2(ft.path)), num: ft.num || 0, src: ft.src };
+          b.tfonts[f.k] = { fam: ft.fam, fam_base: ft.fam_base || '', sub: ft.sub || '',
+            path: ft.path, file: (ft.file || fbase2(ft.path)), num: ft.num || 0, src: ft.src };
           fsel.classList.add('on');
         }
         applyFonts(); /* 키트폰트 @font-face 재생성(배너 포함) */
@@ -10281,8 +10443,8 @@ window.gifenc=exports;})();
       bnSel = null;
       bnPartSel = null;
       var e = ensureBanners().edit;
-      $('#edW').value = Math.round(clampN(e.cw, 1280, 64, 4096));
-      $('#edH').value = Math.round(clampN(e.ch, 720, 64, 4096));
+      $('#edW').value = Math.round(clampN(e.cw, 1280, ED_MINPX, 4096));
+      $('#edH').value = Math.round(clampN(e.ch, 720, ED_MINPX, 4096));
       showBnItem('edit');
     } else if (bn) {
       if (bnType === 'edit') bnType = bnLastType || 'top';
@@ -10300,8 +10462,8 @@ window.gifenc=exports;})();
   /* ── 편집 캔버스 — 크기 패널 배선 ── */
   function edSetSize(w, h) {
     var e = ensureBanners().edit;
-    e.cw = Math.round(clampN(w, 1280, 64, 4096));
-    e.ch = Math.round(clampN(h, 720, 64, 4096));
+    e.cw = Math.round(clampN(w, 1280, ED_MINPX, 4096));
+    e.ch = Math.round(clampN(h, 720, ED_MINPX, 4096));
     $('#edW').value = e.cw;
     $('#edH').value = e.ch;
     if (bnType === 'edit') { refreshBnStage(); renderBnInspector(); }
@@ -11588,7 +11750,8 @@ window.gifenc=exports;})();
       /* 키트 폰트의 CSS 이름은 "몇 번째 항목이냐"가 아니라 파일 기준 해시로 잡는다.
          목록 인덱스로 잡으면 폰트를 하나 추가해 정렬이 바뀌는 순간
          움짤 글자가 엉뚱한 폰트로 바뀐다. */
-      var fam = f.src === 'kit' ? kitFaceName(f) : f.fam;
+      var fc5 = faceOf(f);
+      var fam = fc5 ? fc5.fam : (f.src === 'kit' ? kitFaceName(f) : f.fam);
       if (f.src === 'kit' && f.b64 && !giFontLoaded[fam]) {
         giFontLoaded[fam] = 1;
         try {
@@ -15872,6 +16035,19 @@ window.gifenc=exports;})();
           ((used.c < 256 || used.step > 1 || used.f > 0) ? '<br><span style="color:#8b887c">자동 맞춤: ' + used.c + '색' + (used.f ? ' · 미세압축 ±' + used.f : '') + (used.step > 1 ? ' · 프레임 ½' : '') + '</span>' : '') +
           (room ? '<br><span style="color:#8b887c">여유 ' + ((LIMIT - bytes.length) / 1048576).toFixed(2) +
             'MB — fps나 길이를 올리면 더 부드럽게 뽑을 수 있어요</span>' : '');
+        /* ⚠ 자유 크기(프사 아님)는 여태 한도도 경고도 없었다. 20~40MB 짜리가 그냥 나와서
+           디스코드(10MB)·트위터(15MB)에 올리다 튕겼는데 앱은 아무 말도 안 했다. */
+        if (!av) {
+          var mb2 = bytes.length / 1048576;
+          var warn = '';
+          if (mb2 > 15) warn = '<br><b style="color:#c0392b">⚠ ' + mb2.toFixed(1) +
+            'MB — 디스코드(10MB)·트위터(15MB) 둘 다 못 올려요.</b>' +
+            '<br><span style="color:#8b887c">길이·fps·가로 크기를 줄여보세요.</span>';
+          else if (mb2 > 8) warn = '<br><b style="color:#a4521a">⚠ ' + mb2.toFixed(1) +
+            'MB — 디스코드 무료(10MB)에는 못 올릴 수 있어요.</b>' +
+            '<br><span style="color:#8b887c">길이·fps를 조금만 줄이면 넉넉해져요.</span>';
+          if (warn) gifEl('gifMeta').innerHTML += warn;
+        }
         gifEl('gifOut').style.display = '';
         gifEl('gifSave').style.display = '';
         gifSetProg(null);
@@ -15881,33 +16057,54 @@ window.gifenc=exports;})();
       }
     }
   };
+  /* 이번 실행에서 이미 저장한 이름 — 같은 이름을 또 쓰면 조용히 덮어써진다 */
+  var gifSaved = {};
+  function gifPickName(base) {
+    var stem = String(base || '움짤').replace(/\.gif$/i, '');
+    var try1 = stem, k = 2;
+    while (gifSaved[try1.toLowerCase()]) { try1 = stem + '_' + k; k++; }
+    return askName('움짤 저장', '이름을 정해주세요. (.gif 는 자동으로 붙어요)', try1)
+      .then(function (got) {
+        if (got === null) return null;               /* 취소 */
+        got = String(got).replace(/\.gif$/i, '').trim();
+        /* 윈도우 파일 이름에 못 쓰는 글자와 경로 구분자를 막는다 */
+        got = got.replace(/[\\/:*?"<>|]/g, '').replace(/^\.+/, '').replace(/[. ]+$/, '');
+        if (!got) got = try1;
+        gifSaved[got.toLowerCase()] = 1;
+        return got + '.gif';
+      });
+  }
   gifEl('gifSave').onclick = function () {
     if (!GIF.out) return;
     var name = GIF.outName || '움짤.gif';
     if (GIF.mode === 'avatar' && name.indexOf('_프사') < 0) name = name.replace(/\.gif$/, '') + '_프사' + (GIF.outSize || 420) + '.gif';
-    var b = GIF.out, s = '';
-    for (var i = 0; i < b.length; i += 32768) s += String.fromCharCode.apply(null, b.subarray(i, i + 32768));
-    var b64 = btoa(s);
-    if (api && api.pick_dir) {
-      busy(true, '저장할 폴더 고르는 중…');
-      api.pick_dir().then(function (res) {
-        res = typeof res === 'string' ? JSON.parse(res) : res;
-        if (!res || !res.dir) { busy(false); return; }
-        return api.save_png(JSON.stringify({ dir: res.dir, name: name, b64: b64 })).then(function (r2) {
-          busy(false);
-          r2 = typeof r2 === 'string' ? JSON.parse(r2) : r2;
-          if (r2 && r2.ok) alert('저장했어요.\n' + r2.path);
-          else if (r2 && r2.err) apiErr('저장하지 못했어요.', r2.err);
-        });
-      }).catch(function (e) { busy(false); alert('실패: ' + e); });
-    } else {
+    /* ⚠ 예전엔 이름을 못 바꿔서, 같은 영상으로 여러 개 만들면 계속 덮어써졌다 */
+    gifPickName(name).then(function (picked) {
+      if (!picked) return;                 /* 취소 */
+      name = picked;
+      var b = GIF.out, s = '';
+      for (var i = 0; i < b.length; i += 32768) s += String.fromCharCode.apply(null, b.subarray(i, i + 32768));
+      var b64 = btoa(s);
+      if (api && api.pick_dir) {
+        busy(true, '저장할 폴더 고르는 중…');
+        return api.pick_dir().then(function (res) {
+          res = typeof res === 'string' ? JSON.parse(res) : res;
+          if (!res || !res.dir) { busy(false); return; }
+          return api.save_png(JSON.stringify({ dir: res.dir, name: name, b64: b64 })).then(function (r2) {
+            busy(false);
+            r2 = typeof r2 === 'string' ? JSON.parse(r2) : r2;
+            if (r2 && r2.ok) alert('저장했어요.\n' + r2.path);
+            else if (r2 && r2.err) apiErr('저장하지 못했어요.', r2.err);
+          });
+        }).catch(function (e) { busy(false); alert('실패: ' + e); });
+      }
       var a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([GIF.out], { type: 'image/gif' }));
       a.download = name;
       document.body.appendChild(a);
       a.click();
       a.remove();
-    }
+    });
   };
 
   /* ================= 편집 탭 — 그리기 도구 (브러시·지우개·도형·자르기·그라디언트) =================
@@ -16710,7 +16907,6 @@ window.gifenc=exports;})();
       '있냐'가 아니라 '불러서 답이 오냐'로 판단한다(실패·무응답 = 옛 본체). */
 (function () {
   'use strict';
-  var NOTICE_ID = 'v11';      /* 안내를 다시 띄우고 싶을 때만 이 값을 바꾼다 */
   var el = document.getElementById('kitVer');
   var WEBVER = el ? (el.textContent || '').trim() : '';
   var tries = 0;
@@ -16739,33 +16935,12 @@ window.gifenc=exports;})();
       el.title = '화면은 ' + WEBVER + ' 로 최신이고, 프로그램 본체(exe)만 옛 판이에요.'
         + ' 문의하실 때 이 문구 그대로 알려주세요.';
     }
-    var seen = '';
-    try { seen = localStorage.getItem('pbkOldBodyNotice') || ''; } catch (e) {}
-    if (seen === NOTICE_ID) return;      /* 이미 닫았으면 다시 안 띄운다 */
-    setTimeout(card, 1200);
+    /* ⚠ 예전엔 여기서 안내 카드를 띄웠는데, 고객이 "본체 수동 업데이트가 한 번 더
+       있는 줄 알았다" 며 문의를 넣었다. 지금 시점에 옛 본체와 새 본체는 기능 차이가
+       없으므로(누끼 엔진 동일), 방해하지 않고 위 글자만 남긴다.
+       나중에 본체 쪽에 진짜 차이가 생기면 그때 다시 알린다. */
   }
 
-  function card() {
-    var ov = document.createElement('div');
-    ov.id = 'obOv';
-    ov.innerHTML =
-      '<div class="obBox">'
-      + '<h3>화면은 최신이에요 ✅</h3>'
-      + '<p>업데이트는 앞으로도 <b>버튼 하나로 계속</b> 받으실 수 있어요.<br>'
-      +   '다만 이 컴퓨터의 <b>프로그램 본체</b>가 옛 판이라, 본체 쪽 개선은 안 들어와요.</p>'
-      + '<p class="obDim">지금까지 나온 <b>기능·수정은 전부 화면 쪽</b>이라 그대로 쓰실 수 있어요.'
-      +   ' 안 받으셔도 됩니다.</p>'
-      + '<p class="obDim">본체까지 맞추고 싶으시면 <b>판매자에게 최신 설치본</b>을 요청해'
-      +   ' 한 번만 덮어쓰시면 돼요. 그 뒤로는 본체까지 전부 버튼 하나로 끝나요.</p>'
-      + '<div class="obBtns"><button id="obLater" class="pri">알겠어요</button></div>'
-      + '</div>';
-    document.body.appendChild(ov);
-    function close() {
-      try { localStorage.setItem('pbkOldBodyNotice', NOTICE_ID); } catch (e) {}
-      if (ov.parentNode) ov.parentNode.removeChild(ov);
-    }
-    document.getElementById('obLater').onclick = close;
-  }
   boot();
 })();
 
@@ -17674,6 +17849,14 @@ window.gifenc=exports;})();
       }
       return out;
     }).then(function (tiles) {
+      var bnTileTag = '';
+      return askName('하단배너 저장',
+        '이름 뒤에 붙일 표시를 정해주세요. 비우면 하단배너_01 … 로 저장돼요.\n'
+        + '(같은 폴더에 또 저장하면 앞 것이 덮어써집니다)', '')
+        .then(function (tag) {
+      if (tag === null) { busy(false); return null; }
+      bnTileTag = String(tag).replace(/[\\/:*?"<>|]/g, '').replace(/[. ]+$/, '').trim();
+      if (bnTileTag) bnTileTag = '_' + bnTileTag;
       return api.pick_dir().then(function (res) {
         res = typeof res === 'string' ? JSON.parse(res) : res;
         if (!res || !res.dir) { busy(false); return null; }
@@ -17682,7 +17865,9 @@ window.gifenc=exports;})();
           if (i >= tiles.length) return Promise.resolve(res.dir);
           $('#busyMsg').textContent = '저장 중… (' + (i + 1) + '/' + n + ')';
           return api.save_png(JSON.stringify({ dir: res.dir,
-            name: '하단배너_' + String(nums[i]).padStart(2, '0') + '.' + tiles[i].ext,
+            /* ⚠ 이름이 고정이라 두 번째 배너를 같은 폴더에 저장하면 첫 번째가 사라졌다.
+               사용자가 정한 꼬리표를 붙여 겹치지 않게 한다. */
+            name: '하단배너' + bnTileTag + '_' + String(nums[i]).padStart(2, '0') + '.' + tiles[i].ext,
             b64: tiles[i].b64 }))
             .then(function (rr) {
               /* 파이썬은 실패해도 예외 대신 {err:...} 를 정상으로 돌려준다 —
@@ -17692,14 +17877,15 @@ window.gifenc=exports;})();
               i++; return next();
             });
         }
-        return next().then(function (d) { return { dir: d, tiles: tiles }; });
+        return next().then(function (d) { return { dir: d, tiles: tiles, tag: bnTileTag }; });
+      });
       });
     }).then(function (r) {
       busy(false);
       if (!r || !r.dir) return;
       var mx = Math.max.apply(null, r.tiles.map(function (t) { return t.bytes || 0; }));
       var jpg = r.tiles.filter(function (t) { return t.ext === 'jpg'; }).length;
-      alert(n + '칸으로 잘라 저장했어요.\n' + r.dir + '\n\n하단배너_' +
+      alert(n + '칸으로 잘라 저장했어요.\n' + r.dir + '\n\n하단배너' + (r.tag || '') + '_' +
         nums.map(function (v) { return String(v).padStart(2, '0'); }).join(', ') +
         '\n가장 큰 파일 ' + (mx / 1024).toFixed(0) + 'KB' +
         (jpg ? '\n(200KB에 맞추려고 ' + jpg + '장을 JPG로 저장했어요)' : ''));
@@ -18555,6 +18741,9 @@ window.gifenc=exports;})();
     book = defaultBook();
     applyPalette(); applyFonts(); presetsUI(); refreshAll();
     histReset(); /* 시작 상태를 히스토리 바닥에 */
+    /* 저장 안 하고 꺼진 작업이 남아 있으면 되살릴지 물어본다.
+       화면이 다 그려진 뒤에 물어야 배경이 흰 채로 대화상자만 뜨지 않는다. */
+    setTimeout(function () { try { bakOffer(); } catch (e) {} }, 900);
     var pf0 = loadPrefs();
     api.get_assets().then(function (res) {
       return inlineAssetArt(typeof res === 'string' ? JSON.parse(res) : res);
