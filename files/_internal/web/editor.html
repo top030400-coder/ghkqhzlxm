@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-06_v15 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-09_v16 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -682,7 +682,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-06 v15</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-09 v16</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -5976,11 +5976,12 @@ window.gifenc=exports;})();
     '.b-bot6 .b6big h1{font-size:104px;letter-spacing:-.02em}' +
     '.b-bot6 .b6big .line{width:180px;height:5px;background:var(--acc2,#dea44e);border-radius:3px}' +
     /* 잘릴 자리 안내선 — 편집 화면에만 보이고 저장본에는 안 나온다 */
+    /* 잘릴 자리 안내선 — ⚠ 점선이어야 한다. 통짜 줄로 그리면 같은 자리에 있는
+       디자인 선(.b6row·.b3div 등)을 완전히 덮어, 고객이 '저장하면 줄이 사라진다' 고 여긴다. */
     '.b-bot6.edit::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:99;' +
-      'background:' +
-      'linear-gradient(90deg,transparent 719px,rgba(255,60,60,.85) 719px 721px,transparent 721px),' +
-      'linear-gradient(180deg,transparent 149px,rgba(255,60,60,.85) 149px 151px,transparent 151px,' +
-      'transparent 299px,rgba(255,60,60,.85) 299px 301px,transparent 301px)}' +
+      'background:repeating-linear-gradient(180deg,rgba(255,60,60,.95) 0 9px,transparent 9px 18px) 719px 0/2px 100% no-repeat,' +
+      'repeating-linear-gradient(90deg,rgba(255,60,60,.95) 0 9px,transparent 9px 18px) 0 149px/100% 2px no-repeat,' +
+      'repeating-linear-gradient(90deg,rgba(255,60,60,.95) 0 9px,transparent 9px 18px) 0 299px/100% 2px no-repeat}' +
     /* ── 하단 배너 한 열 1×3 (720×450) — 타일 3개가 세로로 이어진 판 ── */
     '.b-bot3 .bph.bg{left:0;top:0;width:720px;height:450px}' +
     '.b-bot3 .scrim{position:absolute;inset:0;pointer-events:none;' +
@@ -6011,8 +6012,8 @@ window.gifenc=exports;})();
     '.b-bot3 .b3big h1{font-size:78px;letter-spacing:-.02em;white-space:normal;line-height:1.05}' +
     '.b-bot3 .b3big .line{width:130px;height:5px;background:var(--acc2,#dea44e);border-radius:3px}' +
     '.b-bot3.edit::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:99;' +
-      'background:linear-gradient(180deg,transparent 149px,rgba(255,60,60,.85) 149px 151px,transparent 151px,' +
-      'transparent 299px,rgba(255,60,60,.85) 299px 301px,transparent 301px)}' +
+      'background:repeating-linear-gradient(90deg,rgba(255,60,60,.95) 0 9px,transparent 9px 18px) 0 149px/100% 2px no-repeat,' +
+      'repeating-linear-gradient(90deg,rgba(255,60,60,.95) 0 9px,transparent 9px 18px) 0 299px/100% 2px no-repeat}' +
     '.b-bottom .bph.bg{left:0;top:0;width:720px;height:150px}' +
     '.b-bottom .scrim{position:absolute;inset:0;pointer-events:none}' +
     '.b-bottom .chip{text-transform:uppercase;font-weight:700;color:var(--acc2,#dea44e);pointer-events:none}' +
@@ -10505,6 +10506,11 @@ window.gifenc=exports;})();
     ['patch_fr_player_blu', '플레이어 파랑', 'fr'], ['patch_fr_gameboy_ylw', '게임기 노랑', 'fr'],
     ['patch_fr_gameboy_wht', '게임기 화이트', 'fr'], ['patch_fr_photocard', '포토카드', 'fr'],
     ['patch_fr_diary', '다이어리', 'fr'], ['patch_fr_airmail2', '에어메일', 'fr'],
+    /* 2026-08-09 와이드(16:9) 선화 프레임 8종 — 1920×1080, 흰 선·가운데 비침 */
+    ['patch_fr_w_ribbon', '리본 하트 (와이드)', 'fr'], ['patch_fr_w_moon', '달·별·구름 (와이드)', 'fr'],
+    ['patch_fr_w_tech', '게이밍 HUD (와이드)', 'fr'], ['patch_fr_w_rose', '장미 (와이드)', 'fr'],
+    ['patch_fr_w_dots', '반짝 점선 (와이드)', 'fr'], ['patch_fr_w_stars', '별비·구름 (와이드)', 'fr'],
+    ['patch_fr_w_lace', '레이스 리본 (와이드)', 'fr'], ['patch_fr_w_heart', '하트 넝쿨 (와이드)', 'fr'],
     /* 2026-08-04 추가 — 단컷 방셀 프레임 3종 */
     ['patch_fr_bangsel_china', '차이나 레트로', 'fr'],
     ['patch_fr_bangsel_goodmorning', '굿모닝 체리', 'fr'],
@@ -10526,13 +10532,25 @@ window.gifenc=exports;})();
       if (edCapFull(e)) return;
       var id = 'edframe_' + fr[0] + '_' + (bnUid++);
       thumbs[id] = durl;
-      /* 캔버스를 꽉 덮게 — 세로가 짧은 캔버스면 세로에, 넓으면 가로에 맞춘다(3:4 기준) */
       var def = BANNERS.edit;
-      var sc = Math.max(100, Math.ceil((def.w / def.h) / (1086 / 1448) * 100));
       /* art = 이 레이어의 출처 파일. .pbk 에는 그림 대신 이 경로만 저장하고
          다시 열 때 restoreArtLayers() 가 여기서 그림을 되살린다(프로젝트 용량 그대로). */
-      e.chars.push({ id: id, art: 'art/' + fr[0] + '.png', x: 50, y: 50, sc: Math.min(sc, 600), rot: 0, flip: false, prop: true });
+      var lay = { id: id, art: 'art/' + fr[0] + '.png', x: 50, y: 50, sc: 100,
+                  rot: 0, flip: false, prop: true };
+      e.chars.push(lay);
       bnSel = { kind: 'char', idx: e.chars.length - 1 };
+      /* 캔버스에 맞춰 크기를 잡는다.
+         ⚠ 예전엔 프레임 비율을 3:4(1086×1448)로 못박아 계산했다. 그래서 16:9 프레임을
+            16:9 캔버스에 얹어도 238% 로 커져 테두리가 화면 밖으로 나갔다.
+         ⚠ 그림 크기는 로드가 끝나야 알 수 있다 — measureInto 가 재 준 뒤에 계산한다.
+            (Image 를 만들어 바로 naturalWidth 를 읽으면 아직 0 이다) */
+      measureInto(lay, durl, function () {
+        var fw = lay.iw || 1086, fh = lay.ih || 1448;
+        var sc = Math.max(100, Math.ceil((def.w / def.h) / (fw / fh) * 100));
+        lay.sc = Math.min(sc, 600);
+        refreshBnStage();
+        renderBnInspector();
+      });
       refreshBnStage();
       renderBnInspector();
     }).catch(function (err) { busy(false); alert('프레임을 불러오지 못했어요: ' + err); });
@@ -18589,6 +18607,14 @@ window.gifenc=exports;})();
     findFont: findFont, famFor: famFor, fontAddLoad: fontAddLoad,
     /* 겹침순서 검증용 — 배경이 옛 프로젝트에서 맨 위로 튀지 않는지 자동으로 확인한다 */
     ensureBanners: ensureBanners, banners: function () { return book.banners; },
+    /* 편집 화면 vs 저장본 비교 검증용 — 두 모드의 결과가 달라지는 걸 자동으로 잡는다 */
+    bnLayouts: function (t) {
+      return (BANNERS[t] && BANNERS[t].layouts || []).map(function (l) { return l.id; });
+    },
+    bnTypes: function () { return Object.keys(BANNERS); },
+    renderBanner: renderBanner, setBnLayout: function (t, id) {
+      var bb = ensureBanners()[t]; bb.layout = id; return bb.layout;
+    },
     gifDrawFrame: gifDrawFrame, gifClampPan: gifClampPan, gifCardPeekT: gifCardPeekT,
     gifSrcInfo: function () {
       var v = gifV();
@@ -18935,7 +18961,15 @@ window.gifenc=exports;})();
           'art/patch_fr_gameboy_wht.png',
           'art/patch_fr_photocard.png',
           'art/patch_fr_diary.png',
-          'art/patch_fr_airmail2.png'];
+          'art/patch_fr_airmail2.png',
+          'art/patch_fr_w_ribbon.png',
+          'art/patch_fr_w_moon.png',
+          'art/patch_fr_w_tech.png',
+          'art/patch_fr_w_rose.png',
+          'art/patch_fr_w_dots.png',
+          'art/patch_fr_w_stars.png',
+          'art/patch_fr_w_lace.png',
+          'art/patch_fr_w_heart.png'];
         return Promise.all([fetchTxt('engine.css'), fetchTxt('book_shell.css'),
           fetchTxt('fonts_embed.css'), fetchTxt('book_runtime.js')].concat(art.map(fetchData)))
           .then(function (a) {

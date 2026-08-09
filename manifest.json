@@ -1,7 +1,7 @@
 {
- "version": "2026-08-06_v15",
- "date": "2026-08-06",
- "notes": "■ 2026-08-06 (10차) — 겹친 사진 자르기 · 배경 순서 바꾸기\n\n【 ✂ 겹친 사진 자르기 】\n- 편집 탭에 <▭ 네모 선택> 도구가 생겼어요.\n  드래그한 네모만큼 선택되고, 놓으면 <잘라내기·복사·지우기·반전> 이 뜹니다.\n  프레임(다마고치·게임기 등) 밖으로 튀어나온 부분을 반듯하게 자를 때 쓰세요.\n- 기존 <✂ 자르기> 는 이름을 <✂ 캔버스 자르기> 로 바꿨어요.\n  그건 작업 화면 자체를 자르는 거라 헷갈리셨던 분들이 많았습니다.\n\n【 🖼 배경 순서 바꾸기 】\n- 레이어에서 <배경> 도 ▲▼ 로 위아래를 바꿀 수 있어요.\n- 화면을 덮는 소품(프레임)을 얹으면 그 아래 배경이 눌려서 클릭조차 안 되던 문제가\n  해결됩니다. 배경을 소품 위로 올리면 바로 잡혀요.\n- 예전에 저장하신 프로젝트를 열어도 배경은 <원래대로 맨 아래> 그대로입니다.",
+ "version": "2026-08-09_v16",
+ "date": "2026-08-09",
+ "notes": "■ 2026-08-09 (11차) — 겹친 사진 자르기 · 배경 순서 · 와이드 프레임 8종\n\n【 ✂ 겹친 사진 자르기 】\n- 편집 탭에 <▭ 네모 선택> 이 생겼어요. 드래그한 네모만큼 선택되고,\n  놓으면 <잘라내기·복사·지우기·반전> 이 뜹니다.\n  프레임 밖으로 튀어나온 부분을 반듯하게 자를 때 쓰세요.\n- 기존 <✂ 자르기> 는 <✂ 캔버스 자르기> 로 이름을 바꿨어요.\n  (그건 작업 화면 자체를 자르는 기능이라 헷갈리셨던 분들이 많았습니다)\n\n【 🖼 배경도 순서를 바꿀 수 있어요 】\n- 레이어에서 <배경> 에 ▲▼ 가 생겼어요.\n- 화면을 덮는 소품(프레임)을 얹으면 그 아래 배경이 눌려서 클릭조차 안 되던 문제가\n  해결됩니다. 배경을 위로 올리면 바로 잡혀요.\n- 예전에 저장하신 프로젝트를 열어도 배경은 <원래대로 맨 아래> 그대로입니다.\n\n【 📸 와이드 프레임 8종 추가 】\n- 리본 하트 · 달별구름 · 게이밍 HUD · 장미 · 반짝 점선 · 별비구름 · 레이스 리본 · 하트 넝쿨\n- 1920×1080 (16:9) 라 편집 탭 기본 캔버스에 딱 맞습니다.\n- 프레임이 캔버스에 얹히는 크기를 <프레임 실제 비율> 로 계산하게 고쳤어요.\n  예전엔 전부 3:4 로 가정해서, 가로 캔버스에선 프레임이 화면 밖으로 커졌습니다.\n\n【 🙂 그 밖 】\n- 하단배너 <잘릴 자리> 안내선을 점선으로 바꿨어요.\n  통짜 빨간 줄이 같은 자리의 디자인 선을 덮어서 \"저장하면 줄이 사라진다\" 고\n  보이던 것을 없앴습니다.",
  "page": "https://github.com/top030400-coder/ghkqhzlxm",
  "files": [
   {
@@ -36,8 +36,8 @@
   },
   {
    "p": "_internal/web/editor.html",
-   "h": "c5c2129ed5ee5f5bc1b6c0c41d716e701ef1d6fa18898e051755d79677cf49ef",
-   "s": 985210
+   "h": "ed266d13898fccb29b59e451afc8c0ee782a71f95381d10bbe47ff7b69a4b7b4",
+   "s": 987437
   },
   {
    "p": "_internal/web/engine.css",
@@ -163,6 +163,46 @@
    "p": "_internal/web/art/patch_fr_scrap_pink.png",
    "h": "28d54066b03b32f1151182b954ecdee39eb275d954faafc95094b085af9923ff",
    "s": 80231
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_dots.png",
+   "h": "ee65e54fce34dde6a68a8837e04f028c21cc152391d6940d9e3da4d88232c075",
+   "s": 86502
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_heart.png",
+   "h": "d1c2d8d37dc7a23df13676d049d51fe8dd96d0fc423da0efd062a938d0746e68",
+   "s": 208722
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_lace.png",
+   "h": "7d8a57a5ff83a8972bcb158f6e6321191b6505c5dcf87e454bf846da79351aa9",
+   "s": 308930
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_moon.png",
+   "h": "80522bc72fbde7b3149705fb5903f6f1396e41f5f3fd2e292783158525348e0c",
+   "s": 197126
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_ribbon.png",
+   "h": "abd89666f71507e691717f4a45dcadeb3c96c1446eef6f8c390d595582dfa1e1",
+   "s": 196464
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_rose.png",
+   "h": "1032e344e337a573f1b6c3025b048fd935dac30d09b85fe4c4edc57e6e016b6e",
+   "s": 282593
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_stars.png",
+   "h": "52092bce8abd95bf71232be242ca783c46989c1b0fd6968b22d94ad5b1b51de0",
+   "s": 162078
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_tech.png",
+   "h": "913e0e5e1bb7c076e7bc871c9fc146b20ece74eba763edd4989acfdb5b724d15",
+   "s": 146754
   },
   {
    "p": "_internal/web/art/patch_fr_zine.png",
@@ -2476,20 +2516,20 @@
   },
   {
    "p": "_internal/web/version.json",
-   "h": "77b92e00340b61662a69f2ae9c269716d871b62a8bb0c870950cddaab08b8ae7",
+   "h": "1b4f47d36bec9c57a7f5edb09b5602780f1b33960e42e891fe20a297159616d7",
    "s": 179
   }
  ],
  "files2": [
   {
    "p": "PhotobookKit.exe",
-   "h": "a9955434e38ee81707eddfcd529a33b3fabe92195ec7e03cec29be94a67da9dd",
-   "s": 10913408
+   "h": "95da563daad5f611661205f6b514759d375894ceff14bd88328226003b5565fc",
+   "s": 10913409
   },
   {
    "p": "_internal/MSVCP140_1.dll",
-   "h": "bfad5aef4c63a669e3c140655cdfdf395b6c979b400a447bd5dcb65ed8826c3d",
-   "s": 35952
+   "h": "206c931bf90fdad8816de3b5e2ef80b2bcaa9406c89ecc05fe6fddffe251e982",
+   "s": 35768
   },
   {
    "p": "_internal/_asyncio.pyd",
@@ -2578,7 +2618,7 @@
   },
   {
    "p": "_internal/base_library.zip",
-   "h": "41119d34266880fb832fb36c36fb5258b3d974a48932727505345592ed78b271",
+   "h": "375b128ae91760e1bc19f42f388ec7d165608a9edb97c56c10475f014e27e770",
    "s": 1333490
   },
   {
@@ -2598,8 +2638,8 @@
   },
   {
    "p": "_internal/msvcp140.dll",
-   "h": "0f885b509a685d2bbfa652fed26b5fb31d88fbdab0a978c641d1c7b8aa460aa9",
-   "s": 557728
+   "h": "7c26614e1d733892c2deac7e245ce115504b1d80592dd0a01b08e3e5a55f89ca",
+   "s": 643512
   },
   {
    "p": "_internal/pyexpat.pyd",
@@ -2628,13 +2668,13 @@
   },
   {
    "p": "_internal/vcruntime140.dll",
-   "h": "d5e4d9a3e835fa679450145d6a7d94e36573a509317111904d9b3712c30d9066",
-   "s": 124544
+   "h": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7",
+   "s": 178616
   },
   {
    "p": "_internal/vcruntime140_1.dll",
-   "h": "1f2d41c4aa5db0bc33ebf7b66d72943a817d7ce6cbe880502a9403823633093f",
-   "s": 49792
+   "h": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e",
+   "s": 50112
   },
   {
    "p": "_internal/viewer_stub.exe",
@@ -7312,7 +7352,5 @@
   }
  ],
  "delete": [],
- "delete2": [
-  "_internal/zopfli/zopfli.pyd"
- ]
+ "delete2": []
 }
