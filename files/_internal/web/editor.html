@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-09_v16 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v5 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -318,9 +318,13 @@
   /* 방셀 프레임 그리드 — 프레임 미리보기(체크무늬 배경으로 투명 구멍이 보이게) */
   #edFrames,.edFrGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:4px 0}
   .edFrGrid{grid-template-columns:repeat(4,1fr)}   /* 인스펙터는 384px 로 넓어 4열 */
+  /* ⚠ 바탕 체크무늬가 #eee/#fff 라 '흰 선화' 프레임은 썸네일에서 안 보였다(32종).
+     투명을 알려주는 체크는 유지하되 한 톤 어둡게 — 흰 선이 보이고 컬러 카드도 그대로. */
   #edFrames .efr,.edFrGrid .efr{position:relative;border:1px solid #d8d4c6;border-radius:7px;overflow:hidden;cursor:pointer;
-    background:conic-gradient(#eee 0 25%,#fff 0 50%,#eee 0 75%,#fff 0) 0 0/12px 12px;padding:0}
+    background:conic-gradient(#bdb9ad 0 25%,#dcd8cd 0 50%,#bdb9ad 0 75%,#dcd8cd 0) 0 0/12px 12px;padding:0}
   #edFrames .efr img,.edFrGrid .efr img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block}
+  /* 가로(16:9) 프레임·카드는 3:4 칸에 넣으면 좌우가 잘려 뭔지 알아볼 수 없다 → 칸 자체를 가로로 */
+  #edFrames .efr.wide img,.edFrGrid .efr.wide img{aspect-ratio:16/9}
   #edFrames .efr b,.edFrGrid .efr b{position:absolute;left:0;right:0;bottom:0;font-size:9.5px;font-weight:700;color:#fff;
     background:rgba(20,20,16,.62);padding:2px 3px;text-align:center;white-space:nowrap;overflow:hidden}
   #edFrames .efr:hover,.edFrGrid .efr:hover{border-color:#7f9a6a}
@@ -331,8 +335,8 @@
   .bnPropCell .bnFav.on{color:#e0a93b}
   .bnFavLbl{font-size:10.5px;color:#8b887c;margin:5px 0 1px}
   .txtRow .btxtW{width:52px;flex:none;accent-color:#7f9a6a}
-  .edFrTabs{display:flex;gap:4px;margin:4px 0 2px}
-  .edFrTabs button{flex:1;font-size:11px;padding:4px 2px}
+  .edFrTabs{display:flex;gap:4px;margin:4px 0 2px;flex-wrap:wrap}
+  .edFrTabs button{flex:1 1 30%;font-size:11px;padding:4px 2px;white-space:nowrap}
   .edFrTabs button.on{background:#2f2c25;color:#fff;border-color:#2f2c25}
   .edPreRow{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
   .edPreRow button{flex:1 1 46%;font-size:11px;padding:6px 2px;white-space:nowrap}
@@ -682,7 +686,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-09 v16</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v17</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -796,7 +800,7 @@
         <button data-s="1280,720">▶ 썸네일 16:9</button>
         <button data-s="1080,1080">■ 정방 1080</button>
         <button data-s="1080,1920">▮ 세로 쇼츠</button>
-        <button data-s="1086,1448" title="아래 방셀 프레임과 꼭 맞는 세로 3:4 캔버스">📸 방셀 3:4</button>
+        <button data-s="1086,1448" title="아래 [▯ 세로] 프레임·카드와 꼭 맞는 세로 3:4 캔버스">📸 방셀 3:4</button>
         <button data-s="24,24" title="SOOP 구독 퍼스나콘 — 24×24, 50KB 이하">🔖 퍼스나콘 24</button>
       </div>
       <div class="insSec">다른 채널 규격</div>
@@ -851,16 +855,21 @@
       <div class="ckRow"><button id="edSolid" style="flex:1">🟦 단색 레이어</button>
         <button id="edFlat" style="flex:1">📌 전부 병합</button></div>
       <div class="bnRec" id="edHint">브러시·도형은 <b>그리기 레이어</b>에 그려져요 —<br>레이어 패널에서 순서·숨김·보정·블렌드 전부 가능.</div>
-      <!-- 단컷 방셀 꾸미기 — 프레임을 사진 위에 얹기 (시청자 요청) -->
-      <div class="insSec">📸 방셀 프레임 (사진 위에 얹기)</div>
+      <!-- 방셀·체키 꾸미기 — 프레임/카드를 사진 위에 얹기 (시청자 요청) -->
+      <div class="insSec">📸 프레임 · 카드 (사진 위에 얹기)</div>
+      <!-- ⚠ 89종이라 한 줄로 쏟아부으면 왼쪽 패널이 끝없이 길어진다 → 오른쪽 팔레트와
+           같은 탭을 여기에도 둔다(고른 탭은 두 곳이 함께 움직인다). -->
+      <div id="edFrTabsL" class="edFrTabs"></div>
       <div id="edFrames"></div>
-      <div class="bnRec">방셀 꾸미기: 사진을 넣고 프레임을 얹은 뒤 —<br>
+      <div class="bnRec">방셀·체키 꾸미기: 사진을 넣고 프레임을 얹은 뒤 —<br>
         ✍ 싸인 PNG는 오른쪽 <b>＋ 캐릭터 추가</b>,<br>
         🅰 문구는 <b>＋ 텍스트 추가</b>(각도 조절 가능),<br>
         🎨 보정은 레이어 선택 후 <b>레이어 보정</b>.<br>
+        ▯ 세로는 <b>방셀 3:4</b>, ▭ 가로는 <b>썸네일 16:9</b> 캔버스에 딱 맞아요.<br>
+        💗 <b>카드</b>는 가운데가 뚫려 있어 사진이 그대로 비쳐요.<br>
         🎥 REC·포커스처럼 <b>살짝 얹는 뷰파인더</b>는 오른쪽<br>
         소품 팔레트에서 테마를 <b>"뷰파인더·오버레이"</b>로 고르면 바로 나와요.<br>
-        📸 프레임은 <b>오른쪽 맨 위 "방셀 프레임"</b> 그룹에도 똑같이 있어요.</div>
+        📸 같은 목록이 <b>오른쪽 맨 위</b>에도 있어요.</div>
     </div>
     <button class="bnItem" data-bn="top"><b>⬆ 상단 배너</b><span>2320 × 338px</span></button>
     <button class="bnItem" data-bn="bottom"><b>⬇ 하단 배너</b><span>720 × 150px</span></button>
@@ -1222,6 +1231,7 @@
 <script src="bn_art2.js"></script>
 <script src="bn_art3.js"></script>
 <script src="bn_art4.js"></script>
+<script src="bn_art5.js"></script>
 <!-- GIF 인코더(gifenc, MIT)를 파일 안에 넣어둔다 — 옆에 gifenc.js가 없거나
      윈도우가 차단해도 움짤이 동작하게. 외부 파일은 더 이상 필요 없음. -->
 <script>
@@ -7690,7 +7700,7 @@ window.gifenc=exports;})();
 
   var bnType = 'top';
   var bnPropPage = 0;     /* 소품 팔레트 현재 페이지 */
-  var edFrFilter = '';    /* 방셀 프레임 그룹 하위 탭('' 전체 | fr | sns) */
+  var edFrFilter = '';    /* 프레임·카드 하위 탭('' 전체 | fr | fw | cd | cw | sns) */
   var bnPropQuery = '';   /* 소품 팔레트 검색어 */
   /* 얹는 것(캐릭터·소품·프레임·그리기)은 전부 같은 chars 배열을 쓴다.
      예전엔 소품 10 / 캐릭터 8 로 상한이 갈려 있어서, 소품만 10개 얹고
@@ -9570,26 +9580,14 @@ window.gifenc=exports;})();
        예전엔 왼쪽 도구 패널 맨 아래에만 있어서, 오른쪽 팔레트에서 프레임을 찾다가
        소품 34페이지를 넘겨야 비슷한 게 나왔다(요청). */
     if (bnType === 'edit' && typeof ED_FRAMES !== 'undefined') {
-      box.appendChild(insSec('📸 방셀 프레임 ' + ED_FRAMES.length + '종 (사진 위에 얹기)'));
+      box.appendChild(insSec('📸 프레임 · 카드 ' + ED_FRAMES.length + '종 (사진 위에 얹기)'));
       var frTabWrap = document.createElement('div');
       frTabWrap.className = 'edFrTabs';
       var frGrid = document.createElement('div');
       frGrid.className = 'edFrGrid';
-      [['', '전체'], ['fr', '프레임'], ['sns', 'SNS']].forEach(function (t) {
-        var tb = document.createElement('button');
-        tb.textContent = t[1];
-        if ((edFrFilter || '') === t[0]) tb.className = 'on';
-        tb.onclick = function () {
-          edFrFilter = t[0];
-          frTabWrap.querySelectorAll('button').forEach(function (o) { o.className = ''; });
-          tb.className = 'on';
-          edFillFrameGrid(frGrid, edFrFilter);
-        };
-        frTabWrap.appendChild(tb);
-      });
       box.appendChild(frTabWrap);
-      edFillFrameGrid(frGrid, edFrFilter);
       box.appendChild(frGrid);
+      edFrTabsInto(frTabWrap, frGrid);   /* 왼쪽 도구판과 같은 탭·같은 선택 상태 */
     }
 
     /* 소품(스티커) 팔레트 — 타입 무관 전 테마 공용.
@@ -10495,10 +10493,14 @@ window.gifenc=exports;})();
     };
   });
 
-  /* ── 방셀 프레임 팔레트 — 화보집 프레임 18종을 편집 캔버스에 "얹는 레이어"로 재활용.
-     단컷 방셀 꾸미기(사진 + 프레임 + 싸인 PNG + 텍스트 + 보정) 요청 대응. */
-  /* [키, 이름, 분류] — 분류는 오른쪽 인스펙터 "방셀 프레임" 그룹의 하위 탭 */
+  /* ── 프레임·카드 팔레트 — 편집 캔버스에 "얹는 레이어".
+     방셀·체키 꾸미기(사진 + 프레임/카드 + 싸인 PNG + 텍스트 + 보정) 요청 대응.
+     ⚠ 세로 3:4 와 가로 16:9 가 섞여 있다 — 캔버스에 맞는 것만 보이도록 탭으로 가른다. */
+  /* [키, 이름, 분류] — 분류는 오른쪽 인스펙터 "방셀 프레임" 그룹의 하위 탭.
+     분류 = fr(세로 3:4 프레임) · fw(가로 16:9 프레임) · cd(세로 카드) · cw(가로 카드) · sns
+     ⚠ 가로·세로를 섞어두면 캔버스에 안 맞는 걸 계속 눌러보게 된다(요청) → 탭으로 가름. */
   var ED_FRAMES = [
+    /* ── ▯ 세로 3:4 프레임 ─────────────────────────────────── */
     ['patch_fr_comic', '만화 팝아트', 'fr'], ['patch_fr_scrap_pink', '핑크 스크랩북', 'fr'],
     ['patch_fr_journey', '여행 저널', 'fr'], ['patch_fr_kisunote', '키스노트', 'fr'],
     ['patch_fr_zine', 'ZINE 콜라주', 'fr'], ['patch_fr_filmstrip', '필름 스트립', 'fr'],
@@ -10506,18 +10508,54 @@ window.gifenc=exports;})();
     ['patch_fr_player_blu', '플레이어 파랑', 'fr'], ['patch_fr_gameboy_ylw', '게임기 노랑', 'fr'],
     ['patch_fr_gameboy_wht', '게임기 화이트', 'fr'], ['patch_fr_photocard', '포토카드', 'fr'],
     ['patch_fr_diary', '다이어리', 'fr'], ['patch_fr_airmail2', '에어메일', 'fr'],
-    /* 2026-08-09 와이드(16:9) 선화 프레임 8종 — 1920×1080, 흰 선·가운데 비침 */
-    ['patch_fr_w_ribbon', '리본 하트 (와이드)', 'fr'], ['patch_fr_w_moon', '달·별·구름 (와이드)', 'fr'],
-    ['patch_fr_w_tech', '게이밍 HUD (와이드)', 'fr'], ['patch_fr_w_rose', '장미 (와이드)', 'fr'],
-    ['patch_fr_w_dots', '반짝 점선 (와이드)', 'fr'], ['patch_fr_w_stars', '별비·구름 (와이드)', 'fr'],
-    ['patch_fr_w_lace', '레이스 리본 (와이드)', 'fr'], ['patch_fr_w_heart', '하트 넝쿨 (와이드)', 'fr'],
     /* 2026-08-04 추가 — 단컷 방셀 프레임 3종 */
     ['patch_fr_bangsel_china', '차이나 레트로', 'fr'],
     ['patch_fr_bangsel_goodmorning', '굿모닝 체리', 'fr'],
     ['patch_fr_bangsel_okayeee', '폴라로이드 블루', 'fr'],
+    /* 2026-08-10 추가 — 시즌·이벤트 흰 선화 12종 */
+    ['patch_fr_birthday', '생일', 'fr'], ['patch_fr_debut', '데뷔 기념일', 'fr'],
+    ['patch_fr_cherry', '벚꽃', 'fr'], ['patch_fr_sea', '여름 바다', 'fr'],
+    ['patch_fr_autumn', '가을', 'fr'], ['patch_fr_xmas', '크리스마스', 'fr'],
+    ['patch_fr_hallow', '할로윈', 'fr'], ['patch_fr_victory', '게임 승리창', 'fr'],
+    ['patch_fr_concert', '콘서트', 'fr'], ['patch_fr_cert', '상장', 'fr'],
+    ['patch_fr_idcard', '신분증', 'fr'], ['patch_fr_gacha', '뽑기 캡슐', 'fr'],
+    /* ── ▭ 가로 16:9 프레임 (1920×1080, 흰 선·가운데 비침) ───── */
+    ['patch_fr_w_ribbon', '리본 하트', 'fw'], ['patch_fr_w_moon', '달·별·구름', 'fw'],
+    ['patch_fr_w_tech', '게이밍 HUD', 'fw'], ['patch_fr_w_rose', '장미', 'fw'],
+    ['patch_fr_w_dots', '반짝 점선', 'fw'], ['patch_fr_w_stars', '별비·구름', 'fw'],
+    ['patch_fr_w_lace', '레이스 리본', 'fw'], ['patch_fr_w_heart', '하트 넝쿨', 'fw'],
+    ['patch_fr_w_birthday', '생일', 'fw'], ['patch_fr_w_debut', '데뷔 기념일', 'fw'],
+    ['patch_fr_w_cherry', '벚꽃', 'fw'], ['patch_fr_w_sea', '여름 바다', 'fw'],
+    ['patch_fr_w_autumn', '가을', 'fw'], ['patch_fr_w_xmas', '크리스마스', 'fw'],
+    ['patch_fr_w_hallow', '할로윈', 'fw'], ['patch_fr_w_victory', '게임 승리창', 'fw'],
+    ['patch_fr_w_concert', '콘서트', 'fw'], ['patch_fr_w_cert', '상장', 'fw'],
+    ['patch_fr_w_idcard', '신분증', 'fw'], ['patch_fr_w_gacha', '뽑기 캡슐', 'fw'],
+    /* ── 💗 포토카드(체키) 세로 3:4 24종 — 사진 자리만 뚫린 컬러 카드 ── */
+    ['patch_fr_c_love', 'LOVE 곰돌이', 'cd'], ['patch_fr_c_dream', 'DREAM 나비', 'cd'],
+    ['patch_fr_c_sky', 'SKY 파랑새', 'cd'], ['patch_fr_c_shine', 'SHINE 병아리', 'cd'],
+    ['patch_fr_c_honey', 'HONEY 리본곰', 'cd'], ['patch_fr_c_angel', 'ANGEL 크롬하트', 'cd'],
+    ['patch_fr_c_neon', 'NEON 로봇', 'cd'], ['patch_fr_c_play', 'PLAY 픽셀고양이', 'cd'],
+    ['patch_fr_c_film', 'FILM 필름통', 'cd'], ['patch_fr_c_cute', 'CUTE 스마일', 'cd'],
+    ['patch_fr_c_post', 'POST 우체통', 'cd'], ['patch_fr_c_bold', 'BOLD 가위', 'cd'],
+    ['patch_fr_c_spring', 'SPRING 벚꽃', 'cd'], ['patch_fr_c_summer', 'SUMMER 튜브', 'cd'],
+    ['patch_fr_c_boo', 'BOO 유령', 'cd'], ['patch_fr_c_merry', 'MERRY 산타모자', 'cd'],
+    ['patch_fr_c_snow', 'SNOW 눈사람', 'cd'], ['patch_fr_c_rose', 'ROSE 장미', 'cd'],
+    ['patch_fr_c_noir', 'NOIR 박쥐리본', 'cd'], ['patch_fr_c_halo', 'HALO 아기천사', 'cd'],
+    ['patch_fr_c_devil', 'DEVIL 작은악마', 'cd'], ['patch_fr_c_magic', 'MAGIC 마법봉', 'cd'],
+    ['patch_fr_c_sweet', 'SWEET 딸기우유', 'cd'], ['patch_fr_c_stage', 'STAGE 마이크', 'cd'],
+    /* ── 💗 포토카드 가로 16:9 12종 ────────────────────────── */
+    ['patch_fr_cw_love', 'LOVE 곰돌이', 'cw'], ['patch_fr_cw_sky', 'SKY 파랑새', 'cw'],
+    ['patch_fr_cw_shine', 'SHINE 병아리', 'cw'], ['patch_fr_cw_angel', 'ANGEL 크롬하트', 'cw'],
+    ['patch_fr_cw_neon', 'NEON 로봇', 'cw'], ['patch_fr_cw_play', 'PLAY 픽셀고양이', 'cw'],
+    ['patch_fr_cw_film', 'FILM 필름통', 'cw'], ['patch_fr_cw_spring', 'SPRING 벚꽃', 'cw'],
+    ['patch_fr_cw_summer', 'SUMMER 튜브', 'cw'], ['patch_fr_cw_snow', 'SNOW 눈사람', 'cw'],
+    ['patch_fr_cw_sweet', 'SWEET 딸기우유', 'cw'], ['patch_fr_cw_stage', 'STAGE 마이크', 'cw'],
+    /* ── SNS ──────────────────────────────────────────────── */
     ['patch_sns_ig_feed', '인스타 피드', 'sns'], ['patch_sns_ig_profile', '인스타 프로필', 'sns'],
     ['patch_sns_x_post', 'X 게시물', 'sns'], ['patch_sns_x_feed', 'X 피드', 'sns']
   ];
+  /* 가로(16:9) 분류 — 썸네일 칸 비율과 "얹을 때 기본 크기"를 이걸로 가른다 */
+  var ED_FR_WIDE = { fw: 1, cw: 1 };
   /* 프레임 한 장 얹기 — 왼쪽 도구 패널·오른쪽 인스펙터 두 곳에서 같이 쓴다 */
   function edAddFrame(fr) {
     if (edCapFull(ensureBanners().edit)) return;
@@ -10563,8 +10601,10 @@ window.gifenc=exports;})();
     ED_FRAMES.forEach(function (fr) {
       if (only && fr[2] !== only) return;
       var bt = document.createElement('button');
-      bt.className = 'efr';
-      bt.title = fr[1] + ' — 사진 위에 프레임으로 얹어요 (📸 방셀 3:4 캔버스와 꼭 맞음)';
+      /* 가로 것은 썸네일 칸도 가로로 — 3:4 칸에 넣으면 좌우가 잘려 뭔지 안 보인다 */
+      bt.className = 'efr' + (ED_FR_WIDE[fr[2]] ? ' wide' : '');
+      bt.title = fr[1] + ' — 사진 위에 얹어요 ('
+        + (ED_FR_WIDE[fr[2]] ? '▭ 가로 16:9 캔버스와 꼭 맞음' : '▯ 세로 3:4 캔버스와 꼭 맞음') + ')';
       bt.innerHTML = '<img src="art/' + fr[0] + '.png" alt="" loading="lazy"><b>' + fr[1] + '</b>';
       bt.onclick = function () { edAddFrame(fr); };
       grid.appendChild(bt);
@@ -10572,7 +10612,47 @@ window.gifenc=exports;})();
     });
     return n;
   }
-  edFillFrameGrid($('#edFrames'));
+  /* ── 프레임·카드 탭 — 왼쪽 도구판과 오른쪽 팔레트 두 곳에서 같은 상태를 쓴다 ──
+     한쪽에서 탭을 바꾸면 다른 쪽도 같이 바뀐다(두 곳이 다르면 뭘 보고 있는지 헷갈린다).
+     오른쪽 팔레트는 renderBnInspector() 가 통째로 다시 그리므로, 화면에서 떨어져 나간
+     옛 칸은 등록 목록에서 걸러낸다. */
+  var ED_FR_TABS = [['', '전체'], ['fr', '▯ 세로'], ['fw', '▭ 가로'],
+                    ['cd', '💗 카드▯'], ['cw', '💗 카드▭'], ['sns', 'SNS']];
+  var edFrPanels = [];
+  function edFrSync() {
+    edFrPanels = edFrPanels.filter(function (p) { return document.contains(p.grid); });
+    edFrPanels.forEach(function (p) {
+      Array.prototype.forEach.call(p.wrap.querySelectorAll('button'), function (b) {
+        b.className = (b.getAttribute('data-k') || '') === (edFrFilter || '') ? 'on' : '';
+      });
+      edFillFrameGrid(p.grid, edFrFilter);
+    });
+  }
+  function edFrTabsInto(wrap, grid) {
+    if (!grid) return;
+    /* 탭 칸이 없어도 목록은 반드시 채운다 — 예전엔 여기서 그냥 돌아가 팔레트가 텅 비었다 */
+    if (!wrap) { edFillFrameGrid(grid, edFrFilter); return; }
+    wrap.innerHTML = '';
+    ED_FR_TABS.forEach(function (t) {
+      var tb = document.createElement('button');
+      tb.textContent = t[1];
+      tb.setAttribute('data-k', t[0]);
+      tb.title = t[0] === '' ? '전부 보기'
+        : (t[0] === 'fr' ? '세로 3:4 프레임 — 방셀 3:4 캔버스용'
+        : (t[0] === 'fw' ? '가로 16:9 프레임 — 썸네일·OBS 캔버스용'
+        : (t[0] === 'cd' ? '세로 포토카드(체키) — 가운데가 뚫려 사진이 비쳐요'
+        : (t[0] === 'cw' ? '가로 포토카드 — 썸네일 16:9 에 맞음' : 'SNS 화면 틀'))));
+      if ((edFrFilter || '') === t[0]) tb.className = 'on';
+      tb.onclick = function () { edFrFilter = t[0]; edFrSync(); };
+      wrap.appendChild(tb);
+    });
+    /* 오른쪽 팔레트는 다시 그릴 때마다 새 칸이 온다 — 떨어져 나간 옛 칸은 여기서 버린다
+       (안 버리면 다시 그릴 때마다 목록이 쌓인다) */
+    edFrPanels = edFrPanels.filter(function (p) { return document.contains(p.grid); });
+    edFrPanels.push({ wrap: wrap, grid: grid });
+    edFillFrameGrid(grid, edFrFilter);
+  }
+  edFrTabsInto($('#edFrTabsL'), $('#edFrames'));
 
   /* 방셀을 하나 만들고 다음 걸 시작하려면 레이어를 하나씩 ✕ 로 지워야 했다(10개면 10번). */
   (function () {

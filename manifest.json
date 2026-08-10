@@ -1,7 +1,7 @@
 {
- "version": "2026-08-09_v16",
- "date": "2026-08-09",
- "notes": "■ 2026-08-09 (11차) — 겹친 사진 자르기 · 배경 순서 · 와이드 프레임 8종\n\n【 ✂ 겹친 사진 자르기 】\n- 편집 탭에 <▭ 네모 선택> 이 생겼어요. 드래그한 네모만큼 선택되고,\n  놓으면 <잘라내기·복사·지우기·반전> 이 뜹니다.\n  프레임 밖으로 튀어나온 부분을 반듯하게 자를 때 쓰세요.\n- 기존 <✂ 자르기> 는 <✂ 캔버스 자르기> 로 이름을 바꿨어요.\n  (그건 작업 화면 자체를 자르는 기능이라 헷갈리셨던 분들이 많았습니다)\n\n【 🖼 배경도 순서를 바꿀 수 있어요 】\n- 레이어에서 <배경> 에 ▲▼ 가 생겼어요.\n- 화면을 덮는 소품(프레임)을 얹으면 그 아래 배경이 눌려서 클릭조차 안 되던 문제가\n  해결됩니다. 배경을 위로 올리면 바로 잡혀요.\n- 예전에 저장하신 프로젝트를 열어도 배경은 <원래대로 맨 아래> 그대로입니다.\n\n【 📸 와이드 프레임 8종 추가 】\n- 리본 하트 · 달별구름 · 게이밍 HUD · 장미 · 반짝 점선 · 별비구름 · 레이스 리본 · 하트 넝쿨\n- 1920×1080 (16:9) 라 편집 탭 기본 캔버스에 딱 맞습니다.\n- 프레임이 캔버스에 얹히는 크기를 <프레임 실제 비율> 로 계산하게 고쳤어요.\n  예전엔 전부 3:4 로 가정해서, 가로 캔버스에선 프레임이 화면 밖으로 커졌습니다.\n\n【 🙂 그 밖 】\n- 하단배너 <잘릴 자리> 안내선을 점선으로 바꿨어요.\n  통짜 빨간 줄이 같은 자리의 디자인 선을 덮어서 \"저장하면 줄이 사라진다\" 고\n  보이던 것을 없앴습니다.",
+ "version": "2026-08-10_v17",
+ "date": "2026-08-10",
+ "notes": "■ 2026-08-10 (12차) — 프레임·카드 60종 추가 · 가로/세로 나눠서 고르기\n\n【 💗 포토카드(체키) 36종 추가 】\n- 가운데가 뻥 뚫린 <카드> 가 생겼어요. 사진을 넣고 카드를 얹으면\n  사진이 그대로 비치고, 테두리·글자·스티커만 얹힙니다.\n- 세로 3:4 24종 / 가로 16:9 12종.\n  LOVE · DREAM · SKY · SHINE · HONEY · ANGEL · NEON · PLAY · FILM · CUTE ·\n  POST · BOLD · SPRING · SUMMER · BOO · MERRY · SNOW · ROSE · NOIR · HALO ·\n  DEVIL · MAGIC · SWEET · STAGE\n\n【 📸 시즌·이벤트 프레임 24종 추가 】\n- 생일 · 데뷔 기념일 · 벚꽃 · 여름 바다 · 가을 · 크리스마스 · 할로윈 ·\n  게임 승리창 · 콘서트 · 상장 · 신분증 · 뽑기 캡슐\n- 같은 12종을 <세로 3:4> 와 <가로 16:9> 로 각각 넣었어요.\n\n【 ▯▭ 가로·세로를 탭으로 나눴어요 】\n- 프레임이 89종이 되면서, 캔버스에 안 맞는 걸 계속 눌러보게 됐습니다.\n- <전체 / ▯세로 / ▭가로 / 💗카드▯ / 💗카드▭ / SNS> 탭으로 갈랐어요.\n- 왼쪽 도구판과 오른쪽 팔레트가 같이 움직입니다.\n- 가로 프레임은 미리보기 칸도 가로로 나와서 무슨 그림인지 바로 보여요.\n\n【 🎀 스티커 24종 · 사진 오버레이 8종 추가 】\n- 소품 팔레트에 <스티커 (카와이)> 칸이 생겼어요 —\n  말풍선 · ON AIR/LIVE/NEW 배지 · 반짝이 · 리본 · 하트 · 왕관 · 나비 ·\n  벚꽃 · 구름 · 음표 · 커피컵 · 도장 · 화살표 · 낙서 동그라미\n- <뷰파인더·오버레이> 칸에 8종을 더했어요 —\n  필름 그레인 · 빛샘 · 비네트 · 스캔라인 · 창문 그림자 ·\n  블라인드 그림자 · 유리 물방울 · 반짝 보케\n\n【 🙂 그 밖 】\n- 프레임 미리보기 바탕을 한 톤 어둡게 했어요.\n  흰 선으로 그린 프레임이 바탕에 묻혀 빈칸처럼 보이던 문제가 없어집니다.",
  "page": "https://github.com/top030400-coder/ghkqhzlxm",
  "files": [
   {
@@ -25,6 +25,11 @@
    "s": 4006
   },
   {
+   "p": "_internal/web/bn_art5.js",
+   "h": "e09c93571ab9dabf5666493f5f7d4cd98fc6148c42b82ee168af9c8907de65ae",
+   "s": 2570
+  },
+  {
    "p": "_internal/web/book_runtime.js",
    "h": "8b04af2406af4a2d76591d4ecc3d901bf13b47e5369a9bcac97c9f69658067a7",
    "s": 6872
@@ -36,8 +41,8 @@
   },
   {
    "p": "_internal/web/editor.html",
-   "h": "ed266d13898fccb29b59e451afc8c0ee782a71f95381d10bbe47ff7b69a4b7b4",
-   "s": 987437
+   "h": "31f2009717572e2b1389001185d50799bd1f5c6d50ae095a9e92c1cc9b7a7b6d",
+   "s": 994390
   },
   {
    "p": "_internal/web/engine.css",
@@ -90,6 +95,11 @@
    "s": 149598
   },
   {
+   "p": "_internal/web/art/patch_fr_autumn.png",
+   "h": "9912db00923966d479b9fc60840716abef5791abb3fc3f368cb6a347e48202b1",
+   "s": 34293
+  },
+  {
    "p": "_internal/web/art/patch_fr_bangsel_china.png",
    "h": "4b1c0a92e9911ad4709d6c11d942d53a089fe7b595fad5038357dd7c5ca1441a",
    "s": 212046
@@ -105,9 +115,214 @@
    "s": 194220
   },
   {
+   "p": "_internal/web/art/patch_fr_birthday.png",
+   "h": "46e2a2ec3813d17b3dbf0e9ddc6ce749883a8e4958fd11cd471b53c82a72361c",
+   "s": 28910
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_angel.png",
+   "h": "a6bfe7625d067b78d3f1a6aaa3048713dddf93e7148ab3e211d07c85ea7123f5",
+   "s": 219016
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_bold.png",
+   "h": "3840a2f7d4f823d8387448840577f4a39076f2b322917a591ef9d3605aefa8d3",
+   "s": 166223
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_boo.png",
+   "h": "7ab89893eb09c21fb616ffb27d6b6d905042f34c4d21526157ac4a5a424d3eeb",
+   "s": 256386
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_cute.png",
+   "h": "5029c34e7cc071c08cb799454a03062edfd1556c3b82634c236749a11e568dbd",
+   "s": 202713
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_devil.png",
+   "h": "a68acc7d20c9a5b0f85c684de5dba6da320d56ded52bc7afb8092917bcb2d37a",
+   "s": 190158
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_dream.png",
+   "h": "10689cdf40fd4153d3d6159c0ef3663a09459ff7aa0426fe667f3a3d91cb41d9",
+   "s": 188671
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_film.png",
+   "h": "ece029ebca783530968ef789dabbfb6f8f739be32276b47e0df5ba4331d3f998",
+   "s": 228606
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_halo.png",
+   "h": "2ef7d85cd43d759088acf48f49f2e9b66ef1c0e35dfc2f6d02f9fdc07ec6ee2e",
+   "s": 194894
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_honey.png",
+   "h": "aa84c1d96a0a1cabe60f2a3011de2179a8c28147d5817293f7870f926e8733c0",
+   "s": 291370
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_love.png",
+   "h": "1be9e436c82dbfe00c569c6a37db4be624cd340a1a40232fb40048871886bcff",
+   "s": 184623
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_magic.png",
+   "h": "413ee2f3778c152472af7eaf82aa3061155a6e09f95ce34599fb08ed53be4dcb",
+   "s": 176274
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_merry.png",
+   "h": "1e5fc68704cc01c0b9e706ebc8b484e997265d7cbf8aad1ab9f1aeedd311c87c",
+   "s": 184831
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_neon.png",
+   "h": "42fdd3d99139af682e9f184b5f7bc6a4b0915ab846cd2b1ecf92c4a64b6eb42a",
+   "s": 213324
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_noir.png",
+   "h": "8de1cda914d99c43b603e4eb7476d963e5f55f1fbd53a68ecc6d8cb0cd00cb4e",
+   "s": 207856
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_play.png",
+   "h": "73ee047cfc965083ebcb38765e0318a3444d575188de664dea72d075885f20c5",
+   "s": 194983
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_post.png",
+   "h": "6f3762f6761cf40fd57967c00e68b15537f21ad094223aa62522ec51b74d2e71",
+   "s": 223100
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_rose.png",
+   "h": "dc7572177de03b9e1f4e579c8c79bff7834013ea3f85c46952821ee2b0bc2f70",
+   "s": 195614
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_shine.png",
+   "h": "387e8de7bb80ef199517b4d9df7f4c7f6d4c4f98223a9d5b24bec46d4adf5b75",
+   "s": 190107
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_sky.png",
+   "h": "e664e27da055ae41bdcb0fcf26d98eeff20123e8ed6c12c700ed215ce1d63c24",
+   "s": 175142
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_snow.png",
+   "h": "f0a2316759ce49b50b383d682e02f82cfbad86e793e9a4810a3c7df61321be63",
+   "s": 177876
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_spring.png",
+   "h": "a4076eb72c7e7ab141aca947d511d07c66be5c77337515cc22792c37d4921453",
+   "s": 200381
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_stage.png",
+   "h": "3d89df5e92d1ec097e76daf1da178c73601dd286ebe7f033a9ef12a998092ca8",
+   "s": 226029
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_summer.png",
+   "h": "5b5d69f92d59e33fe250fc5ff1819560c6109f964c5c8140280a87f434457e15",
+   "s": 217158
+  },
+  {
+   "p": "_internal/web/art/patch_fr_c_sweet.png",
+   "h": "2f101dcb00f05124df9e74aaeb0b8e330cd93d9329154737973102cc520b09fe",
+   "s": 184211
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cert.png",
+   "h": "502a1b204715a882fe3b13f1e0a3ccb290787019cf70ce8eab0730b817c1e574",
+   "s": 17597
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cherry.png",
+   "h": "c612ff4aabb83ad64fb644e707e95fc76a698d67a5c3b20762708dc731d482f2",
+   "s": 31881
+  },
+  {
    "p": "_internal/web/art/patch_fr_comic.png",
    "h": "552e9d88fc3ce3694ab89d9ef93882831904975d17aaa776286fc71610a22359",
    "s": 157019
+  },
+  {
+   "p": "_internal/web/art/patch_fr_concert.png",
+   "h": "7342d75523e8c82b50ca37ed045b040c3a2f1ed60a8c5b5dd8b4c1bcf2af5c86",
+   "s": 26848
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_angel.png",
+   "h": "3629960b18f2128d43bd6dcd49657c06a73a1b8b72bca1084be92d76da42c4a7",
+   "s": 186285
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_film.png",
+   "h": "7e89b764891c30fd4ad77c1a7abb7a07c40200d9679298908392b310311dbab5",
+   "s": 180849
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_love.png",
+   "h": "fd5ca376a52a44dbad9686fc301d713476b3b2fc33c0b13c5de52c65209deadc",
+   "s": 147864
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_neon.png",
+   "h": "8d662b129b2f4dde1af7dfa21241c6cc5f4e8e529e811dfa59d91798edc6024b",
+   "s": 174003
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_play.png",
+   "h": "9740704b1bacba01cce481b0191847ea2902944de08d320106dc8aa590a714a1",
+   "s": 160953
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_shine.png",
+   "h": "0c68569bc888c8f592da37bf4ae52b80f35ffa490b509094352958d9983ed714",
+   "s": 158154
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_sky.png",
+   "h": "4327b4b309c8bb63cd3b7b2730c19a2da9872c0bbd355b11fcf5709da2d2f4c4",
+   "s": 142161
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_snow.png",
+   "h": "84cf2991b49b5c244e96f3aca66bef6051b03dafa2257fd603187f287b1508b3",
+   "s": 143251
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_spring.png",
+   "h": "2044c4ba54d50d3d0000a4972bfbe8e0cfa59fe3ad2efaa4f9c1591fbe1dea66",
+   "s": 158153
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_stage.png",
+   "h": "d85c4a4030078c091767fecf2a3826df91eb143936a3bd5eb30e00498f674e5c",
+   "s": 207451
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_summer.png",
+   "h": "0feb75021a5a326d5b2de9665e1f156efd17f4c522ea627134870cc268bc4f55",
+   "s": 175325
+  },
+  {
+   "p": "_internal/web/art/patch_fr_cw_sweet.png",
+   "h": "152b88d33e5bee12d8e731ad789c9e6ab31b76bab8aa4943dcc992974711d1b9",
+   "s": 146760
+  },
+  {
+   "p": "_internal/web/art/patch_fr_debut.png",
+   "h": "c7cfa98bd63abcfe611cf2de3c520f8f191b8d56ce20a126449762e040c49099",
+   "s": 24427
   },
   {
    "p": "_internal/web/art/patch_fr_diary.png",
@@ -120,6 +335,11 @@
    "s": 151903
   },
   {
+   "p": "_internal/web/art/patch_fr_gacha.png",
+   "h": "454d4c1b669edcc7eb9ce45575f3159fe6b642b4a9d2dafa91a2d27a04d806d5",
+   "s": 25817
+  },
+  {
    "p": "_internal/web/art/patch_fr_gameboy_wht.png",
    "h": "a433af7d0cdeb6c269a936148982295db8e45245979fa1d79dfe8973e17f949f",
    "s": 89543
@@ -128,6 +348,16 @@
    "p": "_internal/web/art/patch_fr_gameboy_ylw.png",
    "h": "9a85cc2be054d88503d841f79f935b492cb57f1e8368c979268c289425d89342",
    "s": 40327
+  },
+  {
+   "p": "_internal/web/art/patch_fr_hallow.png",
+   "h": "ce84c19bbfdc043120f3a7e2e2ee2ff9a31e351adcd685f34275832dc4b6456a",
+   "s": 23478
+  },
+  {
+   "p": "_internal/web/art/patch_fr_idcard.png",
+   "h": "9159ffea35e68bcd5e9ae4f052bc96e6e7ac21a4ea59283b434bb402caa6321c",
+   "s": 13285
   },
   {
    "p": "_internal/web/art/patch_fr_journey.png",
@@ -165,14 +395,69 @@
    "s": 80231
   },
   {
+   "p": "_internal/web/art/patch_fr_sea.png",
+   "h": "c460a323f477f7b650ee6dc8dd574d46763aba3de1ff3cdca6fa868556afddc1",
+   "s": 29264
+  },
+  {
+   "p": "_internal/web/art/patch_fr_victory.png",
+   "h": "e7b01d973228f4ecdb77e06b84d47795a953363ddcea3bc898cba0be8a8a6e63",
+   "s": 19906
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_autumn.png",
+   "h": "cf13ebe167b6ce671d6bb859b613f279a14df57ea043ac7f48087d71edba8356",
+   "s": 114586
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_birthday.png",
+   "h": "95f40cc54dbdafa9e23a8f7b1dbd47c2af0da563d5b968c90788890a22a4b348",
+   "s": 90574
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_cert.png",
+   "h": "f29a6b1e6d2de385e6471480663bc810f4a45044aae511700e146839e2d94fdd",
+   "s": 62848
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_cherry.png",
+   "h": "07fd2caffe04d55a1f646b701985b2697847744962cfabbbfb4087bff57c294c",
+   "s": 108990
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_concert.png",
+   "h": "5948e927bbe5784e0b60e92abe405fd20b2dd27891b11e93cd1be3d7cedaf5e5",
+   "s": 76507
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_debut.png",
+   "h": "34f52c5607b2142395c419bd19a59906b17f6dfbf03bf1f87d9618e9c1351502",
+   "s": 115518
+  },
+  {
    "p": "_internal/web/art/patch_fr_w_dots.png",
    "h": "ee65e54fce34dde6a68a8837e04f028c21cc152391d6940d9e3da4d88232c075",
    "s": 86502
   },
   {
+   "p": "_internal/web/art/patch_fr_w_gacha.png",
+   "h": "f958383eb9d6dacc25fa25532bb9de24545631659784f03055dd09cd178ed6b4",
+   "s": 78090
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_hallow.png",
+   "h": "27ba623594ae0ba4ade8ef21583126d06113f20c21549f59fd6f543faa28ae32",
+   "s": 88947
+  },
+  {
    "p": "_internal/web/art/patch_fr_w_heart.png",
    "h": "d1c2d8d37dc7a23df13676d049d51fe8dd96d0fc423da0efd062a938d0746e68",
    "s": 208722
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_idcard.png",
+   "h": "c6fbb940c5fbde06fd1ffcc106d3c4e906c340692a26c273802e623af7c20098",
+   "s": 30651
   },
   {
    "p": "_internal/web/art/patch_fr_w_lace.png",
@@ -195,6 +480,11 @@
    "s": 282593
   },
   {
+   "p": "_internal/web/art/patch_fr_w_sea.png",
+   "h": "90a54e1e37726e609b1cc166215349ade0b025cc6e631ed717396eb1c47c90c1",
+   "s": 80532
+  },
+  {
    "p": "_internal/web/art/patch_fr_w_stars.png",
    "h": "52092bce8abd95bf71232be242ca783c46989c1b0fd6968b22d94ad5b1b51de0",
    "s": 162078
@@ -203,6 +493,21 @@
    "p": "_internal/web/art/patch_fr_w_tech.png",
    "h": "913e0e5e1bb7c076e7bc871c9fc146b20ece74eba763edd4989acfdb5b724d15",
    "s": 146754
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_victory.png",
+   "h": "4c2da6dc418fb4a1f3b16875484a469419391905c98e5260808cbc9ed74c5315",
+   "s": 59489
+  },
+  {
+   "p": "_internal/web/art/patch_fr_w_xmas.png",
+   "h": "4f21a29ba73f2191f6aecd578a1e05c9523ca43a4ca971dfbf7387e1b61d4b28",
+   "s": 110725
+  },
+  {
+   "p": "_internal/web/art/patch_fr_xmas.png",
+   "h": "4104fd0dd54f686b381f92ac08b270a9f973c56f153454ed8721c08e2576f849",
+   "s": 29974
   },
   {
    "p": "_internal/web/art/patch_fr_zine.png",
@@ -755,6 +1060,16 @@
    "s": 335621
   },
   {
+   "p": "_internal/web/bn/patch/ovl_blind_w.png",
+   "h": "071d766a13a13fdc6af05aab1839d511fc3911ca75b238622bef8eb52df8bbb0",
+   "s": 142851
+  },
+  {
+   "p": "_internal/web/bn/patch/ovl_bokeh_w.png",
+   "h": "67787fc4ee9178e21855cb7ab15dda89a92a92ded17140f36f4d1c8149006269",
+   "s": 103988
+  },
+  {
    "p": "_internal/web/bn/patch/ovl_cctv_w.png",
    "h": "6ca1b8e957ed3077918450982a8b49d5a5c5435195218d2d2702a658a9dab95a",
    "s": 38895
@@ -763,6 +1078,11 @@
    "p": "_internal/web/bn/patch/ovl_date_w.png",
    "h": "7c2fbb44125c8ed57bbe0c10b231eb96526acd4894fa259c7bdd79bfac4986bf",
    "s": 21643
+  },
+  {
+   "p": "_internal/web/bn/patch/ovl_drops_w.png",
+   "h": "46e394b406ec1d6c51f6368e456883adcf81b0713dbc26203027af2965f4ab63",
+   "s": 502231
   },
   {
    "p": "_internal/web/bn/patch/ovl_film_w.png",
@@ -778,6 +1098,11 @@
    "p": "_internal/web/bn/patch/ovl_focus_w.png",
    "h": "e99fc219c6000dc745c4b420dd98945f4814a573d0ec31a82113c409baf5ef54",
    "s": 28973
+  },
+  {
+   "p": "_internal/web/bn/patch/ovl_grain_w.png",
+   "h": "72d068aef23ca21333f3cbc0b6f2ced99092f794aa0ea61a03520942839cf3f0",
+   "s": 536597
   },
   {
    "p": "_internal/web/bn/patch/ovl_grid_t.png",
@@ -800,6 +1125,11 @@
    "s": 28022
   },
   {
+   "p": "_internal/web/bn/patch/ovl_leak_w.png",
+   "h": "5a9984415fd78e163a71f383a7b49c64bdfb0e33b1d8cae7f94953d744aab138",
+   "s": 48180
+  },
+  {
    "p": "_internal/web/bn/patch/ovl_polaroid_t.png",
    "h": "adc5b66b881e84acde0144a7f6653f8f72324b98f6f152a96c17daa6ea212022",
    "s": 9250
@@ -815,9 +1145,24 @@
    "s": 31037
   },
   {
+   "p": "_internal/web/bn/patch/ovl_scan_w.png",
+   "h": "3ebd56a8660a42ce4d12793bba54ca07d89a7d74bbc9bfd68b1eee51c65d3ccc",
+   "s": 11257
+  },
+  {
    "p": "_internal/web/bn/patch/ovl_sparkle_t.png",
    "h": "188a645b5d2c185c65f83c78129254631f1f2184799b96e3b3c0490b881579ac",
    "s": 27815
+  },
+  {
+   "p": "_internal/web/bn/patch/ovl_vign_w.png",
+   "h": "9b6d77a6d3a5adf54bae8d929721daddae65cad26c23b778bf69a7255eed1545",
+   "s": 54184
+  },
+  {
+   "p": "_internal/web/bn/patch/ovl_winsh_w.png",
+   "h": "2b05fe7d2e46fbec5741e98e27bb6a85d8d781f1b8de1014ead2b9789d0a3823",
+   "s": 50038
   },
   {
    "p": "_internal/web/bn/patch/patch_bangsel_base_01.png",
@@ -1143,6 +1488,126 @@
    "p": "_internal/web/bn/patch/patch_paper_brown_p20-22.png",
    "h": "106ae370f1e9e635192441c7bda02d4e13910bab19a916637f3e7c9468c6afcc",
    "s": 7308
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_01.png",
+   "h": "f096428577fda9fad22beb9c7806dc6fc4e0cff5b593948fad96d1c367804f1e",
+   "s": 347882
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_02.png",
+   "h": "e372962c8899b5a6403e5a12021d5fa99f004f4a9cf90d48ec947ef453f94766",
+   "s": 345801
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_03.png",
+   "h": "00d719a294732a5e86355dd4b9208c41e749e3c557715f41122220d98422d4d1",
+   "s": 336916
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_04.png",
+   "h": "1ccfa9da7a1d9c369b1d2ec8cd5c27da62e4bce7685fc1c7d4f3a2ad986183ff",
+   "s": 240022
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_05.png",
+   "h": "108bc9f29e726ef00945a7d4ceac6f422fb3965768aa1468951ae444ae14327f",
+   "s": 263539
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_06.png",
+   "h": "99f05fb564542d38d90c30d6794c1b0992b202337ffb21925a8026b5a290eedb",
+   "s": 457417
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_07.png",
+   "h": "c30cba77d204d8bc5f3c733276426ecf65b0dc5a61cddcee7659735f30c48318",
+   "s": 166170
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_08.png",
+   "h": "ca9408c3c045b6911ecc4197a1847239703f81cc237ad276c084fbea797e2d88",
+   "s": 238513
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_09.png",
+   "h": "e8f3b9e00514c3939cb56d2e5266a530266d45864d795901ec664fa136930587",
+   "s": 388075
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_10.png",
+   "h": "8e8f17f844a50af3d12e598d631448cb8fff67c1cdd5545c047c863fab7b96ba",
+   "s": 385069
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_11.png",
+   "h": "4636898007137a52c7c6a6310d38092b7bfbd5f2531accd0511dd28ab18414ae",
+   "s": 478827
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_12.png",
+   "h": "c5a3ffc65c4a644371879cdd77c06df7df32bd42814b521bc6ec1cb91a8fc090",
+   "s": 184539
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_13.png",
+   "h": "5e3f23c1510c3a106fd6f1487611eb4d2a54f9ff2a61650d1d9841549317bbcc",
+   "s": 359350
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_14.png",
+   "h": "4ee827c88ec8a97a94f9e15651f384bcc0a84137b4edbe90b436dcf1966cfab5",
+   "s": 283444
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_15.png",
+   "h": "d894c249497a2e6dbb9d08ac438d43275b9a5f093ca7aadc13e5dfc6ec1b5625",
+   "s": 301026
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_16.png",
+   "h": "b3e1ec20e0a6952d5deb208c71d49bc246d5bf20617333825d205c90ca7cd8fd",
+   "s": 407453
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_17.png",
+   "h": "b4345a18d90a35e72c40329d3a7782a0051e9d9ab85a1a221d7a564de74fe9bc",
+   "s": 387269
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_18.png",
+   "h": "0a8ebc7565e1a6e94eb888b504963419951de66ea74a436615f1d215a6596924",
+   "s": 298413
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_19.png",
+   "h": "1906397de2272a583de582905bbfb0fb201f238f7a4d075fc231730d4509d692",
+   "s": 285995
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_20.png",
+   "h": "85deb8c705491702be91f44c2aed52d9a02e1412dc742daa542b041c6595f68e",
+   "s": 352984
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_21.png",
+   "h": "a2952689a8230ecb653750693cdb75a3526763cacdce3fccb98fe426063026bb",
+   "s": 295237
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_22.png",
+   "h": "fa632e25c94b25a14e307c60721f16d21e4945b5949147fd64503c3d668d58df",
+   "s": 261454
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_23.png",
+   "h": "6a048aa1dbe194a100bf8949db8ea488af3868c89717d7dc6d4a71eeb56e573e",
+   "s": 306445
+  },
+  {
+   "p": "_internal/web/bn/patch/patch_stk_24.png",
+   "h": "014be2c132864ced20c49032e30ba095985eb91892fd5f372fa84f9f39553bc4",
+   "s": 266543
   },
   {
    "p": "_internal/web/bn/patch/patch_tape_bright_p25-01.png",
@@ -2516,7 +2981,7 @@
   },
   {
    "p": "_internal/web/version.json",
-   "h": "1b4f47d36bec9c57a7f5edb09b5602780f1b33960e42e891fe20a297159616d7",
+   "h": "5eb9089d19d2ee6ce2dd9ac4dc9da399a9beb04ffbf1c85e4c36a36367aa9f2f",
    "s": 179
   }
  ],
