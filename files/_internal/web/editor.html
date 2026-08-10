@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v5 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v18 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -686,7 +686,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v17</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v18</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -10556,6 +10556,22 @@ window.gifenc=exports;})();
   ];
   /* 가로(16:9) 분류 — 썸네일 칸 비율과 "얹을 때 기본 크기"를 이걸로 가른다 */
   var ED_FR_WIDE = { fw: 1, cw: 1 };
+  /* 캔버스를 프레임에 맞춰 바꿨을 때 잠깐 알려준다 — 갑자기 화면 모양이 바뀌면 놀라니까.
+     알림창(alert)은 흐름을 끊어서 안 쓰고, 왼쪽 안내 칸 글자만 잠깐 바꾼다. */
+  var edHintTimer = null, edHintKeep = null;
+  function edFrNotice(w, h) {
+    var el = $('#edHint');
+    if (!el) return;
+    if (edHintKeep === null) edHintKeep = el.innerHTML;
+    el.innerHTML = '📐 캔버스를 <b>' + w + '×' + h + '</b> ('
+      + (w >= h ? '가로' : '세로') + ') 로 맞췄어요 — 프레임에 맞게 바꿨습니다.<br>'
+      + '<span style="color:#8b887c">원래 크기로 되돌리려면 Ctrl+Z 또는 위 [캔버스 크기] 에서 고르세요.</span>';
+    clearTimeout(edHintTimer);
+    edHintTimer = setTimeout(function () {
+      if (edHintKeep !== null) el.innerHTML = edHintKeep;
+      edHintKeep = null;
+    }, 6000);
+  }
   /* 프레임 한 장 얹기 — 왼쪽 도구 패널·오른쪽 인스펙터 두 곳에서 같이 쓴다 */
   function edAddFrame(fr) {
     if (edCapFull(ensureBanners().edit)) return;
@@ -10584,7 +10600,18 @@ window.gifenc=exports;})();
             (Image 를 만들어 바로 naturalWidth 를 읽으면 아직 0 이다) */
       measureInto(lay, durl, function () {
         var fw = lay.iw || 1086, fh = lay.ih || 1448;
-        var sc = Math.max(100, Math.ceil((def.w / def.h) / (fw / fh) * 100));
+        /* ⚠ 세로 프레임을 가로 캔버스에 얹으면 '덮기' 계산이라 238% 로 커져 화면 밖으로 나갔다.
+              프레임 크기를 줄이면 테두리가 캔버스 안에 뜨는 이상한 그림이 된다.
+           → 방향이 다르면 캔버스를 프레임에 맞춘다(요청). 방향이 같으면 크기는 그대로 둔다
+              (1280×720 에 16:9 프레임을 얹었다고 1920×1080 으로 바꾸진 않는다). */
+        var e3 = ensureBanners().edit;
+        var cur = (e3.cw || def.w) / (e3.ch || def.h), fr = fw / fh;
+        if (Math.abs(cur - fr) / fr > 0.02) {
+          edSetSize(fw, fh);
+          edFrNotice(fw, fh);
+        }
+        var d3 = ensureBanners().edit;
+        var sc = Math.max(100, Math.ceil((d3.cw / d3.ch) / (fw / fh) * 100));
         lay.sc = Math.min(sc, 600);
         refreshBnStage();
         renderBnInspector();
