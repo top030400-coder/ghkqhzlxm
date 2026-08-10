@@ -1,7 +1,7 @@
 {
- "version": "2026-08-10_v18",
+ "version": "2026-08-10_v19",
  "date": "2026-08-10",
- "notes": "■ 2026-08-10 (13차) — 프레임 누르면 캔버스가 알아서 맞춰져요\n\n【 📐 세로 프레임을 누르면 캔버스도 세로로 】\n- 가로(16:9) 캔버스에서 세로(3:4) 카드를 누르면 프레임이 238% 로 커져서\n  화면 밖으로 튀어나갔어요. 반대도 마찬가지였고요.\n- 이제 누른 프레임에 맞춰 <캔버스가 알아서 세로/가로로 바뀝니다>.\n  바뀌면 왼쪽에 잠깐 안내가 뜨고, Ctrl+Z 로 한 번에 되돌릴 수 있어요.\n- 방향이 이미 같으면 크기는 안 건드립니다\n  (1280×720 에서 가로 프레임을 눌러도 그대로 1280×720 이에요).",
+ "notes": "■ 2026-08-10 (14차) — 배너에 장식 테두리 36종\n\n【 ✦ 흰 선 장식 테두리 】\n- 배너 레이아웃에 <장식 테두리> 계열이 생겼어요. 사진 위에 흰 선 테두리만 얹혀서\n  사진은 그대로 다 보이고 테두리만 예쁘게 둘러집니다.\n- 모티프 8종 — 리본·하트 / 별비·달 / 레이스 / 장미 / 반짝이 / 나비·꽃 / 체리 / 눈결정\n- 들어간 곳 : 상단 8 · 하단 8 · 썸네일 8 · 하단통짜 8 · 사이드 4  (합계 36)\n- 어떤 사진에 얹어도 보이도록 가장자리에만 옅은 그늘을 함께 깔았어요.\n  (흰 선이 밝은 사진에 묻히던 문제)",
  "page": "https://github.com/top030400-coder/ghkqhzlxm",
  "files": [
   {
@@ -41,8 +41,8 @@
   },
   {
    "p": "_internal/web/editor.html",
-   "h": "b31e7fc296ff0490045893c892389c8c20c7c3e79cac5c9e0bfc5baa0ccfddc0",
-   "s": 996023
+   "h": "884beed079b1f6152b22a0ffeca1e16374861b2ec9b27447f49754d4ba71dba0",
+   "s": 1064987
   },
   {
    "p": "_internal/web/engine.css",
@@ -88,6 +88,186 @@
    "p": "_internal/web/art/newsprint.png",
    "h": "9a606bafc86ef5d351445d45ff2b0801a00c9be7b9593d657a988515e8619ca1",
    "s": 2282965
+  },
+  {
+   "p": "_internal/web/art/orn_b6_m1.png",
+   "h": "fb65be7a0de3f2090d77bfb84dc6220518c9c7c99889534604c1f6cb515b8ae6",
+   "s": 83436
+  },
+  {
+   "p": "_internal/web/art/orn_b6_m2.png",
+   "h": "6a0b99700ef1f72db049dc7affd98828a543475196a66841a3fd335e5ced221a",
+   "s": 28842
+  },
+  {
+   "p": "_internal/web/art/orn_b6_m3.png",
+   "h": "5c5c6df75ec8769bfa3a92fb657062877c1b4c4f73df4260e239e426a9f1be4a",
+   "s": 86242
+  },
+  {
+   "p": "_internal/web/art/orn_b6_m4.png",
+   "h": "424cb0c0beaab693315f2b528897e7ca88f88cb6f32fdcef6d94d320e1bc2785",
+   "s": 44895
+  },
+  {
+   "p": "_internal/web/art/orn_b6_m5.png",
+   "h": "e75aaca12e84390db585e44a056eac9feb9054c3965803404248513f8074e52f",
+   "s": 53154
+  },
+  {
+   "p": "_internal/web/art/orn_b6_m6.png",
+   "h": "efbfba70859c250bc5cdef93f1f9a9619593927818da8f2aa2ebb006a26b8862",
+   "s": 67556
+  },
+  {
+   "p": "_internal/web/art/orn_b6_m7.png",
+   "h": "ac922d97cbd22e19ae8054f7d742c9f045cace045fbc9b0fe1e5c08ec205b5e5",
+   "s": 57155
+  },
+  {
+   "p": "_internal/web/art/orn_b6_m8.png",
+   "h": "60200431413f543929ae9400f83bb735a51f2666d89f04a5398464debd697f05",
+   "s": 79170
+  },
+  {
+   "p": "_internal/web/art/orn_bot_m1.png",
+   "h": "950cda92f98339fc74ba7d3b39b02017e992a092b76d228bdb789bd617035b7d",
+   "s": 31119
+  },
+  {
+   "p": "_internal/web/art/orn_bot_m2.png",
+   "h": "721eae218e67f14346a761d5cea06badf4c8caf94aeea730add771cfbb7cb711",
+   "s": 17100
+  },
+  {
+   "p": "_internal/web/art/orn_bot_m3.png",
+   "h": "67c98b41f97cdab1012f8ac55b045cc4b5537afc7e3dc1ae44395338c356f4f2",
+   "s": 31910
+  },
+  {
+   "p": "_internal/web/art/orn_bot_m4.png",
+   "h": "85603da27033858c1e6c3e5e6bd42e13abb6aa07eb411c35469d47a53b2209d6",
+   "s": 29629
+  },
+  {
+   "p": "_internal/web/art/orn_bot_m5.png",
+   "h": "049ab6d473bf5f4927e7d03905cd9d1deda98b22135bbffe4493b553db41e5fe",
+   "s": 39561
+  },
+  {
+   "p": "_internal/web/art/orn_bot_m6.png",
+   "h": "5e26e621d337cbc8443a44b9bfb825f1b83afae1ddc9323ea75d97fae67cb1c2",
+   "s": 48215
+  },
+  {
+   "p": "_internal/web/art/orn_bot_m7.png",
+   "h": "79076184241767c31b58f5ce19e4894092d85aa20648d2bb6df0ed107614952d",
+   "s": 26708
+  },
+  {
+   "p": "_internal/web/art/orn_bot_m8.png",
+   "h": "28cad70f34db249b95883f53712b3086c798ea5ec5aca13b75e1794190e2069d",
+   "s": 46305
+  },
+  {
+   "p": "_internal/web/art/orn_sd_m1.png",
+   "h": "16fbfef551a2ae6ed570c2bb28d607a392223065675413f160382b1c3a2c9919",
+   "s": 36393
+  },
+  {
+   "p": "_internal/web/art/orn_sd_m2.png",
+   "h": "e872fdb2a90a0ee793159e5819b2212a07d7d89628967033953f0da96d56e5a4",
+   "s": 22339
+  },
+  {
+   "p": "_internal/web/art/orn_sd_m3.png",
+   "h": "f876ecda56b83f850da330099fcfc1627188eacb2be9dc1248bea8b2b4736735",
+   "s": 43688
+  },
+  {
+   "p": "_internal/web/art/orn_sd_m5.png",
+   "h": "b338a97cb53fae8e2675c0186891cac695b997b5ebebe4db402427841aa7498a",
+   "s": 17512
+  },
+  {
+   "p": "_internal/web/art/orn_th_m1.png",
+   "h": "7049636ada4b508f4c867cd23cc88eea52f260ec1e318e51a14957ab4d0f3078",
+   "s": 111830
+  },
+  {
+   "p": "_internal/web/art/orn_th_m2.png",
+   "h": "e3aae5673e529d93b94a707d3ca42deabcd06ea98999beee6189742af69b9047",
+   "s": 43398
+  },
+  {
+   "p": "_internal/web/art/orn_th_m3.png",
+   "h": "0193c64aad2bf5f868e269d95896b8a27eba4c4a8457369ec67b8ff411a1d8c4",
+   "s": 115344
+  },
+  {
+   "p": "_internal/web/art/orn_th_m4.png",
+   "h": "3572b8a2a02762d27d53e048ac0aa84be748ffc9fbadeb17587c8a27ed65a23e",
+   "s": 64410
+  },
+  {
+   "p": "_internal/web/art/orn_th_m5.png",
+   "h": "23187ce38aed1350d3852277fa5c65fb3b50f0dedd7a8cb0bb8ee865925c4c94",
+   "s": 35148
+  },
+  {
+   "p": "_internal/web/art/orn_th_m6.png",
+   "h": "4c22b5068c48291605752ed0403ef1c0dd3c762c22815b23bfd23d096d78247e",
+   "s": 46571
+  },
+  {
+   "p": "_internal/web/art/orn_th_m7.png",
+   "h": "08d1b1945cc593b2126300a2c3f2db7b0a868a44371dd5c811a2581a25d26a98",
+   "s": 63589
+  },
+  {
+   "p": "_internal/web/art/orn_th_m8.png",
+   "h": "5eae0229f46a4d1c0f8f9236d86da0da72953dc5e07305d1f260887e07276f80",
+   "s": 92041
+  },
+  {
+   "p": "_internal/web/art/orn_top_m1.png",
+   "h": "8d286425f64b85fe2d0ac5a4d9347bc5c59e9dc397382c786f782afd406b8517",
+   "s": 71679
+  },
+  {
+   "p": "_internal/web/art/orn_top_m2.png",
+   "h": "9ad5431e10d27d322d167e559f57c4e54ebb03ef249c83555a325b423c44aaea",
+   "s": 31608
+  },
+  {
+   "p": "_internal/web/art/orn_top_m3.png",
+   "h": "177672c366bf5ca9370010f9138ebdfd773e9e9fb0d79354eae5f28e6b2f12ad",
+   "s": 43172
+  },
+  {
+   "p": "_internal/web/art/orn_top_m4.png",
+   "h": "a5db26279fbbb399accb094fe54f23c876c3dbf78d92f51cab37563f1d7f05d5",
+   "s": 47913
+  },
+  {
+   "p": "_internal/web/art/orn_top_m5.png",
+   "h": "8e5a63aa345a4b9527bca61b398115e9ecf4b5b69c4a65fbd54f12b101c2cb13",
+   "s": 59454
+  },
+  {
+   "p": "_internal/web/art/orn_top_m6.png",
+   "h": "5a0ca234cb1fc53b4525fa7038c9daa65a92f42cec838cb9772d464d738e512d",
+   "s": 82456
+  },
+  {
+   "p": "_internal/web/art/orn_top_m7.png",
+   "h": "d3e1d8adb34dff19ff29fbcaf96b99a943897f06b11c23175757487d5c42a7d2",
+   "s": 51168
+  },
+  {
+   "p": "_internal/web/art/orn_top_m8.png",
+   "h": "c1bf748299472eebacc066ecab64e3dc150c4f0ab4c5155ca336997bb406e6b1",
+   "s": 86041
   },
   {
    "p": "_internal/web/art/patch_fr_airmail2.png",
@@ -2981,7 +3161,7 @@
   },
   {
    "p": "_internal/web/version.json",
-   "h": "c8b6af47bf8516ce67f09d9bfd45ad04b67cad40a205a022b47989b520b0be46",
+   "h": "839cc67751982c4d50b56a305b46f0c8d42cca6522fedc3e703074606a1bfaf5",
    "s": 179
   }
  ],
