@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v19 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v20 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -438,9 +438,13 @@
   .decoPick input[type=color]{width:30px;height:24px;border:1px solid #c9c6ba;border-radius:5px;padding:0;background:#fff;cursor:pointer;flex:none}
   .decoPick.on{border-color:#7f9a6a;background:#eef2e4}
   /* 자유 텍스트 행 */
-  .txtRow{position:relative;display:flex;align-items:center;gap:5px;margin-bottom:6px}
-  .txtRow input[type=text]{flex:1;min-width:0}
-  .txtRow textarea{flex:1;min-width:0;resize:none;overflow:hidden;min-height:30px;line-height:1.5}
+  /* ⚠ 한 줄에 다 넣으면 글자칸이 찌그러진다.
+        옆 컨트롤(글꼴 92 + 크기 52 + 각도 52 + 색 28 + 폭 52 + fx + ✕ + 간격) 합이
+        375px 라 인스펙터(384px)를 넘겨, 남는 폭이 0이 된 글자칸이 한 글자씩 세로로 떨어졌다.
+        → 줄바꿈을 허용하고 글자칸에 최소 폭을 준다. 자리가 넓으면 지금처럼 한 줄로 붙는다. */
+  .txtRow{position:relative;display:flex;align-items:center;gap:5px;margin-bottom:6px;flex-wrap:wrap}
+  .txtRow input[type=text]{flex:1 1 170px;min-width:130px}
+  .txtRow textarea{flex:1 1 170px;min-width:130px;resize:none;overflow:hidden;min-height:30px;line-height:1.5}
   .txtRow .fsel{max-width:92px;font-size:10px;padding:2px 3px;border-radius:5px;color:#6f6d63;flex:none}
   .txtRow .tsz{width:52px;flex:none;font-size:11px;padding:3px 4px;text-align:right}
   .txtRow .fsel.on{color:#2e3a28;border-color:#7f9a6a;font-weight:700}
@@ -686,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v19</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v20</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
