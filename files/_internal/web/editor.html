@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v24 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v25 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v24</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v25</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -1043,6 +1043,8 @@
         <div class="ckRow">이름 <input type="text" id="giName" placeholder="이름/닉네임 직접 입력" style="flex:1"></div>
         <div class="ckRow">폰트 <select id="giFont" style="flex:1"><option value="-1">굵은 기본체</option></select></div>
         <div class="ckRow">글자 크기 <input type="range" id="giSize" min="30" max="220" step="2" value="84" style="flex:1"><span id="giSizeV">84</span></div>
+        <div class="ckRow">기울기 <input type="range" id="giNameRot" min="-45" max="45" step="1" value="0" style="flex:1"
+          title="미리보기에서 마우스 휠을 굴리거나 Shift+드래그로도 돌릴 수 있어요"><span id="giNameRotV">0°</span></div>
         <div class="ckRow">글자색 <input type="color" id="giCol" value="#ffffff">
           테두리 <input type="color" id="giOut" value="#ff5f9e">
           <label class="edChk" title="글자 밑에 은은한 그림자"><input type="checkbox" id="giShadow" checked> 그림자</label></div>
@@ -1070,6 +1072,15 @@
             <option value="bokeh" title="크기 다른 빛망울이 겹쳐 떠다니는 몽환 배경">💫 보케</option>
             <!-- FXPACK-BG-END -->
             <option value="solid">단색</option>
+            <!-- 앱에 들어 있는 원형 밑판을 배경으로 바로 고를 수 있게 (요청) -->
+            <optgroup label="앱 배경 (원형 밑판)">
+              <option value="art:bn/patch/patch_bangsel_base_01.png">🖼 밑판 1</option>
+              <option value="art:bn/patch/patch_bangsel_base_02.png">🖼 밑판 2</option>
+              <option value="art:bn/patch/patch_bangsel_base_03.png">🖼 밑판 3</option>
+              <option value="art:bn/patch/patch_bangsel_base_04.png">🖼 밑판 4</option>
+              <option value="art:bn/patch/patch_bangsel_base_05.png">🖼 밑판 5</option>
+              <option value="art:bn/patch/patch_bangsel_base_06.png">🖼 밑판 6</option>
+            </optgroup>
             <option value="image">이미지 파일</option>
             <option value="blur">영상 흐림</option>
           </select>
@@ -5252,7 +5263,28 @@ window.gifenc=exports;})();
     histPush();            /* 되돌린 것 자체도 되돌릴 수 있게 */
     toast('마지막 저장 시점으로 되돌렸어요.');
   };
+  /* 이 책에 사진이 한 장이라도 들어 있나 — 페이지·배너 어디든 */
+  function bookPhotoCount() {
+    var n = 0;
+    (book.pages || []).forEach(function (pg) {
+      (pg.photos || []).forEach(function (ph) { if (ph && ph.id) n++; });
+    });
+    Object.keys(book.banners || {}).forEach(function (k) {
+      var b = book.banners[k] || {};
+      (b.photos || []).forEach(function (ph) { if (ph && ph.id) n++; });
+      (b.chars || []).forEach(function (ch) { if (ch && ch.id) n++; });
+    });
+    return n;
+  }
   $('#btnSave').onclick = function () {
+    /* ⚠ 실제 사고: 크래시 복구("되살릴까요?")로 되살리면 사진은 안 따라온다.
+          그 상태로 저장하면 13쪽짜리인데 사진 0장인 파일이 나오고,
+          나중에 열어보고 "안 불러와진다" 고 여긴다. 저장 전에 한 번 잡아준다. */
+    if (bookPhotoCount() === 0 &&
+        !confirm('⚠ 이 프로젝트에 사진이 한 장도 없습니다.\n\n' +
+                 '켤 때 "되살릴까요?" 로 복구하셨다면 사진은 따라오지 않습니다.\n' +
+                 '사진을 다시 넣은 뒤 저장하시는 게 좋아요.\n\n' +
+                 '이대로 사진 없이 저장할까요?')) return;
     busy(true, '프로젝트 저장 중…');
     api.save_project(JSON.stringify(book)).then(function (res) {
       busy(false);
@@ -8584,14 +8616,32 @@ window.gifenc=exports;})();
       return bnAddPropData(durl, propId, pr.url);
     }).catch(function (e) { alert('소품을 불러오지 못했어요: ' + e); });
   }
+  /* 배경으로 쓰라고 만든 것들(밑판·도일리) — 얹으면 화면을 덮어서, 예전엔 사용자가
+     직접 "맨 아래로" 를 눌러야 했다(그걸 모르면 소품이 사진을 가려버린다).
+     ⚠ 실제로 "왜 배경이 소품에 들어가 있냐" 는 문의가 나왔다 → 자동으로 맨 아래로 보낸다. */
+  function bnIsBackdrop(artUrl) {
+    return /patch_bangsel_base|patch_doily/.test(String(artUrl || ''));
+  }
   function bnAddPropData(durl, propId, artUrl) {
     var b = ensureBanners()[bnType];
     if (edCapFull(b)) return;
     var id = 'bnart_' + propId + '_' + (bnUid++);
     thumbs[id] = durl;
+    var back = bnIsBackdrop(artUrl);
     /* art = 이 레이어의 출처 파일(복원용) — restoreArtLayers 참조 */
-    b.chars.push({ id: id, art: artUrl || '', x: 50, y: 50, sc: 34, rot: 0, flip: false, prop: true });
+    var lay = { id: id, art: artUrl || '', x: 50, y: 50, sc: back ? 100 : 34,
+                rot: 0, flip: false, prop: true };
+    b.chars.push(lay);
     bnSel = { kind: 'char', idx: b.chars.length - 1 };
+    if (back) {
+      /* ⚠ uid·zorder 는 ensureBanners 가 채운다 — 먼저 돌려서 이 레이어의 자리를 만든 뒤 옮긴다 */
+      ensureBanners();
+      var key = 'c' + lay.uid, z = b.zorder || [];
+      var at = z.indexOf(key);
+      if (at >= 0) z.splice(at, 1);
+      var bi = z.indexOf('B');
+      z.splice(bi >= 0 ? bi + 1 : 0, 0, key);
+    }
     refreshBnStage();
     renderBnInspector();
   }
@@ -12483,7 +12533,7 @@ window.gifenc=exports;})();
         if (hit) GIF.fitRef = hit.ref;
         var ref = GIF.fitRef;
         if (!ref && b.length) { ref = b[0].ref; GIF.fitRef = ref; }
-        if (ref) { drag.ref = ref; drag.tx = ref.x; drag.ty = ref.y; }
+        if (ref) { drag.ref = ref; drag.tx = ref.x; drag.ty = ref.y; drag.trot = ref.rot || 0; }
       }
       try { cv.setPointerCapture(e.pointerId); } catch (err) {}
       e.preventDefault();
@@ -12493,8 +12543,14 @@ window.gifenc=exports;})();
       var dx = (e.clientX - drag.x) / drag.w, dy = (e.clientY - drag.y) / drag.h;
       if (GIF.fitMode === 'video') { GIF.ox = drag.ox + dx; GIF.oy = drag.oy + dy; gifClampPan(); }
       else if (drag.ref) {
-        drag.ref.x = Math.max(-0.45, Math.min(0.45, drag.tx + dx));
-        drag.ref.y = Math.max(-0.45, Math.min(0.45, drag.ty + dy));
+        /* Shift + 좌우 드래그 = 기울이기 (그냥 드래그는 지금처럼 위치 옮기기) */
+        if (e.shiftKey) {
+          drag.ref.rot = Math.max(-45, Math.min(45, Math.round((drag.trot || 0) + dx * 120)));
+          gifTxtSyncRot();
+        } else {
+          drag.ref.x = Math.max(-0.45, Math.min(0.45, drag.tx + dx));
+          drag.ref.y = Math.max(-0.45, Math.min(0.45, drag.ty + dy));
+        }
       }
       gifStale();
     });
@@ -12502,7 +12558,19 @@ window.gifenc=exports;})();
     cv.addEventListener('pointerup', endDrag);
     cv.addEventListener('pointercancel', endDrag);
     cv.addEventListener('wheel', function (e) {
-      if (GIF.fitMode !== 'video' || !GIF.url) return;
+      if (!GIF.url) return;
+      /* 글자 맞추기 화면에서는 휠 = 고른 글자 기울이기 (요청) */
+      if (GIF.fitMode === 'text') {
+        var ref = GIF.fitRef || (GIF.txtBox && GIF.txtBox.length ? GIF.txtBox[0].ref : null);
+        if (!ref) return;
+        e.preventDefault();
+        GIF.fitRef = ref;
+        ref.rot = Math.max(-45, Math.min(45, (ref.rot || 0) + (e.deltaY < 0 ? 2 : -2)));
+        gifTxtSyncRot();
+        gifStale();
+        return;
+      }
+      if (GIF.fitMode !== 'video') return;
       e.preventDefault();
       GIF.zoom = Math.max(1, Math.min(4, (GIF.zoom || 1) * (e.deltaY < 0 ? 1.09 : 1 / 1.09)));
       gifClampPan();
@@ -12690,6 +12758,21 @@ window.gifenc=exports;})();
   gifEl('giTxtSpd').oninput = gifTxtSpdSync;
   /* 추가 텍스트 — 각자 내용·크기·색·등장 시점을 따로 가진다(위치는 미리보기에서 드래그) */
   var GITXT_MAX = 4;
+  /* 마우스로 돌렸을 때 오른쪽 슬라이더 숫자도 같이 움직이게 (패널을 통째로 다시 그리면
+     드래그 중에 입력칸이 날아가므로 값만 살짝 바꾼다) */
+  function gifTxtSyncRot() {
+    var box = gifEl('giTxtList');
+    if (!box) return;
+    var rows = box.querySelectorAll('.giTxtItem');
+    for (var i = 0; i < rows.length && i < GIF.txts.length; i++) {
+      var r = rows[i].querySelector('.gx-rot'), v = rows[i].querySelector('.gx-rotv');
+      if (r) r.value = GIF.txts[i].rot || 0;
+      if (v) v.textContent = (GIF.txts[i].rot || 0) + '°';
+    }
+    var nr = gifEl('giNameRot'), nv = gifEl('giNameRotV');
+    if (nr) { nr.value = GIF.namePos.rot || 0; }
+    if (nv) { nv.textContent = (GIF.namePos.rot || 0) + '°'; }
+  }
   function gifTxtRender() {
     var box = gifEl('giTxtList');
     box.innerHTML = '';
@@ -12703,6 +12786,7 @@ window.gifenc=exports;})();
           '<input type="text" class="gx-s" placeholder="추가 문구" style="flex:1">' +
           '<button class="gx-del" title="삭제">🗑</button></div>' +
           '<div class="ckRow">크기 <input type="range" class="gx-size" min="20" max="200" step="2" style="flex:1"><span class="gx-sizev"></span></div>' +
+          '<div class="ckRow">기울기 <input type="range" class="gx-rot" min="-45" max="45" step="1" style="flex:1"><span class="gx-rotv"></span></div>' +
           '<div class="ckRow">글자색 <input type="color" class="gx-col"> 테두리 <input type="color" class="gx-out"></div>' +
           '<div class="ckRow">등장 <input type="range" class="gx-dly" min="0" max="2" step="0.05" style="flex:1"><span class="gx-dlyv"></span></div>';
         box.appendChild(d);
@@ -12710,6 +12794,14 @@ window.gifenc=exports;})();
         var dlyTxt = function (v) { return v > 0 ? '+' + Number(v).toFixed(2) + '초' : '같이'; };
         q('.gx-s').value = t.s;
         q('.gx-size').value = t.size;
+        q('.gx-rot').value = t.rot || 0;
+        q('.gx-rot').title = '미리보기에서 마우스 휠을 굴리거나 Shift+드래그로도 돌릴 수 있어요';
+        q('.gx-rotv').textContent = (t.rot || 0) + '°';
+        q('.gx-rot').oninput = function () {
+          t.rot = parseInt(this.value, 10) || 0;
+          q('.gx-rotv').textContent = t.rot + '°';
+          GIF.fitRef = t; gifStale();
+        };
         q('.gx-col').value = t.col;
         q('.gx-out').value = t.out;
         q('.gx-dly').value = t.dly;
@@ -12730,6 +12822,13 @@ window.gifenc=exports;})();
     }
     gifEl('giTxtAdd').style.display = GIF.txts.length >= GITXT_MAX ? 'none' : '';
   }
+  /* 이름 글자 기울기 */
+  gifEl('giNameRot').oninput = function () {
+    GIF.namePos.rot = parseInt(this.value, 10) || 0;
+    gifEl('giNameRotV').textContent = GIF.namePos.rot + '°';
+    GIF.fitRef = GIF.namePos;
+    gifStale();
+  };
   gifEl('giTxtAdd').onclick = function () {
     if (GIF.txts.length >= GITXT_MAX) return;
     var nt = { s: '', size: 46, col: '#ffffff', out: gifEl('giOut').value,
@@ -12766,6 +12865,21 @@ window.gifenc=exports;})();
   gifTxtSpdSync();   /* "몇 프레임에 걸쳐 뜨는지" 안내 초기 표시 */
   /* 움짤 탭 — 가운데 영역에 영상·GIF를 그대로 끌어다 놓기 */
   dndZone(gifEl('gifCenter'), 'video', function (files) { gifLoadFile(files[0]); });
+  /* 앱에 들어 있는 배경(art:...)을 고르면 그 그림을 읽어 '이미지 파일'과 같은 자리에 쓴다.
+     ⚠ 굽는 건 SVG 안이 아니라 캔버스라 상대경로도 되지만, 다른 그림들과 같게 dataURL 로 통일한다. */
+  var giBgArtCache = {};
+  function gifBgLoadArt(url) {
+    if (giBgArtCache[url]) { giBgImg = giBgArtCache[url]; gifStale(); return; }
+    artToDataUrl(url).then(function (d) {
+      var im = new Image();
+      im.onload = function () { giBgArtCache[url] = im; giBgImg = im; gifStale(); };
+      im.src = d;
+    }).catch(function () {});
+  }
+  gifEl('giBgMode').addEventListener('change', function () {
+    var v = this.value;
+    if (v.indexOf('art:') === 0) gifBgLoadArt(v.slice(4));
+  });
   gifEl('giBgFile').onchange = function () {
     var f = this.files && this.files[0];
     if (!f) return;
@@ -15820,7 +15934,7 @@ window.gifenc=exports;})();
           }
         }
       }
-    } else if (bgm === 'image' && giBgImg) {
+    } else if ((bgm === 'image' || bgm.indexOf('art:') === 0) && giBgImg) {
       var iw = giBgImg.naturalWidth || 1, ih = giBgImg.naturalHeight || 1;
       var cov = Math.max(W / iw, W / ih);
       g.drawImage(giBgImg, (W - iw * cov) / 2, (W - ih * cov) / 2, iw * cov, ih * cov);
@@ -15887,13 +16001,13 @@ window.gifenc=exports;})();
     var nm = (gifEl('giName').value || '').trim();
     if (nm) items.push({ s: nm, fs: clampN(gifEl('giSize').value, 84, 30, 220),
       col: gifEl('giCol').value, oc: gifEl('giOut').value, dly: 0,
-      px: GIF.namePos.x, py: GIF.namePos.y, ref: GIF.namePos });
+      px: GIF.namePos.x, py: GIF.namePos.y, rot: GIF.namePos.rot || 0, ref: GIF.namePos });
     for (var xi = 0; xi < GIF.txts.length; xi++) {
       var xt = GIF.txts[xi];
       var xs = (xt.s || '').trim();
       if (!xs) continue;
       items.push({ s: xs, fs: clampN(xt.size, 48, 20, 200), col: xt.col, oc: xt.out,
-        dly: clampN(xt.dly, 0, 0, 2), px: xt.x, py: xt.y, ref: xt });
+        dly: clampN(xt.dly, 0, 0, 2), px: xt.x, py: xt.y, rot: xt.rot || 0, ref: xt });
     }
     /* 시점을 너무 늦게 잡아 글자가 아예 안 보이는 일이 없게 — 최소 0.3초는 떠 있도록 */
     var maxStart = Math.max(0, CARD_D - FADE - 0.3);
@@ -15925,7 +16039,10 @@ window.gifenc=exports;})();
         var a0 = noAnim2 ? outA : (Math.min(1, u * 2.5) * outA);
         if (a0 <= 0.004) continue;                    /* 아직 안 떴거나 이미 사라짐 */
         var col = it.col, oc = it.oc;
+        /* 기울기 — 그리는 자리를 중심으로 돌린다(등장 연출 어느 것에나 그대로 먹는다) */
+        var rotR = (it.rot || 0) * Math.PI / 180;
         var drawTxt = function (str, x, y) {
+          if (rotR) { g.save(); g.translate(x, y); g.rotate(rotR); x = 0; y = 0; }
           if (glowOn) {
             /* 글로우 — 여러 번 겹쳐 그려야 캔버스 그림자가 충분히 진해진다 */
             g.save();
@@ -15956,6 +16073,7 @@ window.gifenc=exports;})();
           }
           g.fillStyle = col;
           g.fillText(str, x, y);
+          if (rotR) g.restore();
         };
         var eb = 1 + 2.70158 * Math.pow(u - 1, 3) + 1.70158 * Math.pow(u - 1, 2); /* easeOutBack */
         /* 다 뜬 뒤 아주 천천히 밀어올리기 —

@@ -37,6 +37,15 @@ window.BN_ART = window.BN_ART || { themes: {} };
   ].map(function (o) {
     return { id: o[0], n: o[1], url: 'bn/patch/' + o[2] + '.png' };
   });
+  /* ── 배경으로 쓰는 것들은 이름에 그렇게 적어준다 ──────────────
+     "왜 배경이 소품에 들어가 있냐" 는 문의가 나왔다. 얹으면 자동으로 맨 아래로
+     내려가게 고쳤고(editor.html bnIsBackdrop), 이름으로도 알 수 있게 한다.
+     ⚠ bn_art4.js 는 인코딩이 섞여 있어 직접 고치지 않는다 — 여기서 덮어쓴다. */
+  var _bd = BN_ART.themes['patch_bangsel_base'];
+  if (_bd) _bd.n = '🖼 배경 밑판 (원형) — 얹으면 맨 아래로';
+  var _dl = BN_ART.themes['patch_doily'];
+  if (_dl) _dl.n = '🖼 배경 레이스 도일리 — 얹으면 맨 아래로';
+
   var ov = BN_ART.themes['patch_overlay'];
   if (ov && ov.props && ov.props.length) {
     /* 두 번 실려도 중복으로 쌓이지 않게 */
