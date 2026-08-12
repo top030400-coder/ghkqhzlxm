@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v22 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v23 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v22</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v23</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -16857,14 +16857,35 @@ window.gifenc=exports;})();
         프레임마다 뽑힌 색이 조금씩 달라져, 가만히 있는 배경·볼·머리카락이 계속 떨렸다
         ("색이 자글거린다" 문의). 실측: 정지 픽셀의 12.1% 가 매 프레임 색이 바뀜 → 0%.
         용량은 거의 그대로(오히려 델타 압축이 잘 먹어 조금 줄어든다). */
-  function gifGlobalPalette(GE, frames, step, colors, ditherFn) {
+  function gifGlobalPalette(GE, frames, step, colors, ditherFn, opaqueOnly) {
     var idxs = [], n = Math.ceil(frames.length / step);
     var pick = Math.min(6, n);                 /* 고르게 6장까지만 — 더 넣어도 결과가 같다 */
     for (var k = 0; k < pick; k++) idxs.push(Math.min(frames.length - 1, Math.round(k * (n - 1) / Math.max(1, pick - 1)) * step));
-    var len = frames[0].length;
+    var len = frames[0].length, i, f;
+    /* 프사(동그라미)는 바깥 21% 가 투명이다. 그 픽셀까지 넣고 색을 고르면
+       255칸 일부를 안 보이는 데 쓴다 → 얼굴 색이 그만큼 거칠어진다.
+       실측(고객 영상 420 프사): 색오차 2.932 → 2.825, 입자는 그대로 0. */
+    if (opaqueOnly) {
+      var cnt = 0;
+      for (i = 0; i < idxs.length; i++) {
+        f = frames[idxs[i]];
+        for (var p = 3; p < f.length; p += 4) if (f[p] >= 128) cnt++;
+      }
+      if (cnt > 16) {                          /* 너무 적으면 그냥 전체로(빈 화면 방지) */
+        var op = new Uint8ClampedArray(cnt * 4), w = 0;
+        for (i = 0; i < idxs.length; i++) {
+          f = frames[idxs[i]];
+          for (var q = 0; q < f.length; q += 4) {
+            if (f[q + 3] < 128) continue;
+            op[w] = f[q]; op[w + 1] = f[q + 1]; op[w + 2] = f[q + 2]; op[w + 3] = 255; w += 4;
+          }
+        }
+        return GE.quantize(ditherFn ? ditherFn(op) : op, Math.max(2, colors), { format: 'rgb565' });
+      }
+    }
     var big = new Uint8ClampedArray(idxs.length * len);
-    for (var i = 0; i < idxs.length; i++) {
-      var f = frames[idxs[i]];
+    for (i = 0; i < idxs.length; i++) {
+      f = frames[idxs[i]];
       big.set(ditherFn ? ditherFn(f) : f, i * len);
     }
     return GE.quantize(big, Math.max(2, colors), { format: 'rgb565' });
@@ -16877,7 +16898,7 @@ window.gifenc=exports;})();
     fuzz = fuzz || 0;
     var dfn = GIF_DITHER ? function (d) { return gifDitherCopy(d, W, H, GIF_DITHER); } : null;
     var gPal = gifGlobalPalette(GE, frames, step,
-      transparent ? maxColors - 1 : maxColors, dfn);
+      transparent ? maxColors - 1 : maxColors, dfn, transparent);
     for (var i = 0; i < frames.length; i += step) {
       var data = frames[i];
       /* 색을 고를 때만 디더한 사본을 쓴다 — 델타 비교·투명 판정은 원본 그대로 */
