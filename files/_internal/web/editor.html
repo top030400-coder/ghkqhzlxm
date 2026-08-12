@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v20 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v21 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v20</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v21</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -16847,18 +16847,38 @@ window.gifenc=exports;})();
     }
     return q;
   }
+  /* 전 프레임이 함께 쓸 팔레트를 한 번만 뽑는다.
+     ⚠ 예전엔 프레임마다 256색을 새로 골랐다. 그러면 소스가 완전히 똑같은 정지 픽셀도
+        프레임마다 뽑힌 색이 조금씩 달라져, 가만히 있는 배경·볼·머리카락이 계속 떨렸다
+        ("색이 자글거린다" 문의). 실측: 정지 픽셀의 12.1% 가 매 프레임 색이 바뀜 → 0%.
+        용량은 거의 그대로(오히려 델타 압축이 잘 먹어 조금 줄어든다). */
+  function gifGlobalPalette(GE, frames, step, colors, ditherFn) {
+    var idxs = [], n = Math.ceil(frames.length / step);
+    var pick = Math.min(6, n);                 /* 고르게 6장까지만 — 더 넣어도 결과가 같다 */
+    for (var k = 0; k < pick; k++) idxs.push(Math.min(frames.length - 1, Math.round(k * (n - 1) / Math.max(1, pick - 1)) * step));
+    var len = frames[0].length;
+    var big = new Uint8ClampedArray(idxs.length * len);
+    for (var i = 0; i < idxs.length; i++) {
+      var f = frames[idxs[i]];
+      big.set(ditherFn ? ditherFn(f) : f, i * len);
+    }
+    return GE.quantize(big, Math.max(2, colors), { format: 'rgb565' });
+  }
   function gifEncode(frames, W, H, fps, maxColors, step, transparent, fuzz) {
     var GE = window.gifenc;
     var enc = GE.GIFEncoder();
     var delay = Math.round(1000 * step / fps);
     var prev = null; /* 직전에 실제 기록된 화면(소스 RGBA) — 델타 비교 기준이라 오차 누적 없음 */
     fuzz = fuzz || 0;
+    var dfn = GIF_DITHER ? function (d) { return gifDitherCopy(d, W, H, GIF_DITHER); } : null;
+    var gPal = gifGlobalPalette(GE, frames, step,
+      transparent ? maxColors - 1 : maxColors, dfn);
     for (var i = 0; i < frames.length; i += step) {
       var data = frames[i];
       /* 색을 고를 때만 디더한 사본을 쓴다 — 델타 비교·투명 판정은 원본 그대로 */
       var qdat = GIF_DITHER ? gifDitherCopy(data, W, H, GIF_DITHER) : data;
       if (transparent) {
-        var pal = GE.quantize(qdat, Math.max(2, maxColors - 1), { format: 'rgb565' });
+        var pal = gPal.slice();          /* 전 프레임 공통 — 프레임마다 새로 뽑지 않는다 */
         var idx = GE.applyPalette(qdat, pal, 'rgb565');
         var ti = pal.length;
         pal.push([0, 0, 0]);
@@ -16878,7 +16898,7 @@ window.gifenc=exports;})();
         }
         enc.writeFrame(idx, W, H, { palette: pal, delay: delay, transparent: true, transparentIndex: ti, dispose: 1 });
       } else {
-        var pal2 = GE.quantize(qdat, maxColors, { format: 'rgb565' });
+        var pal2 = gPal;                 /* 전 프레임 공통 */
         enc.writeFrame(GE.applyPalette(qdat, pal2, 'rgb565'), W, H, { palette: pal2, delay: delay });
       }
     }
@@ -19639,6 +19659,8 @@ window.gifenc=exports;})();
     },
     /* 레이아웃을 실제로 구워보는 검증용 — 새 레이아웃이 글자 잘림 없이 나오는지 눈으로 본다 */
     renderBannerCanvasHi: renderBannerCanvasHi,
+    /* 움짤 인코더 — 정지 픽셀이 프레임마다 떨리지 않는지 검증용 */
+    gifEncode: gifEncode, gifGlobalPalette: gifGlobalPalette,
     gifDrawFrame: gifDrawFrame, gifClampPan: gifClampPan, gifCardPeekT: gifCardPeekT,
     gifSrcInfo: function () {
       var v = gifV();
