@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v28 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v29 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v28</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v29</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -962,12 +962,15 @@
     <div class="bnDecoRow" id="gifModeRow">
       <button data-m="free" class="on">자유 크기</button>
       <button data-m="avatar">⭕ 프사 420×420</button>
+      <button data-m="bottom">▰ 하단 720×150</button>
     </div>
     <div class="ckRow" id="gifWRow">가로
       <input type="range" id="gifW" min="120" max="640" step="20" value="360" style="flex:1">
       <span id="gifWv">360px</span></div>
     <div class="bnRec" id="gifAvHint" style="display:none">SOOP 프사 규격 — <b>420×420px · 2MB 미만</b><br>
       동그랗게 잘리고, 2MB가 넘으면 색·프레임을 자동으로 줄여 맞춰요.</div>
+    <div class="bnRec" id="gifBottomHint" style="display:none">하단 배너 고정 규격 — <b>720×150px · 72프레임 · 24fps · 정확히 3초</b><br>
+      사진에서 만든 AI 누끼는 턱·목·손·몸을 나누지 않고 한 덩어리로만 움직여요.</div>
     <div class="ckRow" id="gifAvSizeRow" style="display:none">해상도
       <select id="gifAvSize" style="flex:1">
         <option value="420" selected>420×420 (SOOP 규격)</option>
@@ -975,13 +978,14 @@
       </select></div>
 
     <div class="insSec">구간</div>
-    <div class="ckRow">시작 <input type="range" id="gifStart" min="0" max="0" step="0.1" value="0" style="flex:1"><span id="gifStartV">0초</span></div>
-    <div class="ckRow">길이 <input type="range" id="gifLen" min="0.5" max="10" step="0.5" value="3" style="flex:1"><span id="gifLenV">3초</span></div>
+    <div class="ckRow" id="gifStartRow">시작 <input type="range" id="gifStart" min="0" max="0" step="0.1" value="0" style="flex:1"><span id="gifStartV">0초</span></div>
+    <div class="ckRow" id="gifLenRow">길이 <input type="range" id="gifLen" min="0.5" max="10" step="0.5" value="3" style="flex:1"><span id="gifLenV">3초</span></div>
     <!-- 사진을 넣었을 때만 — 정지 사진에 움직임을 입혀 영상처럼 만든다 -->
     <div id="giPhRow" style="display:none">
       <div class="insSec">🖼 사진 움직임</div>
       <div class="ckRow">움직임
         <select id="giPhMove" style="flex:1">
+          <option value="portrait2d" title="보정 프로그램의 BiRefNet 누끼로 인물 전체를 한 덩어리로 움직임">🧍 인물 2D 흔들림 (AI 누끼)</option>
           <option value="zoomin" selected title="천천히 확대됐다가 제자리로">🔍 천천히 확대</option>
           <option value="zoomout" title="확대된 상태에서 천천히 축소">🔎 천천히 축소</option>
           <option value="panx" title="좌우로 천천히 흐름">↔ 좌우로 흐르기</option>
@@ -989,11 +993,23 @@
           <option value="drift" title="비스듬히 천천히 흐름">✧ 비스듬히 흐르기</option>
           <option value="none" title="움직임 없이 정지">— 움직임 없음</option>
         </select></div>
-      <div class="ckRow">움직임 세기 <input type="range" id="giPhAmt" min="0" max="40" step="1" value="12" style="flex:1" title="클수록 크게 움직여요. 흐르기는 이 값만큼 미리 확대해 빈 공간이 안 보이게 합니다"><span id="giPhAmtV">12%</span></div>
+      <div class="ckRow" id="giPhAmtRow">움직임 세기 <input type="range" id="giPhAmt" min="0" max="40" step="1" value="12" style="flex:1" title="클수록 크게 움직여요. 인물 2D는 턱·목·손·몸 전체에 같은 변환만 적용합니다"><span id="giPhAmtV">12%</span></div>
+      <div id="giRigBox" class="bnRec" style="display:none;font-size:11px">
+        <b>보정 프로그램 AI 누끼 사용</b> — 턱·목·하트 손·소매·몸을 하나의 고정 그룹으로 보호합니다.<br>
+        <div class="ckRow" style="margin-top:7px">배경
+          <select id="giRigBg" style="flex:1">
+            <option value="auto" selected>자동 (누끼 밖 깨끗한 쪽)</option>
+            <option value="blur">원본 흐림</option>
+            <option value="color">단색</option>
+          </select>
+          <input type="color" id="giRigBgCol" value="#17345f" title="단색 배경" style="width:34px;height:28px;padding:0"></div>
+        <button type="button" id="giRigBuild" class="bnBigBtn" style="width:100%;margin-top:7px">AI 누끼 만들기 / 다시 만들기</button>
+        <div id="giRigStatus" style="margin-top:6px;color:#6f6b61">사진을 고른 뒤 AI 누끼를 만들어 주세요.</div>
+      </div>
       <div class="bnRec" style="font-size:11px">사진 한 장으로 움짤을 만듭니다 — <b>사진 → 움직임 → 글자 → 움짤</b><br>
         움직임은 갔다가 되돌아오게 만들어서 반복될 때 툭 튀지 않아요.</div>
     </div>
-    <div class="ckRow">부드러움
+    <div class="ckRow" id="gifFpsRow">부드러움
       <select id="gifFps" style="flex:1">
         <option value="5">5 fps (가벼움)</option>
         <option value="8">8 fps</option>
@@ -1001,6 +1017,7 @@
         <option value="12">12 fps</option>
         <option value="15">15 fps (부드러움)</option>
         <option value="20">20 fps</option>
+        <option value="24">24 fps (하단 배너 고정)</option>
         <option value="30">30 fps (제일 부드러움 — 210 해상도 추천)</option>
       </select></div>
 
@@ -1174,7 +1191,7 @@
       <canvas id="gifPrev" width="420" height="420" title="클릭 = 재생/일시정지"></canvas>
       <div id="gifFitRow">
         <button data-f="play" class="on">▶ 미리보기</button>
-        <button data-f="video" title="원 안에서 영상을 드래그해 옮기고, 휠로 확대·축소해요">🎞 영상 맞추기</button>
+        <button data-f="video" id="gifFitVideo" title="드래그해 옮기고, 휠로 확대·축소해요">🎞 영상 맞추기</button>
         <button data-f="text" title="글자를 드래그해 원하는 자리에 놓아요 (여러 개면 클릭해서 고르고 끌기)">🅰 글자 맞추기</button>
         <button id="gifFitReset" title="지금 모드의 위치·크기를 처음으로">↺ 되돌리기</button>
       </div>
@@ -12044,6 +12061,21 @@ window.gifenc=exports;})();
     p.style.display = msg ? '' : 'none';
     p.innerHTML = msg || '';
   }
+  /* 하단 배너는 서비스 규격을 하나의 계약으로 고정한다. GIF 지연은 10ms 단위라
+     72장을 40/50ms로 고르게 섞어야 합계가 정확히 3000ms가 된다. */
+  var GIF_BOTTOM_SPEC = { w: 720, h: 150, fps: 24, len: 3, frames: 72, durationMs: 3000 };
+  function gifBottomDelays(count) {
+    count = Math.max(1, Math.round(count || GIF_BOTTOM_SPEC.frames));
+    var units = Math.round(GIF_BOTTOM_SPEC.durationMs / 10);
+    var base = Math.floor(units / count), extra = units - base * count;
+    var out = [], prev = 0;
+    for (var i = 0; i < count; i++) {
+      var now = Math.floor((i + 1) * extra / count);
+      out.push((base + now - prev) * 10);
+      prev = now;
+    }
+    return out;
+  }
   /* ── GIF 입력 — <video>로는 GIF를 못 열어서, 프레임으로 풀어놓고
      영상 요소와 같은 방식으로 쓰이는 대역 객체(shim)를 씌운다. 나머지 코드는 그대로. ── */
   var GIFSRC = null; /* {frames:[{cv,t,d}], dur, w, h} */
@@ -12078,7 +12110,7 @@ window.gifenc=exports;})();
      영상과 같은 인터페이스(currentTime·paused·readyState·videoWidth…)를 흉내 내므로
      미리보기·인코딩·인트로 카드 경로를 하나도 안 고치고 그대로 쓴다.
      움직임은 gifPhotoMotion 이 시간에 따라 배율·이동을 만들어 gifDrawFrame 이 반영한다. */
-  var PHOTO = { img: null, w: 0, h: 0 };
+  var PHOTO = { img: null, w: 0, h: 0, rig: null, rigPromise: null, rigError: '', rev: 0, makeAfterRig: false };
   var gifPhotoShim = (function () {
     var sh = { __photo: true, paused: true, readyState: 0, videoWidth: 0, videoHeight: 0, __t0: 0, _t: 0, seeking: false };
     Object.defineProperty(sh, 'currentTime', {
@@ -12100,6 +12132,7 @@ window.gifenc=exports;})();
   function gifPhotoMotion(u) {
     var kind = (gifEl('giPhMove') && gifEl('giPhMove').value) || 'zoomin';
     var amt = clampN(gifEl('giPhAmt') && gifEl('giPhAmt').value, 12, 0, 40) / 100;
+    if (kind === 'portrait2d') return { sc: 1, ox: 0, oy: 0 };
     if (kind === 'none' || amt <= 0) return { sc: 1, ox: 0, oy: 0 };
     var pp = 1 - Math.abs(1 - 2 * u);                 /* 0→1→0 왕복 */
     var e = pp * pp * (3 - 2 * pp);                   /* 부드럽게(smoothstep) */
@@ -12112,6 +12145,200 @@ window.gifenc=exports;})();
     if (kind === 'pany') return { sc: base, ox: 0, oy: d };
     if (kind === 'drift') return { sc: base, ox: d * 0.8, oy: d * 0.5 };
     return { sc: 1, ox: 0, oy: 0 };
+  }
+  function gifPortraitChosen() {
+    return GIF.kind === 'photo' && !!gifEl('giPhMove') && gifEl('giPhMove').value === 'portrait2d';
+  }
+  function gifRigStatus(msg, bad) {
+    var s = gifEl('giRigStatus');
+    if (!s) return;
+    s.textContent = msg || '';
+    s.style.color = bad ? '#b42318' : '#6f6b61';
+  }
+  function gifPhotoRigReset() {
+    PHOTO.rig = null;
+    PHOTO.rigPromise = null;
+    PHOTO.rigError = '';
+    PHOTO.makeAfterRig = false;
+    PHOTO.rev++;
+    var b = gifEl('giRigBuild');
+    if (b) b.disabled = false;
+    gifRigStatus(PHOTO.img ? 'AI 누끼를 만들어 주세요.' : '사진을 고른 뒤 AI 누끼를 만들어 주세요.', false);
+  }
+  function gifPortraitUiSync() {
+    var on = gifPortraitChosen();
+    var box = gifEl('giRigBox');
+    if (box) box.style.display = on ? '' : 'none';
+    if (!on) return;
+    if (PHOTO.rig) gifRigStatus('준비 완료 — 턱·목·하트 손·소매·몸 전체가 한 덩어리입니다.', false);
+    else if (PHOTO.rigError) gifRigStatus(PHOTO.rigError, true);
+    else gifRigStatus(PHOTO.img ? 'AI 누끼를 만들어 주세요.' : '사진을 먼저 골라 주세요.', false);
+  }
+  function gifPortraitBBox(mask) {
+    var w = mask.width, h = mask.height;
+    var d = mask.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+    var x0 = w, y0 = h, x1 = -1, y1 = -1, count = 0;
+    for (var y = 0, p = 3; y < h; y++) {
+      for (var x = 0; x < w; x++, p += 4) {
+        if (d[p] < 20) continue;
+        count++;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+    if (x1 < x0 || y1 < y0 || count < w * h * 0.002) return null;
+    return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1, pixels: count };
+  }
+  function gifPortraitSourceCanvas(img) {
+    var s = Math.min(1, 1600 / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+    var c = document.createElement('canvas');
+    c.width = Math.max(8, Math.round((img.naturalWidth || img.width) * s));
+    c.height = Math.max(8, Math.round((img.naturalHeight || img.height) * s));
+    var g = c.getContext('2d');
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  }
+  /* 이 경로는 보정 프로그램의 Python BiRefNet만 허용한다. 브라우저 U2Net 폴백은
+     턱/머리카락 경계 품질이 낮으므로 실패 시 조용히 대체하지 않고 닫는다(fail closed). */
+  function gifEnsurePortraitRig(force) {
+    if (!PHOTO.img) return Promise.reject(new Error('사진을 먼저 골라 주세요.'));
+    if (PHOTO.rigPromise) return PHOTO.rigPromise;
+    if (PHOTO.rig && !force) return Promise.resolve(PHOTO.rig);
+    if (force) PHOTO.rig = null;
+    var rev = PHOTO.rev, img = PHOTO.img;
+    var build = gifEl('giRigBuild');
+    if (build) build.disabled = true;
+    PHOTO.rigError = '';
+    gifRigStatus('보정 프로그램 AI가 인물 누끼를 만드는 중…', false);
+    gifSetProg('AI 누끼 만드는 중… 턱·목·손 연결을 보호해요');
+    PHOTO.rigPromise = edAIPyReady().then(function (ok) {
+      if (!ok) throw new Error('보정 프로그램의 AI 누끼 모델을 사용할 수 없어요. 앱을 다시 열고 모델 파일을 확인해 주세요.');
+      var source = gifPortraitSourceCanvas(img);
+      return edAISegmentPy(source).then(function (mask) {
+        if (PHOTO.rev !== rev || PHOTO.img !== img) throw new Error('사진이 바뀌어서 누끼 만들기를 취소했어요.');
+        var bbox = gifPortraitBBox(mask);
+        if (!bbox) throw new Error('인물 누끼를 확인하지 못했어요. 다른 사진으로 다시 시도해 주세요.');
+        var subject = document.createElement('canvas');
+        subject.width = source.width;
+        subject.height = source.height;
+        var sg = subject.getContext('2d');
+        sg.drawImage(source, 0, 0);
+        sg.globalCompositeOperation = 'destination-in';
+        sg.drawImage(mask, 0, 0, source.width, source.height);
+        sg.globalCompositeOperation = 'source-over';
+        /* 마스크 밖 좌우 여백 중 큰 쪽만 자동 배경 후보로 쓴다. 피사체가 남은 쪽을
+           늘이는 것보다, 누끼로 검증된 깨끗한 띠를 정적인 배경으로 쓰는 편이 안전하다. */
+        var pad = Math.max(2, Math.round(source.width * 0.012));
+        var leftW = Math.max(0, bbox.x - pad);
+        var rightX = Math.min(source.width, bbox.x + bbox.w + pad);
+        var rightW = Math.max(0, source.width - rightX);
+        var bgCrop = leftW >= rightW ? { x: 0, y: 0, w: leftW, h: source.height }
+                                      : { x: rightX, y: 0, w: rightW, h: source.height };
+        if (bgCrop.w < source.width * 0.10) bgCrop = null;
+        PHOTO.rig = {
+          source: source,
+          mask: mask,
+          subject: subject,
+          bbox: bbox,
+          bgCrop: bgCrop,
+          backgrounds: {},
+          contract: 'single-rigid-subject:face+jaw+neck+heart-hands+sleeves+torso'
+        };
+        gifRigStatus('준비 완료 — 턱·목·하트 손·소매·몸 전체가 한 덩어리입니다.', false);
+        gifStale();
+        gifSyncPreview();
+        return PHOTO.rig;
+      });
+    }).catch(function (e) {
+      var msg = e && e.message ? e.message : String(e);
+      PHOTO.rig = null;
+      PHOTO.rigError = msg;
+      gifRigStatus(msg, true);
+      throw e;
+    }).finally(function () {
+      PHOTO.rigPromise = null;
+      if (build) build.disabled = false;
+      gifSetProg(null);
+    });
+    return PHOTO.rigPromise;
+  }
+  function gifDrawCoverCrop(g, img, sx, sy, sw, sh, W, H, overscan) {
+    var z = Math.max(W / sw, H / sh) * (overscan || 1);
+    var dw = sw * z, dh = sh * z;
+    g.drawImage(img, sx, sy, sw, sh, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  }
+  function gifPortraitBackground(W, H) {
+    var rig = PHOTO.rig;
+    if (!rig) return null;
+    var mode = (gifEl('giRigBg') && gifEl('giRigBg').value) || 'auto';
+    var col = (gifEl('giRigBgCol') && gifEl('giRigBgCol').value) || '#17345f';
+    var key = W + 'x' + H + '|' + mode + '|' + col;
+    if (rig.backgrounds[key]) return rig.backgrounds[key];
+    var c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    var g = c.getContext('2d');
+    if (mode === 'color') {
+      g.fillStyle = col;
+      g.fillRect(0, 0, W, H);
+    } else {
+      g.save();
+      g.filter = 'blur(' + Math.max(5, Math.round(H * 0.045)) + 'px)';
+      if (mode === 'auto' && rig.bgCrop) {
+        gifDrawCoverCrop(g, rig.source, rig.bgCrop.x, rig.bgCrop.y, rig.bgCrop.w, rig.bgCrop.h, W, H, 1.08);
+      } else {
+        gifDrawCoverCrop(g, rig.source, 0, 0, rig.source.width, rig.source.height, W, H, 1.12);
+      }
+      g.restore();
+    }
+    /* 글자를 얹기 좋은 왼쪽 여백만 살짝 눌러 주고 배경은 모든 프레임에서 고정한다. */
+    var gr = g.createLinearGradient(0, 0, W, 0);
+    gr.addColorStop(0, 'rgba(4,12,34,.42)');
+    gr.addColorStop(.58, 'rgba(4,12,34,.10)');
+    gr.addColorStop(1, 'rgba(4,12,34,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, W, H);
+    rig.backgrounds[key] = c;
+    return c;
+  }
+  /* u=0과 u=1은 숫자까지 같은 변환이다. 인물 내부에는 어떤 부분 변형도 없다. */
+  function gifPortraitMotion(u, amount) {
+    u = Math.max(0, Math.min(1, Number(u) || 0));
+    var power = Math.max(0, Math.min(40, Number(amount) || 0)) / 12;
+    var e = (u <= 0 || u >= 1) ? 0 : Math.pow(Math.sin(Math.PI * u), 2);
+    return { dx: -3.2 * power * e, dy: -4.8 * power * e,
+      sc: 1 + 0.011 * power * e, rot: 0.75 * power * e };
+  }
+  function gifDrawPortraitFrame(g, W, H, ph) {
+    var rig = PHOTO.rig;
+    if (!rig) return false;
+    var bg = gifPortraitBackground(W, H);
+    if (bg) g.drawImage(bg, 0, 0);
+    var b = rig.bbox;
+    var zoom = GIF.zoom || 1;
+    var targetH = H * 1.72 * zoom;
+    var maxW = W * 0.62 * zoom;
+    var scale = Math.min(targetH / Math.max(1, b.h), maxW / Math.max(1, b.w));
+    var cx = W * 0.76 + (GIF.ox || 0) * W;
+    var cy = H * 0.52 + (GIF.oy || 0) * H;
+    var x = cx - (b.x + b.w / 2) * scale;
+    var y = cy - (b.y + b.h / 2) * scale;
+    var m = gifPortraitMotion(ph, gifEl('giPhAmt') && gifEl('giPhAmt').value);
+    var dx = m.dx * W / GIF_BOTTOM_SPEC.w;
+    var dy = m.dy * H / GIF_BOTTOM_SPEC.h;
+    g.save();
+    g.translate(cx + dx, cy + dy);
+    g.rotate(m.rot * Math.PI / 180);
+    g.scale(m.sc, m.sc);
+    g.translate(-cx, -cy);
+    /* 유일한 움직이는 레이어. 얼굴/턱/목/손/몸을 따로 그리는 drawImage는 만들지 않는다. */
+    g.drawImage(rig.subject, x, y, rig.source.width * scale, rig.source.height * scale);
+    g.restore();
+    return true;
   }
   /* 캔버스에 그릴 수 있는 실제 대상 — shim이면 현재 프레임 캔버스를 내준다 */
   function gifDrawable(v) { return (v && (v.__gif || v.__photo)) ? v.frame() : v; }
@@ -12171,6 +12398,7 @@ window.gifenc=exports;})();
     gifShim.reset();
     gifPhotoShim.reset();
     PHOTO.img = null;
+    gifPhotoRigReset();
     if (isGif) {
       GIF.kind = 'gif';
       gifEl('gifVideo').style.display = 'none';
@@ -12226,6 +12454,8 @@ window.gifenc=exports;})();
     GIFSRC = null;
     gifShim.reset();
     gifPhotoShim.reset();
+    PHOTO.img = null;
+    gifPhotoRigReset();
     gifEl('gifVideo').style.display = 'none';
     gifEl('gifVideo').removeAttribute('src');
     gifSetProg('사진 읽는 중…');
@@ -12236,7 +12466,9 @@ window.gifenc=exports;})();
       im.onerror = function () { gifSetProg(null); alert('이 사진은 열 수 없어요'); };
       im.onload = function () {
         PHOTO.img = im; PHOTO.w = im.naturalWidth; PHOTO.h = im.naturalHeight;
+        gifPhotoRigReset();
         GIF.kind = 'photo';
+        if (GIF.mode === 'bottom') gifEl('giPhMove').value = 'portrait2d';
         GIF.url = 'photo:' + f.name;
         GIF.dur = 3;                       /* 사진은 길이 개념이 없다 → 기본 3초 */
         GIF.vw = im.naturalWidth; GIF.vh = im.naturalHeight;
@@ -12256,7 +12488,8 @@ window.gifenc=exports;})();
     var row = gifEl('giPhRow');
     if (row) row.style.display = (GIF.kind === 'photo') ? '' : 'none';
     var st = gifEl('gifStart');
-    if (st) st.parentNode.style.display = (GIF.kind === 'photo') ? 'none' : '';  /* 사진은 시작 지점이 없다 */
+    if (st) st.parentNode.style.display = (GIF.kind === 'photo' || GIF.mode === 'bottom') ? 'none' : '';  /* 사진·하단 고정은 시작 지점이 없다 */
+    gifPortraitUiSync();
   }
   /* 영상·GIF 공통 — 불러온 뒤 구간 슬라이더와 정보 표시를 맞춘다 */
   function gifSrcReady(f, extra) {
@@ -12285,20 +12518,21 @@ window.gifenc=exports;})();
   function gifSyncPreview() {
     var v = gifEl('gifVideo');
     var av = GIF.mode === 'avatar';
+    var bottom = GIF.mode === 'bottom';
     var loaded = !!GIF.url;
     var showingOut = gifEl('gifOut').style.display !== 'none';
     var isGif = GIF.kind === 'gif' || GIF.kind === 'photo';
     /* GIF·사진은 <video>로 못 보여주므로 자유 크기 모드에서도 캔버스 미리보기를 쓴다 */
-    var useCv = (av || isGif) && loaded && !showingOut;
+    var useCv = (av || bottom || isGif) && loaded && !showingOut;
     var cv = gifEl('gifPrev');
     if (useCv) {
-      var pw = 420, ph = (av || !GIF.vw) ? 420 : Math.max(60, Math.round(420 * GIF.vh / GIF.vw));
+      var pw = 420, ph = av ? 420 : (bottom ? 88 : (!GIF.vw ? 420 : Math.max(60, Math.round(420 * GIF.vh / GIF.vw))));
       if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
       cv.style.borderRadius = av ? '50%' : '10px';
       cv.style.height = 'auto';
     }
     gifEl('gifPrevWrap').style.display = useCv ? '' : 'none';
-    gifEl('gifFitRow').style.display = av ? '' : 'none';
+    gifEl('gifFitRow').style.display = (av || bottom) ? '' : 'none';
     if (gifEl('gifVideo')) gifEl('gifVideo').style.display = (!av && !isGif && loaded && !showingOut) ? '' : 'none';
     if (useCv) gifPrevStart();
     else gifPrevOn = false;
@@ -12572,7 +12806,9 @@ window.gifenc=exports;})();
       }
       if (GIF.fitMode !== 'video') return;
       e.preventDefault();
-      GIF.zoom = Math.max(1, Math.min(4, (GIF.zoom || 1) * (e.deltaY < 0 ? 1.09 : 1 / 1.09)));
+      var minZoom = gifPortraitChosen() ? 0.65 : 1;
+      var maxZoom = gifPortraitChosen() ? 2.5 : 4;
+      GIF.zoom = Math.max(minZoom, Math.min(maxZoom, (GIF.zoom || 1) * (e.deltaY < 0 ? 1.09 : 1 / 1.09)));
       gifClampPan();
       gifFitSync();
       gifStale();
@@ -12701,8 +12937,20 @@ window.gifenc=exports;})();
     if (this.checked && gifEl('giOn').checked) gifEl('giOn').checked = false;
     gifTextModeSync();
   };
-  gifEl('giPhMove').onchange = function () { gifStale(); };
+  gifEl('giPhMove').onchange = function () { gifPortraitUiSync(); gifStale(); };
   gifEl('giPhAmt').oninput = function () { gifEl('giPhAmtV').textContent = this.value + '%'; gifStale(); };
+  gifEl('giRigBuild').onclick = function () {
+    gifEnsurePortraitRig(true).catch(function (e) {
+      alert('AI 누끼를 만들지 못했어요:\n' + (e && e.message ? e.message : e));
+    });
+  };
+  ['giRigBg', 'giRigBgCol'].forEach(function (id) {
+    var el = gifEl(id);
+    el.oninput = el.onchange = function () {
+      if (PHOTO.rig) PHOTO.rig.backgrounds = {};
+      gifStale();
+    };
+  });
   ['giName', 'giCol', 'giOut', 'giBgCol', 'giBgCol2', 'giTrans', 'giBgMode', 'gifAvSize', 'giTxtAnim', 'giParti'].forEach(function (id) {
     var el = gifEl(id);
     el.oninput = gifStale;
@@ -16555,15 +16803,31 @@ window.gifenc=exports;})();
       bt.classList.add('on');
       GIF.mode = bt.getAttribute('data-m');
       var av = GIF.mode === 'avatar';
-      gifEl('gifWRow').style.display = av ? 'none' : '';
+      var bottom = GIF.mode === 'bottom';
+      gifEl('gifWRow').style.display = (av || bottom) ? 'none' : '';
       gifEl('gifAvHint').style.display = av ? '' : 'none';
+      gifEl('gifBottomHint').style.display = bottom ? '' : 'none';
       gifEl('gifRingSec').style.display = av ? '' : 'none';
       gifEl('gifIntroSec').style.display = av ? '' : 'none'; /* 인트로(이름 카드)는 프사 전용 */
       gifEl('gifAvSizeRow').style.display = av ? '' : 'none';
+      gifEl('gifLenRow').style.display = bottom ? 'none' : '';
+      gifEl('gifFpsRow').style.display = bottom ? 'none' : '';
+      if (bottom) {
+        gifEl('gifLen').value = GIF_BOTTOM_SPEC.len;
+        gifEl('gifLenV').textContent = GIF_BOTTOM_SPEC.len + '초';
+        gifEl('gifFps').value = String(GIF_BOTTOM_SPEC.fps);
+        if (GIF.kind === 'photo') {
+          GIF.dur = GIF_BOTTOM_SPEC.len;
+          gifPhotoShim.currentTime = 0;
+          gifEl('giPhMove').value = 'portrait2d';
+        }
+      }
       /* 프사에서 맞춘 팬·줌이 자유 크기(여백 0)로 그대로 넘어가면 검은 띠·잘림이 생긴다 → 새 모드 기준으로 다시 제한.
          맞추기 버튼은 프사 전용이라 모드를 벗어나면 조작이 안 보이는 채로 살아있지 않게 되돌린다 */
       gifClampPan();
-      if (!av && GIF.fitMode !== 'play') { GIF.fitMode = 'play'; gifFitSync(); }
+      if (!av && !bottom && GIF.fitMode !== 'play') { GIF.fitMode = 'play'; }
+      gifFitSync();
+      gifPhotoSync();
       gifSyncPreview(); /* 프사 모드면 즉시 원형 미리보기로 전환 */
     };
   });
@@ -16878,6 +17142,23 @@ window.gifenc=exports;})();
     /* 1080p 영상을 420px로 줄일 땐 기본(저품질) 축소가 계단·뭉개짐을 만든다 — 고품질 축소로 */
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
+    if (gifPortraitChosen()) {
+      if (gifDrawPortraitFrame(g, W, H, isFinite(ph) ? ph : 0)) return;
+      /* 누끼 전 미리보기일 뿐이며 내보내기는 아래 생성 버튼에서 차단된다. */
+      var pcover = Math.max(W / GIF.vw, H / GIF.vh);
+      var pdw = GIF.vw * pcover, pdh = GIF.vh * pcover;
+      g.drawImage(img, (W - pdw) / 2, (H - pdh) / 2, pdw, pdh);
+      g.fillStyle = 'rgba(5,10,24,.48)';
+      g.fillRect(0, 0, W, H);
+      if (W >= 300) {
+        g.fillStyle = '#fff';
+        g.font = '600 ' + Math.max(12, Math.round(H * .12)) + 'px sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText('AI 누끼 만들기를 눌러 주세요', W / 2, H / 2);
+      }
+      return;
+    }
     /* 영상 맞추기 — 배율(zoom)과 이동(ox·oy, 화면 비율 단위)을 반영 */
     var mo = { sc: 1, ox: 0, oy: 0 };
     /* 사진 소스는 스스로 안 움직이므로 여기서 켄번즈 움직임을 얹는다 */
@@ -16900,7 +17181,15 @@ window.gifenc=exports;})();
   /* 이동이 너무 커서 빈 공간이 보이지 않게 — 확대한 만큼만 움직일 수 있다 */
   function gifClampPan() {
     if (!GIF.vw || !GIF.vh) return;
-    var W = 1, H = (GIF.mode === 'avatar') ? 1 : (GIF.vh / GIF.vw);
+    if (gifPortraitChosen()) {
+      /* 인물 배치는 원본 cover 여백과 무관하다. 기존 영상 clamp를 쓰면 오른쪽 인물을
+         움직이는 순간 0으로 되감기므로, 배너 안에서 찾기 쉬운 넉넉한 안전 범위만 둔다. */
+      GIF.ox = Math.max(-0.58, Math.min(0.22, GIF.ox || 0));
+      GIF.oy = Math.max(-0.55, Math.min(0.55, GIF.oy || 0));
+      GIF.zoom = Math.max(0.65, Math.min(2.5, GIF.zoom || 1));
+      return;
+    }
+    var W = 1, H = (GIF.mode === 'avatar') ? 1 : (GIF.mode === 'bottom' ? GIF_BOTTOM_SPEC.h / GIF_BOTTOM_SPEC.w : GIF.vh / GIF.vw);
     var cover = Math.max(W / GIF.vw, H / GIF.vh) * (GIF.zoom || 1);
     var dw = GIF.vw * cover, dh = GIF.vh * cover;
     var mx = Math.max(0, (dw - W) / 2) / W, my = Math.max(0, (dh - H) / 2) / H;
@@ -16999,7 +17288,11 @@ window.gifenc=exports;})();
     var key = ((r >> 2) << 13) | ((g >> 1) << 6) | (b >> 2);
     var v = L.lut[key];
     if (v >= 0) return v;
-    var R = (r >> 2) << 2, G = (g >> 1) << 1, B = (b >> 2) << 2;
+    /* ⚠ 칸의 '바닥 모서리'로 재면 안 된다. 칸 폭이 R·B 는 4, G 는 2 라
+       모든 판정이 평균 (-1.5, -0.5, -1.5) 만큼 어두운 쪽으로 치우친다.
+       치우침은 흩어진 오차와 달리 서로 상쇄가 안 돼서 넓은 면에 띠로 남는다.
+       칸 한가운데로 재면 없어진다 — 실측(레퍼런스 프사): 계단 0.783 → 0.745 */
+    var R = ((r >> 2) << 2) + 1.5, G = ((g >> 1) << 1) + 0.5, B = ((b >> 2) << 2) + 1.5;
     var pal = L.pal, bi = 0, bd = 1e9;
     for (var i = 0; i < pal.length; i++) {
       var p = pal[i], dr = R - p[0], dg = G - p[1], db = B - p[2];
@@ -17014,7 +17307,14 @@ window.gifenc=exports;})();
     var er = new Float32Array((W + 2) * 3), nr = new Float32Array((W + 2) * 3);
     for (var y = 0; y < H; y++) {
       nr.fill(0);
-      for (var x = 0; x < W; x++) {
+      /* 줄마다 훑는 방향을 뒤집는다(뱀 모양).
+         한 방향으로만 훑으면 남은 오차가 계속 같은 쪽으로 밀려서
+         매끈한 면에 비스듬한 결(벌레무늬)이 생긴다. 방향을 번갈아 주면 서로 상쇄된다.
+         ⚠ 순서만 바뀔 뿐 '같은 그림 → 같은 결과'는 그대로다(프레임 간 떨림 위험 없음). */
+      var rev = (y & 1) === 1;
+      var x0 = rev ? W - 1 : 0, xEnd = rev ? -1 : W, xd = rev ? -1 : 1;
+      var fw = rev ? -3 : 3;          /* 진행 방향 '다음 픽셀' 쪽 */
+      for (var x = x0; x !== xEnd; x += xd) {
         var o = (y * W + x) * 4, e = (x + 1) * 3;
         var r = src[o] + er[e], g = src[o + 1] + er[e + 1], b = src[o + 2] + er[e + 2];
         r = r < 0 ? 0 : r > 255 ? 255 : r;
@@ -17024,10 +17324,12 @@ window.gifenc=exports;})();
         idx[y * W + x] = i;
         var p = pal[i];
         var dr = (r - p[0]) * strength, dg = (g - p[1]) * strength, db = (b - p[2]) * strength;
-        er[e + 3] += dr * 7 / 16; er[e + 4] += dg * 7 / 16; er[e + 5] += db * 7 / 16;
-        nr[e - 3] += dr * 3 / 16; nr[e - 2] += dg * 3 / 16; nr[e - 1] += db * 3 / 16;
-        nr[e]     += dr * 5 / 16; nr[e + 1] += dg * 5 / 16; nr[e + 2] += db * 5 / 16;
-        nr[e + 3] += dr * 1 / 16; nr[e + 4] += dg * 1 / 16; nr[e + 5] += db * 1 / 16;
+        /* 7/16 = 진행 방향 다음 칸 · 3/16 = 다음 줄 뒤쪽 대각 ·
+           5/16 = 다음 줄 바로 아래 · 1/16 = 다음 줄 앞쪽 대각 */
+        er[e + fw] += dr * 7 / 16; er[e + fw + 1] += dg * 7 / 16; er[e + fw + 2] += db * 7 / 16;
+        nr[e - fw] += dr * 3 / 16; nr[e - fw + 1] += dg * 3 / 16; nr[e - fw + 2] += db * 3 / 16;
+        nr[e]      += dr * 5 / 16; nr[e + 1]      += dg * 5 / 16; nr[e + 2]      += db * 5 / 16;
+        nr[e + fw] += dr * 1 / 16; nr[e + fw + 1] += dg * 1 / 16; nr[e + fw + 2] += db * 1 / 16;
       }
       er.set(nr);
     }
@@ -17040,31 +17342,89 @@ window.gifenc=exports;})();
      그 무리의 평균으로 색을 옮긴다. 몇 번 돌리면 색이 실제 분포에 붙는다.
      ⚠ 용량은 그대로다(색 개수가 안 늘어남). 순수 이득. */
   var GIF_KMEANS = 4;      /* 돌릴 횟수 · 0 = 안 씀 */
+  /* ── 사람 눈 기준 색공간(Oklab) ─────────────────────────────
+     색을 R·G·B 숫자로 재면 눈에 안 보이는 차이에도 색칸을 낭비한다.
+     Oklab 은 '눈이 느끼는 차이 = 좌표 거리' 가 되게 만든 공간이라,
+     여기서 색을 고르면 피부톤·볼터치처럼 눈이 예민한 구간에 색이 더 간다.
+     (Björn Ottosson, 2020) */
+  var GIF_OK_S2L = null;
+  function gifRgb2Ok(r, g, b, out) {
+    if (!GIF_OK_S2L) {                          /* sRGB→선형 변환표 한 번만 */
+      GIF_OK_S2L = new Float32Array(256);
+      for (var t = 0; t < 256; t++) {
+        var c = t / 255;
+        GIF_OK_S2L[t] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      }
+    }
+    var R = GIF_OK_S2L[r], G = GIF_OK_S2L[g], B = GIF_OK_S2L[b];
+    var l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+    var m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+    var s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+    out[0] = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+    out[1] = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+    out[2] = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+    return out;
+  }
+  function gifOk2Rgb(L, A, B2) {
+    var l_ = L + 0.3963377774 * A + 0.2158037573 * B2;
+    var m_ = L - 0.1055613458 * A - 0.0638541728 * B2;
+    var s_ = L - 0.0894841775 * A - 1.2914855480 * B2;
+    var l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+    var r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+    var g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+    var b = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+    function f(c) {
+      c = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c > 0 ? c : 0, 1 / 2.4) - 0.055;
+      c = Math.round(c * 255);
+      return c < 0 ? 0 : c > 255 ? 255 : c;
+    }
+    return [f(r), f(g), f(b)];
+  }
   function gifRefinePalette(pal, px, iters) {
     if (!iters || !px || px.length < 4096) return pal;
     var n = pal.length, i, k;
     /* 너무 많으면 골고루 솎아낸다 — 6만 점이면 결과가 거의 같고 훨씬 빠르다 */
     var total = px.length / 4, stride = Math.max(1, Math.floor(total / 60000));
-    var sr = new Float64Array(n), sg = new Float64Array(n), sb = new Float64Array(n);
+    /* 표본 픽셀을 Oklab 으로 한 번만 옮겨 둔다 */
+    var m3 = 0, tmp = [0, 0, 0];
+    for (i = 0; i < total; i += stride) m3++;
+    var X = new Float32Array(m3 * 3);
+    var w = 0;
+    for (i = 0; i < total; i += stride) {
+      var o = i * 4;
+      gifRgb2Ok(px[o], px[o + 1], px[o + 2], tmp);
+      X[w] = tmp[0]; X[w + 1] = tmp[1]; X[w + 2] = tmp[2]; w += 3;
+    }
+    /* 씨앗(처음 뽑은 색)도 Oklab 으로 */
+    var P = new Float32Array(n * 3);
+    for (k = 0; k < n; k++) {
+      gifRgb2Ok(pal[k][0], pal[k][1], pal[k][2], tmp);
+      P[k * 3] = tmp[0]; P[k * 3 + 1] = tmp[1]; P[k * 3 + 2] = tmp[2];
+    }
+    var sL = new Float64Array(n), sA = new Float64Array(n), sB = new Float64Array(n);
     var cnt = new Float64Array(n);
     for (var it = 0; it < iters; it++) {
-      var L = gifNearLut(pal);
-      sr.fill(0); sg.fill(0); sb.fill(0); cnt.fill(0);
-      for (i = 0; i < total; i += stride) {
-        var o = i * 4;
-        var r = px[o], g = px[o + 1], b = px[o + 2];
-        k = gifNearIdx(L, r, g, b);
-        sr[k] += r; sg[k] += g; sb[k] += b; cnt[k]++;
+      sL.fill(0); sA.fill(0); sB.fill(0); cnt.fill(0);
+      for (i = 0; i < m3; i++) {
+        var L0 = X[i * 3], A0 = X[i * 3 + 1], B0 = X[i * 3 + 2];
+        var best = 0, bd = 1e18;
+        for (k = 0; k < n; k++) {
+          var d0 = L0 - P[k * 3], d1 = A0 - P[k * 3 + 1], d2 = B0 - P[k * 3 + 2];
+          var d = d0 * d0 + d1 * d1 + d2 * d2;
+          if (d < bd) { bd = d; best = k; }
+        }
+        sL[best] += L0; sA[best] += A0; sB[best] += B0; cnt[best]++;
       }
       var moved = 0;
       for (k = 0; k < n; k++) {
         if (cnt[k] < 1) continue;              /* 아무도 안 붙은 색은 그대로 둔다 */
-        var nr = Math.round(sr[k] / cnt[k]), ng = Math.round(sg[k] / cnt[k]), nb = Math.round(sb[k] / cnt[k]);
-        if (nr !== pal[k][0] || ng !== pal[k][1] || nb !== pal[k][2]) moved++;
-        pal[k] = [nr, ng, nb];
+        var nL = sL[k] / cnt[k], nA = sA[k] / cnt[k], nB = sB[k] / cnt[k];
+        if (nL !== P[k * 3] || nA !== P[k * 3 + 1] || nB !== P[k * 3 + 2]) moved++;
+        P[k * 3] = nL; P[k * 3 + 1] = nA; P[k * 3 + 2] = nB;
       }
       if (!moved) break;                        /* 더 안 움직이면 끝 */
     }
+    for (k = 0; k < n; k++) pal[k] = gifOk2Rgb(P[k * 3], P[k * 3 + 1], P[k * 3 + 2]);
     return pal;
   }
   function gifGlobalPalette(GE, frames, step, colors, ditherFn, opaqueOnly) {
@@ -17103,10 +17463,9 @@ window.gifenc=exports;})();
     return gifRefinePalette(
       GE.quantize(big, Math.max(2, colors), { format: 'rgb565' }), big, GIF_KMEANS);
   }
-  function gifEncode(frames, W, H, fps, maxColors, step, transparent, fuzz) {
+  function gifEncode(frames, W, H, fps, maxColors, step, transparent, fuzz, frameDelays) {
     var GE = window.gifenc;
     var enc = GE.GIFEncoder();
-    var delay = Math.round(1000 * step / fps);
     var prev = null; /* 직전에 실제 기록된 화면(소스 RGBA) — 델타 비교 기준이라 오차 누적 없음 */
     fuzz = fuzz || 0;
     var dfn = GIF_DITHER ? function (d) { return gifDitherCopy(d, W, H, GIF_DITHER); } : null;
@@ -17116,6 +17475,12 @@ window.gifenc=exports;})();
     var gLut = GIF_FS ? gifNearLut(gPal) : null;
     for (var i = 0; i < frames.length; i += step) {
       var data = frames[i];
+      var delay = Math.round(1000 * step / fps);
+      if (frameDelays && frameDelays.length) {
+        delay = 0;
+        for (var di = i; di < Math.min(frames.length, i + step); di++) delay += frameDelays[di] || 0;
+        if (!(delay > 0)) delay = Math.round(1000 * step / fps);
+      }
       /* 색을 고를 때만 디더한 사본을 쓴다 — 델타 비교·투명 판정은 원본 그대로 */
       var qdat = GIF_DITHER ? gifDitherCopy(data, W, H, GIF_DITHER) : data;
       if (transparent) {
@@ -17152,15 +17517,32 @@ window.gifenc=exports;})();
   gifEl('gifGo').onclick = function () {
     if (GIF.busy || !GIF.url) return;
     if (!window.gifenc) return alert('GIF 인코더(gifenc.js)를 못 읽었어요.');
+    var portrait = gifPortraitChosen();
+    if (portrait && !PHOTO.rig) {
+      if (PHOTO.makeAfterRig) return;
+      PHOTO.makeAfterRig = true;
+      gifEl('gifGo').disabled = true;
+      gifEnsurePortraitRig(false).then(function () {
+        PHOTO.makeAfterRig = false;
+        gifEl('gifGo').disabled = false;
+        if (gifPortraitChosen()) gifEl('gifGo').onclick();
+      }).catch(function (e) {
+        PHOTO.makeAfterRig = false;
+        gifEl('gifGo').disabled = false;
+        alert('AI 누끼가 준비되지 않아 만들기를 중단했어요:\n' + (e && e.message ? e.message : e));
+      });
+      return;
+    }
     var v = gifV();
     var av = GIF.mode === 'avatar';
+    var bottom = GIF.mode === 'bottom';
     var avSz = parseInt(gifEl('gifAvSize').value, 10) || 420; /* 420(규격) 또는 210 */
-    var W = av ? avSz : Math.round(clampN(gifEl('gifW').value, 360, 120, 640));
-    var H = av ? avSz : Math.max(2, Math.round(W * GIF.vh / GIF.vw / 2) * 2);
-    var fps = parseInt(gifEl('gifFps').value, 10) || 10;
-    var start = clampN(gifEl('gifStart').value, 0, 0, Math.max(0, GIF.dur - 0.5));
-    var len = clampN(gifEl('gifLen').value, 3, 0.5, 10);
-    len = Math.min(len, Math.max(0.5, GIF.dur - start));
+    var W = bottom ? GIF_BOTTOM_SPEC.w : (av ? avSz : Math.round(clampN(gifEl('gifW').value, 360, 120, 640)));
+    var H = bottom ? GIF_BOTTOM_SPEC.h : (av ? avSz : Math.max(2, Math.round(W * GIF.vh / GIF.vw / 2) * 2));
+    var fps = bottom ? GIF_BOTTOM_SPEC.fps : (parseInt(gifEl('gifFps').value, 10) || 10);
+    var start = bottom ? 0 : clampN(gifEl('gifStart').value, 0, 0, Math.max(0, GIF.dur - 0.5));
+    var len = bottom ? GIF_BOTTOM_SPEC.len : clampN(gifEl('gifLen').value, 3, 0.5, 10);
+    if (!bottom) len = Math.min(len, Math.max(0.5, GIF.dur - start));
     /* ⚠ 용량 가드는 반드시 '상태를 잠그기 전'에. 잠근 뒤에 return 하면
        GIF.busy 와 버튼 disabled 가 걸린 채로 끝나서, 안내대로 설정을 줄여도
        다시 못 누른다(영구 잠김). 여기는 DOM onclick 이라 Promise.reject 도 소용없다. */
@@ -17184,7 +17566,7 @@ window.gifenc=exports;})();
     cv.height = H;
     var g = cv.getContext('2d', { willReadFrequently: true });
     var frames = [];
-    var n = Math.max(2, Math.round(len * fps));
+    var n = bottom ? GIF_BOTTOM_SPEC.frames : Math.max(2, Math.round(len * fps));
     /* 인트로 — 전환을 영상 "위에" 겹친다: 영상이 멈추지 않고 재생되는 채로
        끝 TT프레임 동안 카드가 서서히 진해지고, 루프 복귀도 앞 TT프레임에 겹쳐 카드가 걷힌다.
        (예전엔 마지막 프레임을 얼려놓고 전환을 뒤에 이어붙여서 영상이 멈춰 보였다) */
@@ -17220,7 +17602,7 @@ window.gifenc=exports;})();
       gifSeek(v, start + i / fps).then(function () {
         /* 링은 pushFrame에서 frames.length/total 위상으로 그린다 — 손그림 클립이
            어긋나지 않게 같은 값을 넘긴다(이 시점 frames.length === i) */
-        var rph = frames.length / total;
+        var rph = (portrait && !intro && n > 1) ? i / (n - 1) : frames.length / total;
         if (!intro) {
           gifDrawFrame(g, v, W, H, rph, true);
           /* 영상 위 글자 — 카드 전환 없이 프레임 위에 바로 얹는다(링은 pushFrame에서 위에) */
@@ -17288,7 +17670,11 @@ window.gifenc=exports;})();
       if (!av) {               /* 자유 크기 GIF는 용량 제한이 없다 — 최고 화질 한 번만 */
         gifSetProg('움짤 만드는 중…');
         setTimeout(function () {
-          try { bytes = gifEncode(frames, W, H, fps, 256, 1, av, 0); } catch (e) { return encFail(e); }
+          /* 용량 걱정이 없으니 디더를 끝까지 쓴다(색 뭉침 최소) */
+          var keepFs = GIF_FS; GIF_FS = 1.0;
+          try { bytes = gifEncode(frames, W, H, fps, 256, 1, av, 0, bottom ? gifBottomDelays(frames.length) : null); }
+          catch (e) { GIF_FS = keepFs; return encFail(e); }
+          GIF_FS = keepFs;
           used = { c: 256, f: 0, step: 1 };
           finish();
         }, 20);
@@ -17297,13 +17683,17 @@ window.gifenc=exports;})();
       var stages = [{ c: 256, step: 1 }, { c: 256, step: 2 }, { c: 192, step: 2 }, { c: 128, step: 2 }];
       var si = 0, best = null, last = null, cache = {};
       function enc(ld, cb) {
-        var key = ld.c + '|' + ld.f + '|' + ld.step;
+        var key = ld.c + '|' + ld.f + '|' + ld.step + '|' + (ld.fs || '');
         if (cache[key]) return cb(cache[key], ld);
         gifSetProg('움짤 만드는 중… 2MB에 꽉 채우는 중 (' + ld.c + '색' +
+          (ld.fs ? ' · 최고 화질' : '') +
           (ld.f ? ' · 미세압축 ±' + ld.f : '') + (ld.step > 1 ? ' · 프레임 ½' : '') + ')');
         setTimeout(function () {
-          var b;
-          try { b = gifEncode(frames, W, H, fps, ld.c, ld.step, av, ld.f); } catch (e) { return encFail(e); }
+          var b, keepFs = GIF_FS;
+          if (ld.fs) GIF_FS = ld.fs;
+          try { b = gifEncode(frames, W, H, fps, ld.c, ld.step, av, ld.f); }
+          catch (e) { GIF_FS = keepFs; return encFail(e); }
+          GIF_FS = keepFs;
           cache[key] = b;
           last = { bytes: b, ld: ld };
           cb(b, ld);
@@ -17319,7 +17709,21 @@ window.gifenc=exports;})();
         bytes = pick.bytes; used = pick.ld;
         finish();
       }
-      (function stage() {
+      /* ── 0단계: 디더를 끝까지 쓴 '최고 화질' 을 먼저 시도한다 ──────────
+         디더 강도를 0.8 → 1.0 으로 올리면 매끈한 면의 색 뭉침이 절반으로 준다
+         (실측 계단 0.709 → 0.387). 대신 파일이 5% 쯤 커진다.
+         그래서 2MB 안에 들어갈 때만 쓰고, 안 들어가면 예전 절차 그대로 간다.
+         ⚠ 이 순서가 중요하다 — 화질을 깎는 순서는
+            디더 강도 → 미세압축(잔상) → 프레임 절반 → 색 줄이기 여야 한다.
+            디더가 제일 덜 아프기 때문. */
+      (function tryBest() {
+        enc({ c: 256, f: 0, step: 1, fs: 1.0 }, function (b, ld) {
+          if (keep(b, ld)) return done();
+          best = null;                            /* 못 들어감 → 예전 절차로 */
+          stage();
+        });
+      })();
+      function stage() {
         if (si >= stages.length) return done();   /* 다 해봐도 2MB를 못 맞추면 마지막 것이라도 */
         var st = stages[si];
         best = null;
@@ -17342,7 +17746,7 @@ window.gifenc=exports;})();
             })();
           });
         });
-      })();
+      }
       function finish() {
         GIF.out = bytes;
         GIF.outSize = W; /* 저장 파일명에 실제 만든 해상도를 쓰려고 */
@@ -17354,6 +17758,7 @@ window.gifenc=exports;})();
         gifEl('gifMeta').innerHTML = W + '×' + H + ' · ' + Math.ceil(frames.length / used.step) + '프레임 → <b>' +
           (kb >= 1024 ? (kb / 1024).toFixed(2) + 'MB' : Math.round(kb) + 'KB') + '</b>' +
           (av ? (over ? ' — ⚠ 2MB를 못 맞췄어요. 길이나 fps를 줄여보세요.' : ' — ✅ 프사 규격 OK (' + W + '×' + H + ' · 2MB 미만)') : '') +
+          (bottom ? ' — ✅ 하단 배너 720×150 · 72프레임 · 24fps · 정확히 3.00초 · ' + bytes.length.toLocaleString() + ' bytes' : '') +
           ((used.c < 256 || used.step > 1 || used.f > 0) ? '<br><span style="color:#8b887c">자동 맞춤: ' + used.c + '색' + (used.f ? ' · 미세압축 ±' + used.f : '') + (used.step > 1 ? ' · 프레임 ½' : '') + '</span>' : '') +
           (room ? '<br><span style="color:#8b887c">여유 ' + ((LIMIT - bytes.length) / 1048576).toFixed(2) +
             'MB — fps나 길이를 올리면 더 부드럽게 뽑을 수 있어요</span>' : '');
@@ -17400,6 +17805,7 @@ window.gifenc=exports;})();
     if (!GIF.out) return;
     var name = GIF.outName || '움짤.gif';
     if (GIF.mode === 'avatar' && name.indexOf('_프사') < 0) name = name.replace(/\.gif$/, '') + '_프사' + (GIF.outSize || 420) + '.gif';
+    if (GIF.mode === 'bottom' && name.indexOf('_하단720x150') < 0) name = name.replace(/\.gif$/, '') + '_하단720x150.gif';
     /* ⚠ 예전엔 이름을 못 바꿔서, 같은 영상으로 여러 개 만들면 계속 덮어써졌다 */
     gifPickName(name).then(function (picked) {
       if (!picked) return;                 /* 취소 */
@@ -19897,7 +20303,7 @@ window.gifenc=exports;})();
     document.head.appendChild(st);
   })();
   /* QA용 내부 핸들(자동 검증 스크립트가 사용) */
-  window.__pbkQA = {
+  Object.assign(window.__pbkQA || (window.__pbkQA = {}), {
     showTab: showTab, showBnItem: showBnItem, renderBannerPNG: renderBannerPNG,
     /* 움짤·편집탭 자동검증용 */
     gifEncode: gifEncode, gifDrawRing: gifDrawRing, gifState: function () { return GIF; },
@@ -20072,7 +20478,7 @@ window.gifenc=exports;})();
     undo: function () { histStep(-1); },
     redo: function () { histStep(1); },
     getBook: function () { return book; }
-  };
+  });
 
   /* ================= 시작 ================= */
   /* engine.css 의 상대경로 아트(url("art/…"))를 dataURL 로 인라인.
@@ -20322,6 +20728,47 @@ window.gifenc=exports;})();
   window.addEventListener('resize', debounce(function () {
     document.querySelectorAll('.plItem').forEach(scaleMini);
   }, 200));
+  /* 읽기 전용 QA 표면. 제품 UI/저장 데이터에는 노출하지 않으며 브라우저 계약 테스트에서만 쓴다. */
+  Object.assign(window.__pbkQA || (window.__pbkQA = {}), {
+    bottomSpec: GIF_BOTTOM_SPEC,
+    bottomDelays: gifBottomDelays,
+    portraitMotion: gifPortraitMotion,
+    drawPortraitFrame: gifDrawPortraitFrame,
+    portraitChosen: gifPortraitChosen,
+    getPhotoState: function () {
+      return {
+        hasImage: !!PHOTO.img,
+        ready: !!PHOTO.rig,
+        busy: !!PHOTO.rigPromise,
+        error: PHOTO.rigError || '',
+        bbox: PHOTO.rig && PHOTO.rig.bbox ? Object.assign({}, PHOTO.rig.bbox) : null,
+        contract: PHOTO.rig && PHOTO.rig.contract || ''
+      };
+    },
+    setSyntheticRig: function (subject, bbox) {
+      if (!subject || !bbox) throw new Error('subject/bbox required');
+      PHOTO.img = subject;
+      PHOTO.w = subject.width;
+      PHOTO.h = subject.height;
+      PHOTO.rig = { source: subject, mask: null, subject: subject, bbox: Object.assign({}, bbox),
+        bgCrop: null, backgrounds: {}, contract: 'single-rigid-subject:face+jaw+neck+heart-hands+sleeves+torso' };
+      PHOTO.rigError = '';
+      GIF.kind = 'photo';
+      GIF.mode = 'bottom';
+      GIF.vw = subject.width;
+      GIF.vh = subject.height;
+      GIF.zoom = 1;
+      GIF.ox = 0;
+      GIF.oy = 0;
+      gifEl('giPhMove').value = 'portrait2d';
+      return this.getPhotoState();
+    }
+  });
+  if (/^(localhost|127\.0\.0\.1)$/i.test(location.hostname) && /[?&]pbkqa=1(?:&|$)/.test(location.search + '&')) {
+    var qaScript = document.createElement('script');
+    qaScript.src = '../tests/browser_portrait2d_contract.js';
+    document.head.appendChild(qaScript);
+  }
 })();
 </script>
 
