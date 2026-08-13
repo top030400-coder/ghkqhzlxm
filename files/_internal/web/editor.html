@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v26 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-10_v28 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v27</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v28</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -18350,7 +18350,7 @@ window.gifenc=exports;})();
       ['updTitle', 'updSub', 'updNotes', 'updBar', 'updBtns'].forEach(function (id) {
         var el = document.createElement(id === 'updTitle' ? 'h3' : 'div');
         el.id = id;
-        if (id === 'updSub') el.style.cssText = 'font-size:12px;color:#8b877c';
+        if (id === 'updSub') el.style.cssText = 'font-size:12px;color:#8b877c;white-space:pre-line;line-height:1.6';
         card.appendChild(el);
       });
       var barIn = document.createElement('div');
@@ -18383,9 +18383,22 @@ window.gifenc=exports;})();
       $u('updTitle').textContent = (manual ? '새 버전이 나왔어요' : '새 업데이트가 있어요') +
         ' (' + (info.latest || '') + ')';
       if (manual) {
-        $u('updSub').textContent = (info.reason || '자동으로 설치할 수 없는 상태예요') +
-          (info.page ? ' — 받는 곳에서 받아 덮어써 주세요.'
-                     : ' — 받는 곳 주소가 설정돼 있지 않아요. 만드신 분께 문의해 주세요.');
+        /* ⚠ 2026-08-10 문의: "원래 자동으로 됐는데 갑자기 깃허브가 열려요".
+           자동이 수동으로 떨어지는 경우는 사실상 하나뿐 — 프로그램 폴더에 못 쓰는 것이다.
+           예전엔 원인만 적어줘서 고객이 뭘 해야 할지 몰랐다. 스스로 고치는 법을 적어준다.
+           (본체를 다시 굽지 않아도 되게 화면 쪽에서 안내한다) */
+        var _perm = /쓸 수 없|권한|위치/.test(info.reason || '');
+        $u('updSub').textContent =
+          (info.reason || '자동으로 설치할 수 없는 상태예요') +
+          (_perm
+            ? '\n\n이렇게 하면 다시 자동으로 됩니다 —'
+              + '\n① 프로그램을 끄고, 키트 폴더째로 C:\\PhotobookKit 같은 곳으로 옮겨 주세요.'
+              + '\n   (Program Files · 바탕 화면 · 문서 · OneDrive 안이면 윈도우가 쓰기를 막습니다)'
+              + '\n② 압축을 푼 폴더에서 실행 중인지 확인해 주세요 (zip 안에서 바로 켜면 안 됩니다).'
+              + '\n③ 그래도 안 되면 프로그램을 마우스 오른쪽 → 관리자 권한으로 실행.'
+              + (info.page ? '\n\n급하면 아래 <받는 곳 열기> 로 새 판을 받아 덮어써도 됩니다.' : '')
+            : (info.page ? ' — 받는 곳에서 받아 덮어써 주세요.'
+                         : ' — 받는 곳 주소가 설정돼 있지 않아요. 만드신 분께 문의해 주세요.'));
         $u('updGo').textContent = info.page ? '받는 곳 열기' : '닫기';
       } else {
         $u('updSub').textContent = '받을 용량 ' + mb(info.bytes || 0) +
@@ -18548,6 +18561,9 @@ window.gifenc=exports;})();
     }
 
     setTimeout(ask, 4000);
+    /* 점검용 — 실제 업데이트 없이 안내창 문구를 눈으로 확인한다.
+       (파이썬이 없는 브라우저 검사에서 '자동/수동' 두 화면을 다 보려면 필요하다) */
+    window.updPreview = function (o) { info = o; build(); openBox(); };
   })();
 
   /* ── AI 개체선택 — 파이썬 쪽 birefnet-general-lite(1024px)로 인물/캐릭터 통째 선택.
