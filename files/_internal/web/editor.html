@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v32</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v33</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -17034,6 +17034,10 @@ window.gifenc=exports;})();
         var i = gifNearIdx(lut, r | 0, g | 0, b | 0);
         idx[y * W + x] = i;
         var p = pal[i];
+        /* ⚠ 프사는 동그라미라 바깥이 투명하다. 투명한 칸의 색은 아무 의미가 없는데
+           그 오차를 옆으로 퍼뜨리면 테두리 안쪽 1px 이 지저분해진다(실측 오차 36 → 4).
+           투명한 칸에서는 오차를 만들지 않는다. */
+        if (src[o + 3] < 128) continue;
         var dr = (r - p[0]) * strength, dg = (g - p[1]) * strength, db = (b - p[2]) * strength;
         /* 7/16 = 진행 방향 다음 칸 · 3/16 = 다음 줄 뒤쪽 대각 ·
            5/16 = 다음 줄 바로 아래 · 1/16 = 다음 줄 앞쪽 대각 */
@@ -18644,7 +18648,14 @@ window.gifenc=exports;})();
       Promise.resolve(a.upd_check()).then(function (r) {
         var o = typeof r === 'string' ? JSON.parse(r) : r;
         if (!o || !o.enabled) { updOff(); return; }   /* 업데이트 확인이 꺼진 상태 */
-        if (!o.ok) { if (++tries < 8) setTimeout(ask, 60000); return; }  /* 잠깐 인터넷이 안 될 수도 */
+        /* ⚠ 회사·학교 PC 처럼 막힌 환경에서는 이 갈래가 계속 실패한다.
+           예전엔 8번 조용히 시도하고 영영 입을 다물어서, 고객은 '최신인가 보다' 하고
+           옛 판을 계속 썼다. 이제 다 실패하면 화면에 알린다. */
+        if (!o.ok) {
+          if (++tries < 8) setTimeout(ask, 60000);
+          else updFail(o.err || '');
+          return;
+        }
         if (o.mode !== 'auto' && o.mode !== 'manual') return;
         info = o;
         build();
@@ -18661,6 +18672,40 @@ window.gifenc=exports;})();
        업데이트 목록에는 그 설정 파일이 일부러 빠져 있어서(고객 설정을 덮으면 안 되니까)
        업데이트로 자기 자신을 고칠 수도 없다 → 사람이 알아채게 화면에 띄운다.
        ⚠ 지한판은 일부러 꺼둔 것이라 뜨면 안 된다. 고객판에만 있는 인증 게이트로 구른다. */
+    /* 업데이트 확인이 계속 실패할 때 — 조용히 있지 않는다 */
+    function updFail(err) {
+      if (document.getElementById('updOffDot')) return;
+      var brand = document.querySelector('.brand');
+      if (!brand) return;
+      css();
+      var dot = document.createElement('span');
+      dot.id = 'updOffDot';
+      dot.textContent = '⚠ 업데이트 확인 실패';
+      dot.title = '눌러서 자세히 보기';
+      dot.style.cssText = 'margin-left:10px;padding:3px 9px;border-radius:11px;cursor:pointer;' +
+        'font-size:11px;font-weight:700;background:#8b6b3a;color:#fff;vertical-align:middle';
+      dot.onclick = function () {
+        build();
+        var ov = $u('updOv');
+        $u('updTitle').textContent = '업데이트를 확인하지 못했어요';
+        $u('updSub').textContent = '인터넷이 막혀 있거나 잠시 연결이 안 되는 상태예요. 프로그램은 그대로 쓰셔도 됩니다.';
+        $u('updNotes').textContent =
+          '이렇게 해보세요\n\n' +
+          '1. 인터넷 연결을 확인하고 프로그램을 다시 켜 보세요.\n\n' +
+          '2. 회사·학교 PC 라면 보안 프로그램이 막고 있을 수 있어요.\n' +
+          '   그럴 땐 아래 주소에서 직접 받아 덮어써도 됩니다.\n' +
+          '   https://github.com/top030400-coder/ghkqhzlxm\n\n' +
+          (err ? ('\n[기술 정보] ' + String(err).slice(0, 300)) : '');
+        $u('updGo').textContent = '닫기';
+        $u('updGo').onclick = function () { ov.classList.remove('on'); };
+        $u('updGo').disabled = false;
+        $u('updLater').style.display = 'none';
+        $u('updBar').style.display = 'none';
+        ov.classList.add('on');
+      };
+      brand.appendChild(dot);
+    }
+
     function updOff() {
       if (!document.getElementById('licGate')) return;   /* 지한판 — 원래 꺼져 있는 게 맞다 */
       if (document.getElementById('updOffDot')) return;
@@ -18705,6 +18750,7 @@ window.gifenc=exports;})();
        (파이썬이 없는 브라우저 검사에서 '자동/수동' 두 화면을 다 보려면 필요하다) */
     window.updPreview = function (o) { info = o; build(); openBox(); };
     window.updOffPreview = function () { updOff(); };
+    window.updFailPreview = function (e) { updFail(e || 'test'); };
   })();
 
   /* ── AI 개체선택 — 파이썬 쪽 birefnet-general-lite(1024px)로 인물/캐릭터 통째 선택.
@@ -20357,6 +20403,10 @@ window.gifenc=exports;})();
 
   /* 브라우저 단독 열람용 폴백(QA·데모) — pywebview가 없으면 흉내 API로 부팅 */
   setTimeout(function () {
+    /* ⚠ 진짜 앱(WebView2) 안에서는 절대 깔면 안 된다. 이 흉내 API 에는 인증 기능이
+       없어서, 브리지가 늦게 붙는 사이에 깔리면 인증을 건너뛰고 앱이 열려버린다. */
+    if (window.chrome && window.chrome.webview) return;
+    if (navigator.userAgent.indexOf('pywebview') >= 0) return;
     if (window.pywebview && window.pywebview.api) return;
     if (api || booted) return;
     var fetchTxt = function (u) { return fetch(u).then(function (r) { return r.text(); }); };
@@ -20393,7 +20443,7 @@ window.gifenc=exports;})();
         if (mockPickResolve && !fi.files.length) { mockPickResolve([]); mockPickResolve = null; }
       }, 700);
     });
-    window.pywebview = { api: {
+    window.pywebview = { __mock: true, api: {
       get_assets: function () {
         var art = ['art/camlog_2cut.png', 'art/zine_collage.png', 'art/magazine_cover.png',
           'art/retro_camera.png', 'art/street_poster.png', 'art/newsprint.png', 'art/airmail.png',
@@ -20498,6 +20548,7 @@ window.gifenc=exports;})();
      때문에 다리가 3초를 넘겨 붙는 일이 흔했고, 그때 인증 없이 앱이 열렸다.
      → 이제 시간이 아니라 '다리가 실제로 붙었는지' 로 판단한다. */
   function bridgeUp() {
+    if (window.pywebview && window.pywebview.__mock) return false;   /* 흉내 API 는 다리가 아니다 */
     var a = window.pywebview && window.pywebview.api;
     if (!a) return false;
     for (var k in a) { if (typeof a[k] === 'function') return true; }
@@ -20531,14 +20582,36 @@ window.gifenc=exports;})();
   function askStatus(tries) {
     var a = api();
     if (!a) { pass(); return; }
-    a.license_status().then(function (r) {
-      r = parse(r);
-      if (r && r.activated) pass();
-      else renderForm(r || {});
-    }).catch(function () {
-      if (tries < 3) return setTimeout(function () { askStatus(tries + 1); }, 2000);
-      pass();      /* 세 번 다 거절 = 이 본체엔 인증 기능이 없다(옛 무인증판) */
-    });
+    /* ⚠ 2026-08-15 사고: 인증이 생기기 전 본체(v5·v6)에는 이 함수가 실제로 없다.
+       그런데 브리지 자가복구가 '있는 척' 껍데기를 만들어 두는 바람에, 불러도
+       성공도 실패도 안 오는 상태가 됐다. 시간 제한이 없어서 게이트가 영영 안 풀렸다
+       (= 앱을 못 켰다). 반드시 제한 시간을 둔다. */
+    var done = false;
+    var timer = setTimeout(function () {
+      if (done) return;
+      done = true;
+      pass();   /* 6초를 기다려도 대답이 없다 = 이 본체엔 인증 기능이 없다 */
+    }, 6000);
+    function settle(fn) {
+      return function (x) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        fn(x);
+      };
+    }
+    try {
+      a.license_status().then(settle(function (r) {
+        r = parse(r);
+        if (r && r.activated) pass();
+        else renderForm(r || {});
+      }), settle(function () {
+        if (tries < 2) { done = false; return setTimeout(function () { askStatus(tries + 1); }, 1500); }
+        pass();    /* 여러 번 거절 = 인증 기능이 없는 본체 */
+      }));
+    } catch (e) {
+      settle(function () { pass(); })(null);
+    }
   }
 
   /* 다리를 기다리는 중 / 너무 오래 걸릴 때 화면 */
