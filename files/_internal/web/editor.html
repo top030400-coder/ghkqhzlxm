@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v35</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v36</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -20616,12 +20616,55 @@ window.gifenc=exports;})();
         var d = null, okParse = true;
         try { d = parse(r); } catch (e) { okParse = false; }
         if (!okParse) { done = false; giveUp(); return; }
+        /* ⚠ 2026-08-15: 인증 설정 파일(license_config.json)이 없으면 본체가
+           '설정 안 됨' 이라며 통과(activated:true, unconfigured:true)를 돌려준다.
+           원래는 '판매자가 설정하기 전 시험용' 이었는데, 고객이 앱 폴더를 다른 PC 로
+           복사하다가 그 파일이 빠지면 인증 없이 열려버렸다(송출컴 사례).
+           고객판에는 그 파일이 반드시 들어 있으므로, 없다 = 설치가 깨진 것이다. */
+        if (d && d.activated && d.unconfigured) { renderBroken(); return; }
+        /* 인증 기록이 깨져서 통과한 경우 — 막지는 않는다(일시적일 수 있어서
+           정품 고객을 잠그면 안 된다). 대신 화면에 흔적을 남겨,
+           문의가 왔을 때 "왜 인증을 안 묻지?" 를 바로 알 수 있게 한다. */
+        if (d && d.activated && d.error) markOdd('인증 기록 손상');
+        if (d && d.activated && d.offline) markOdd('오프라인 유예 중');
         if (d && d.activated) pass();
         else renderForm(d || {});
       }), settle(giveUp));
     } catch (e) {
       settle(giveUp)(null);
     }
+  }
+
+  /* 정상 인증이 아닌 사유로 열렸을 때 제목 옆에 작게 표시 (문의 진단용) */
+  function markOdd(why) {
+    try {
+      var brand = document.querySelector('.brand');
+      if (!brand || document.getElementById('licOdd')) return;
+      var s = document.createElement('span');
+      s.id = 'licOdd';
+      s.textContent = '인증: ' + why;
+      s.title = '문의하실 때 이 문구를 알려주세요';
+      s.style.cssText = 'margin-left:8px;padding:2px 8px;border-radius:10px;font-size:11px;' +
+        'background:#8b6b3a;color:#fff;vertical-align:middle';
+      brand.appendChild(s);
+    } catch (e) { }
+  }
+
+  /* 설치 파일이 빠졌을 때 — 통과시키지 않고 다시 설치하라고 알린다 */
+  function renderBroken() {
+    gate.innerHTML =
+      '<div class="licBox">' +
+      '<div class="licLogo">📦</div>' +
+      '<h2>설치 파일이 일부 빠졌어요</h2>' +
+      '<p>인증에 필요한 파일이 없어서 확인할 수 없어요.<br>' +
+      '폴더를 복사해서 옮기면 이렇게 될 수 있어요.</p>' +
+      '<div class="licMsg err" style="text-align:left;line-height:1.7">' +
+      '1. 판매자에게 받은 설치 파일(zip)을 다시 받으세요.<br>' +
+      '2. 지금 폴더를 지우고 새로 압축을 푸세요.<br>' +
+      '3. 라이선스 키를 한 번 넣으면 끝이에요.' +
+      '</div>' +
+      '<div class="licFoot">작업물(.pbk)은 따로 저장돼 있어 지워지지 않아요.</div>' +
+      '</div>';
   }
 
   /* 다리를 기다리는 중 / 너무 오래 걸릴 때 화면 */
