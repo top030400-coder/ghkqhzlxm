@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v33</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v34</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -20590,8 +20590,11 @@ window.gifenc=exports;})();
     var timer = setTimeout(function () {
       if (done) return;
       done = true;
-      pass();   /* 6초를 기다려도 대답이 없다 = 이 본체엔 인증 기능이 없다 */
-    }, 6000);
+      pass();   /* 12초를 기다려도 대답이 없다 = 이 본체엔 인증 기능이 없다 */
+      /* ⚠ 이 시간은 파이썬 쪽 최악(_supabase_rpc timeout=8초)보다 반드시 길어야 한다.
+         6초로 뒀더니 인터넷이 느린 곳에서 파이썬이 아직 대답 중인데
+         화면이 먼저 포기하고 통과시켰다(= 인증 없이 열림). 8 + 여유 4 = 12. */
+    }, 12000);
     function settle(fn) {
       return function (x) {
         if (done) return;
