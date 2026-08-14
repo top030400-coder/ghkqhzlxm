@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v34</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v35</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -20603,17 +20603,24 @@ window.gifenc=exports;})();
         fn(x);
       };
     }
+    /* 대답을 못 알아들었을 때 = 거절과 똑같이 다룬다.
+       ⚠ 예전엔 parse 가 터지면 아무도 못 받아서 게이트가 영영 안 풀렸다
+          (= 앱을 못 켬). 성공 갈래 안에서 터지는 예외는 같은 then 의
+          실패 갈래로 안 간다는 걸 놓쳤다. */
+    function giveUp() {
+      if (tries < 2) { done = false; return setTimeout(function () { askStatus(tries + 1); }, 1500); }
+      pass();    /* 여러 번 실패 = 인증 기능이 없는 본체 */
+    }
     try {
       a.license_status().then(settle(function (r) {
-        r = parse(r);
-        if (r && r.activated) pass();
-        else renderForm(r || {});
-      }), settle(function () {
-        if (tries < 2) { done = false; return setTimeout(function () { askStatus(tries + 1); }, 1500); }
-        pass();    /* 여러 번 거절 = 인증 기능이 없는 본체 */
-      }));
+        var d = null, okParse = true;
+        try { d = parse(r); } catch (e) { okParse = false; }
+        if (!okParse) { done = false; giveUp(); return; }
+        if (d && d.activated) pass();
+        else renderForm(d || {});
+      }), settle(giveUp));
     } catch (e) {
-      settle(function () { pass(); })(null);
+      settle(giveUp)(null);
     }
   }
 
