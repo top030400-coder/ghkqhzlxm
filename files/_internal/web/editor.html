@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v31</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v32</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -18504,6 +18504,8 @@ window.gifenc=exports;})();
       $u('updLater').textContent = '나중에';
       $u('updLater').onclick = closeBox;
       $u('updLater').disabled = false;
+      $u('updLater').style.display = '';      /* 꺼짐 안내창이 숨겨놨을 수 있다 */
+      $u('updBar').style.display = 'none';
       $u('updGo').onclick = run;
       $u('updGo').disabled = false;
       $u('updBar').style.display = 'none';
@@ -18641,7 +18643,7 @@ window.gifenc=exports;})();
       }
       Promise.resolve(a.upd_check()).then(function (r) {
         var o = typeof r === 'string' ? JSON.parse(r) : r;
-        if (!o || !o.enabled) return;                 /* 설정이 비었으면 아예 안 함 */
+        if (!o || !o.enabled) { updOff(); return; }   /* 업데이트 확인이 꺼진 상태 */
         if (!o.ok) { if (++tries < 8) setTimeout(ask, 60000); return; }  /* 잠깐 인터넷이 안 될 수도 */
         if (o.mode !== 'auto' && o.mode !== 'manual') return;
         info = o;
@@ -18653,10 +18655,56 @@ window.gifenc=exports;})();
       });
     }
 
+    /* ⚠ 2026-08-15: 초기 몇 회차 설치본은 '업데이트를 어디서 받는지' 적힌 파일이
+       비어 있어서 확인 자체를 안 했다. 그런데 화면이 아무 말도 안 해서, 고객은
+       "최신인가 보다" 하고 옛 판을 계속 썼다(실제로 v23 에서 멈춘 분들이 있었다).
+       업데이트 목록에는 그 설정 파일이 일부러 빠져 있어서(고객 설정을 덮으면 안 되니까)
+       업데이트로 자기 자신을 고칠 수도 없다 → 사람이 알아채게 화면에 띄운다.
+       ⚠ 지한판은 일부러 꺼둔 것이라 뜨면 안 된다. 고객판에만 있는 인증 게이트로 구른다. */
+    function updOff() {
+      if (!document.getElementById('licGate')) return;   /* 지한판 — 원래 꺼져 있는 게 맞다 */
+      if (document.getElementById('updOffDot')) return;
+      var brand = document.querySelector('.brand');
+      if (!brand) return;
+      css();
+      var dot = document.createElement('span');
+      dot.id = 'updOffDot';
+      dot.textContent = '⚠ 업데이트 확인 꺼짐';
+      dot.title = '눌러서 고치는 법 보기';
+      dot.style.cssText = 'margin-left:10px;padding:3px 9px;border-radius:11px;cursor:pointer;' +
+        'font-size:11px;font-weight:700;background:#a4521a;color:#fff;vertical-align:middle';
+      dot.onclick = function () {
+        build();
+        var ov = $u('updOv');
+        $u('updTitle').textContent = '업데이트 확인이 꺼져 있어요';
+        $u('updSub').textContent =
+          '이 설치본은 새 버전이 나와도 알려주지 못해요. 프로그램 잘못이라 잘못하신 건 없어요.';
+        $u('updNotes').textContent =
+          '고치는 법 (1분, 한 번만 하면 됩니다)\n\n' +
+          '1. 판매자에게 <업데이트 고침 파일> 을 받으세요.\n' +
+          '   (update_config.json 이라는 작은 파일이에요)\n\n' +
+          '2. 화보집 키트를 완전히 끕니다.\n\n' +
+          '3. 키트를 설치한 폴더에서\n' +
+          '   _internal 폴더 → 그 안 web 폴더로 들어갑니다.\n' +
+          '   예)  PhotobookKit\\_internal\\web\n\n' +
+          '4. 받은 파일을 거기에 붙여넣고 <덮어쓰기> 를 누릅니다.\n\n' +
+          '5. 키트를 다시 켭니다. 잠시 뒤 왼쪽 위에\n' +
+          '   <● 업데이트 있어요> 가 뜨면 성공입니다.';
+        $u('updGo').textContent = '닫기';
+        $u('updGo').onclick = function () { ov.classList.remove('on'); };
+        $u('updGo').disabled = false;
+        $u('updLater').style.display = 'none';
+        $u('updBar').style.display = 'none';
+        ov.classList.add('on');
+      };
+      brand.appendChild(dot);
+    }
+
     setTimeout(ask, 4000);
     /* 점검용 — 실제 업데이트 없이 안내창 문구를 눈으로 확인한다.
        (파이썬이 없는 브라우저 검사에서 '자동/수동' 두 화면을 다 보려면 필요하다) */
     window.updPreview = function (o) { info = o; build(); openBox(); };
+    window.updOffPreview = function () { updOff(); };
   })();
 
   /* ── AI 개체선택 — 파이썬 쪽 birefnet-general-lite(1024px)로 인물/캐릭터 통째 선택.
