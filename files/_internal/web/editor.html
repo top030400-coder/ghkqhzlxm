@@ -690,7 +690,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-10 v30</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-15 v31</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -20294,7 +20294,14 @@ window.gifenc=exports;})();
       /* 본체(exe) 판 확인용. 옛 본체엔 파이썬 쪽이 없어서 호출이 실패하는데,
          그 실패로 '옛 본체'를 알아챈다. 여기 빠지면 브리지가 늦게 붙는 PC 에서
          새 본체인데도 옛 본체로 잘못 표시된다. */
-      { func: 'app_build',    params: [] }
+      { func: 'app_build',    params: [] },
+      /* ⚠ 2026-08-15: 이 셋이 빠져 있어서, 자가복구가 도는 PC 에서는
+         '인증 기능이 없는 옛 판' 으로 오인돼 인증 없이 앱이 열렸다.
+         옛 무인증 본체에는 이 기능이 실제로 없는데, 그건 불러봤을 때
+         거절되는 것으로 게이트가 알아서 판단한다(그쪽은 통과가 맞다). */
+      { func: 'license_status',   params: [] },
+      { func: 'license_activate', params: ['key'] },
+      { func: 'license_machine',  params: [] }
     ]);
     /* 늦게 도착한 원본 주입이 콜백 테이블을 리셋해 진행 중인 호출을 죽이지 않게 무력화 */
     window.pywebview._createApi = function () {};
@@ -20437,27 +20444,68 @@ window.gifenc=exports;})();
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  /* 브리지가 붙고 인증 API가 실제로 있는지 — 없으면(옛 무인증판) 통과 */
+  /* ⚠ 2026-08-15: 예전엔 '2.5초 기다려도 인증 API 가 없으면 옛 무인증판' 으로 보고
+     통과시켰다. 그런데 그건 '옛 판이라 없는 것' 과 '아직 다리가 안 붙은 것' 을
+     구분하지 못한다. 고객이 325MB 를 갓 풀고 처음 켜면 디펜더 검사·WebView2 첫 기동
+     때문에 다리가 3초를 넘겨 붙는 일이 흔했고, 그때 인증 없이 앱이 열렸다.
+     → 이제 시간이 아니라 '다리가 실제로 붙었는지' 로 판단한다. */
+  function bridgeUp() {
+    var a = window.pywebview && window.pywebview.api;
+    if (!a) return false;
+    for (var k in a) { if (typeof a[k] === 'function') return true; }
+    return false;      /* 껍데기만 있고 기능이 아직 안 붙은 상태 */
+  }
   function api() {
     var a = window.pywebview && window.pywebview.api;
     return (a && typeof a.license_status === 'function') ? a : null;
   }
 
   var waited = 0;
+  var WAIT_MSG_AT = 6000;      /* 이만큼 지나면 '준비 중' 이라고 알려준다 */
+  var WAIT_RETRY_AT = 25000;   /* 이만큼 지나면 다시 시도 버튼을 준다 */
   function boot() {
     if (passed) return;
-    var a = api();
-    if (!a) {
-      /* 2.5초 안에 인증 API가 안 붙으면 무인증판으로 간주하고 통과 */
+    if (!bridgeUp()) {
+      /* 다리가 아직 안 붙었다 — 통과시키지 않는다. 계속 기다린다. */
       waited += 120;
-      if (waited > 2500) { pass(); return; }
+      if (waited === WAIT_MSG_AT) renderWait(false);
+      if (waited >= WAIT_RETRY_AT) { renderWait(true); return; }
       return setTimeout(boot, 120);
     }
+    var a = api();
+    if (!a) { pass(); return; }   /* 다리는 붙었는데 인증 기능이 없다 = 진짜 무인증판 */
+    askStatus(0);
+  }
+
+  /* 인증 상태를 물어본다. 실패하면 몇 번 다시 물어보고,
+     그래도 안 되면 그때서야 '인증 기능이 진짜 없는 옛 본체' 로 보고 통과시킨다.
+     (시간만 재고 그냥 통과시키던 게 이번 사고의 원인이라, 반드시 '불러본 뒤' 판단한다) */
+  function askStatus(tries) {
+    var a = api();
+    if (!a) { pass(); return; }
     a.license_status().then(function (r) {
       r = parse(r);
       if (r && r.activated) pass();
       else renderForm(r || {});
-    }).catch(function () { pass(); }); /* 상태 조회 자체가 실패하면 잠금으로 앱을 막지 않는다 */
+    }).catch(function () {
+      if (tries < 3) return setTimeout(function () { askStatus(tries + 1); }, 2000);
+      pass();      /* 세 번 다 거절 = 이 본체엔 인증 기능이 없다(옛 무인증판) */
+    });
+  }
+
+  /* 다리를 기다리는 중 / 너무 오래 걸릴 때 화면 */
+  function renderWait(retry) {
+    gate.innerHTML =
+      '<div class="licBox">' +
+      '<div class="licLogo">⏳</div>' +
+      '<h2>' + (retry ? '준비가 오래 걸려요' : '준비 중이에요') + '</h2>' +
+      '<p>' + (retry
+        ? '프로그램을 껐다가 다시 켜 주세요.<br>그래도 안 되면 판매자에게 문의해 주세요.'
+        : '처음 켤 때는 조금 걸릴 수 있어요.<br>잠시만 기다려 주세요…') + '</p>' +
+      (retry ? '<button id="licBtn">다시 시도</button>' : '<div class="licSpin"></div>') +
+      '</div>';
+    var b = document.getElementById('licBtn');
+    if (b) b.onclick = function () { waited = 0; gate.innerHTML = '<div class="licSpin"></div>'; boot(); };
   }
 
   function reasonMsg(r) {
@@ -20495,7 +20543,12 @@ window.gifenc=exports;})();
       msg.className = 'licMsg';
       msg.textContent = '확인 중…';
       var a = api();
-      if (!a || typeof a.license_activate !== 'function') { pass(); return; }
+      if (!a || typeof a.license_activate !== 'function') {
+        btn.disabled = false;
+        msg.className = 'licMsg err';
+        msg.textContent = '아직 준비 중이에요. 잠시 뒤 다시 눌러 주세요.';
+        return;
+      }
       a.license_activate(key).then(function (r) {
         r = parse(r);
         if (r && r.ok) {
