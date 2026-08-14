@@ -1,1 +1,43 @@
-C:\Users\USER\Desktop\화보키트\keepalive_셋업\keep_alive.yml
+name: keep-supabase-alive
+on:
+  schedule:
+    - cron: "0 3 * * 1,4"      # 월·목 새벽 3시(UTC) — 최대 공백 4일 (Supabase 정지 기준 7일)
+  workflow_dispatch:            # 손으로도 돌릴 수 있게
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ping all license servers
+        env:
+          A_URL: ${{ secrets.A_URL }}
+          A_KEY: ${{ secrets.A_KEY }}
+          B_URL: ${{ secrets.B_URL }}
+          B_KEY: ${{ secrets.B_KEY }}
+          C_URL: ${{ secrets.C_URL }}
+          C_KEY: ${{ secrets.C_KEY }}
+        run: |
+          set -u
+          fail=0
+          ping_one () {
+            name="$1"; url="$2"; key="$3"
+            if [ -z "$url" ] || [ -z "$key" ]; then
+              echo "::error::$name 시크릿이 비어 있음 (URL 또는 KEY)"
+              fail=1
+              return
+            fi
+            code=$(curl -s -o /tmp/out.$name -w "%{http_code}" --max-time 30               -X POST "${url%/}/rest/v1/rpc/check_license"               -H "apikey: $key" -H "Authorization: Bearer $key"               -H "Content-Type: application/json"               -d '{"p_key":"__ping__","p_device":"__ping__"}')
+            echo "$name -> HTTP $code  $(head -c 120 /tmp/out.$name)"
+            # 200 이면 정상. 4xx/5xx 면 서버가 자거나 설정이 틀린 것 → 알아채야 한다.
+            case "$code" in
+              200) ;;
+              *) echo "::error::$name 응답이 $code 다 — 프로젝트가 멈췄거나 키가 틀림"; fail=1 ;;
+            esac
+          }
+          ping_one A "$A_URL" "$A_KEY"
+          ping_one B "$B_URL" "$B_KEY"
+          ping_one C "$C_URL" "$C_KEY"
+          if [ "$fail" -ne 0 ]; then
+            echo "핑 실패가 있다 — 위 오류를 보고 고칠 것"
+            exit 1
+          fi
+          echo "세 곳 모두 정상"
