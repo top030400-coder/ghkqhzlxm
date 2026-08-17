@@ -697,7 +697,9 @@ function GIFEncoder(opt = {}) {
         palette = null,
         repeat = 0,
         colorDepth = 8,
-        dispose = -1
+        dispose = -1,
+        x = 0,
+        y = 0
       } = opts;
       let first = false;
       if (auto) {
@@ -724,7 +726,7 @@ function GIFEncoder(opt = {}) {
       const delayTime = Math.round(delay / 10);
       encodeGraphicControlExt(stream, dispose, delayTime, transparent, transparentIndex);
       const useLocalColorTable = Boolean(palette) && !first;
-      encodeImageDescriptor(stream, width, height, useLocalColorTable ? palette : null);
+      encodeImageDescriptor(stream, width, height, useLocalColorTable ? palette : null, x, y);
       if (useLocalColorTable)
         encodeColorTable(stream, palette);
       encodePixels(stream, index, width, height, colorDepth, accum, htab, codetab);
@@ -793,10 +795,14 @@ function encodeColorTable(stream, palette) {
     stream.writeByte(color[2]);
   }
 }
-function encodeImageDescriptor(stream, width, height, localPalette) {
+function encodeImageDescriptor(stream, width, height, localPalette, left, top) {
+  /* ⚠ 원래 이 두 값이 0 으로 박혀 있었다. 그래서 '바뀐 조각만' 담은 프레임을
+     화면 어디에 붙일지 지정할 수 없었고, 모든 조각이 왼쪽 위(0,0)에 붙어
+     델타 프레임이 통째로 어긋났다(배경이 뭉개져 보이는 원인).
+     editor.html 은 이미 x/y 를 넘기고 있었는데 여기서 버리고 있었다. */
   stream.writeByte(44);
-  writeUInt16(stream, 0);
-  writeUInt16(stream, 0);
+  writeUInt16(stream, left || 0);
+  writeUInt16(stream, top || 0);
   writeUInt16(stream, width);
   writeUInt16(stream, height);
   if (localPalette) {

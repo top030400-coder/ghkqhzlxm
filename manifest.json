@@ -1,6 +1,6 @@
 {
- "version": "2026-08-15_v36",
- "date": "2026-08-15",
+ "version": "2026-08-17_v1",
+ "date": "2026-08-17",
  "notes": "■ 2026-08-15 (30차) — 설치 파일이 빠지면 인증 없이 열리던 문제 수정\n\n【 🔒 라이선스 인증 】\n- 앱 폴더를 다른 컴퓨터로 <복사> 해서 옮기면, 인증에 필요한 설정 파일이\n  빠지는 경우가 있었습니다. 그때 프로그램이 <설정 안 됨> 으로 보고\n  인증을 묻지 않고 열렸습니다(송출컴 등 두 번째 PC 사례).\n- 이제는 그 상태면 <설치 파일이 일부 빠졌어요> 안내가 뜨고,\n  다시 설치하는 방법을 알려드립니다.\n  ※ 폴더를 복사하지 마시고, 받으신 압축 파일을 새로 푸는 것이 안전합니다.\n    작업물(.pbk)은 따로 저장돼 있어 지워지지 않습니다.\n- 인증이 아닌 사유(오프라인 유예·기록 손상)로 열린 경우, 프로그램 이름 옆에\n  작게 사유가 표시됩니다. 문의하실 때 그 문구를 알려주시면 빠릅니다.",
  "page": "https://github.com/top030400-coder/ghkqhzlxm",
  "files": [
@@ -41,8 +41,8 @@
   },
   {
    "p": "_internal/web/editor.html",
-   "h": "de46ad2eb9fe9021d5e3a5ce02dd27efe69a593b3ba86c4ced15ddc5ff2dc073",
-   "s": 1101168
+   "h": "3e3df63b24f97affcec574db3c31977c215c903d5fdd872464d36d156916955b",
+   "s": 1325003
   },
   {
    "p": "_internal/web/engine.css",
@@ -61,13 +61,58 @@
   },
   {
    "p": "_internal/web/gifenc.js",
-   "h": "150b85ea141017dc48bfea5d3ec8754aab13717878eb291356f36fba112b84c1",
-   "s": 22793
+   "h": "e59e7eed3935cb7628e2a4cfd62f105115bde6d831d920094b32255473c2e188",
+   "s": 23242
+  },
+  {
+   "p": "_internal/web/measure.html",
+   "h": "9b027a43a45456c71ef4d9f03bdc90e98953227441d828fadf481a237aadeb35",
+   "s": 3113
+  },
+  {
+   "p": "_internal/web/out.html",
+   "h": "e70aa79ecbe333dc6c16b8da394cff3cd12a6f6ff16998767adc21748f562dac",
+   "s": 14805
   },
   {
    "p": "_internal/web/psd_dump.html",
    "h": "1cb55f4458d68659182cab2d9b73f6c970ef3b76437538a26562aa506fb127e6",
    "s": 7617
+  },
+  {
+   "p": "_internal/web/rim_assets.js",
+   "h": "a21ba68acbc12e8eabc52a2eefa2e1756e4e6a96d568645852b1b1d661cf49bc",
+   "s": 53314
+  },
+  {
+   "p": "_internal/web/rimcut.html",
+   "h": "c3fd4dd0952e7b860c3e719fb309d637ef0029d9f5c7c535901ff5cd643072aa",
+   "s": 11228
+  },
+  {
+   "p": "_internal/web/rimlook.html",
+   "h": "d3c26f372e19498ecad967009e0a8620e709879c9a1950e9f158966dbb2a7682",
+   "s": 5366
+  },
+  {
+   "p": "_internal/web/rimtest.html",
+   "h": "3738656d82b304c5d3ecb4a979b725ad937bf2d43820891331c002329c86f521",
+   "s": 10778
+  },
+  {
+   "p": "_internal/web/rimzoom.html",
+   "h": "63b1d42e1af2f9944368633795d8b53d7f0b63628032d72807cd05bce4d33560",
+   "s": 4755
+  },
+  {
+   "p": "_internal/web/signature_balloon.css",
+   "h": "9236fba0ecbf0def6aef7b9574f1a9023049589453d97fd8a3564454bf299a42",
+   "s": 23359
+  },
+  {
+   "p": "_internal/web/signature_balloon.js",
+   "h": "48371ba421cb832374baf2ef1ca2b67037efe5981978ef209bb0c35d369e6c6c",
+   "s": 247587
   },
   {
    "p": "_internal/web/art/airmail.png",
@@ -3145,6 +3190,766 @@
    "s": 767141
   },
   {
+   "p": "_internal/web/sig_assets/BM-JUA.ttf",
+   "h": "9d33c1fcb5c9726f10c25ec503d94843208c5e553a0b276f7e71d3556519645d",
+   "s": 1560072
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-blue-cloud.webp",
+   "h": "caba7916fa38bea4be2604bfd8ed0f482430e455bbb73cc97922e9d58a329495",
+   "s": 11972
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-cat-angel14xx.webp",
+   "h": "21ba33e3dcd10765b769ba3481aab8f3f5e10fc7e03f5c3e5c4863bc4c99cd71",
+   "s": 12530
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-cat-love12486.webp",
+   "h": "8d0d7f4dbf9e8f50741f985fc47e6ddce2387cb920ff062a14076d06d84ddc2b",
+   "s": 14734
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-cat-love486.webp",
+   "h": "6ae4bfdd1ea15cdb2c16d09408aee9313b18aa91b8dd8c4a3dbea129f5e87e64",
+   "s": 9202
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-cat-only57xx.webp",
+   "h": "20db0285e9d4041237869d1f6b973f85aa0d182f0195be4857509288178aff09",
+   "s": 10356
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-cat-pretty28xx.webp",
+   "h": "84920252b5e7b66bb3aa12908b32d0240bcd0de0e9416e176d6fca2e74d1a81f",
+   "s": 14116
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-cat-roulette33.webp",
+   "h": "1d8bfe34799a6f1e0963d2adeab25e0e6f45330f34fe651888ab82e56cbb3833",
+   "s": 7918
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-cat-roulette330.webp",
+   "h": "2c1f0e7a1a8184565ce489300fdde67aeeb42bbfa1319d1aa93f3c0bafc853a3",
+   "s": 18338
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-cat-signature1xx.webp",
+   "h": "8833d169761cd5a348ae955c3ad06a5da053db4726e1a4fce77c0716ca50b007",
+   "s": 8750
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-blue-wings-a.webp",
+   "h": "8a6a0a24737ebe4d120e2b7e9a6d5d0f204aa19d2f61732f6801d339fcbaea97",
+   "s": 28662
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-blue-wings-b.webp",
+   "h": "6ed5f637a28e1aa2a6151be5df203920c225ad3695389fe0dbd767eed2c8cdff",
+   "s": 29890
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-gray-wheel-a.webp",
+   "h": "0e6d61e6863d6ff2aab21c6aa461b65317406b608c64d60737dc07905b95a0ad",
+   "s": 32624
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-gray-wheel-b.webp",
+   "h": "42f7899209278c2afeca1600a5bdfe1f13a4a21e734fdb87188b818fdcefa2b0",
+   "s": 35886
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-green-clover-a.webp",
+   "h": "73bde6edf872a1af9c3a670b56544d8fa4ea67d615a3afe8bed5311c165173e2",
+   "s": 34020
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-green-clover-b.webp",
+   "h": "0bf0fd673003fc9807f2263907477d7e892b365c3101e02d6776a1e30da9ea38",
+   "s": 14858
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-orange-circles-a.webp",
+   "h": "6e2306f7e221122b64659d85a5a40a8df1956d1b2f14315db496d075279ce153",
+   "s": 23716
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-orange-circles-b.webp",
+   "h": "572b96a7ef029efad5be5a2e1b8a6f56c669350de895b6972f155a2f38be449c",
+   "s": 24830
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-pink-hearts-a.webp",
+   "h": "3c791e1b0d7a1946d3bf8d0916c183dc0127a054ebf24a275639a104e13601bd",
+   "s": 25052
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-pink-hearts-b.webp",
+   "h": "89b9da5bce63bffba6445dfa3bc9fb27721608188b79909b4aee61acba315786",
+   "s": 24740
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-purple-ribbon-a.webp",
+   "h": "134618a2c5bc5e0bd4f7664c150f29f47447efd445fa3af3a7d8d9d856f97aa7",
+   "s": 24978
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-flat-purple-ribbon-b.webp",
+   "h": "66e9296bec0ad6aa10d24c6a2f88bc287bd43ba638ca3c900cde151c301177e5",
+   "s": 26102
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-lavender-dream.webp",
+   "h": "a14e84f74e23a3ed4bd7358f909f7a63a6ad5f9860d81d3554d00c4ad955e7f7",
+   "s": 12984
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-angel.webp",
+   "h": "60948e14316a008189dd7a51b479d899e5579c253bb4fe48b18b529f93af4988",
+   "s": 8940
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-double-heart.webp",
+   "h": "aeb896c108eb655dc1c1349fceef386ab9f3b4e04e2eb152cb62c60d8997d90c",
+   "s": 14324
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-lemon.webp",
+   "h": "32d5e4dc086fdd48e50e5d46183f05383f75eca933604253e2b3dee58cda9432",
+   "s": 14402
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-lilac.webp",
+   "h": "914636d3aa2c15af46d8bc898260f5250693c3d3d46b893956f5b37051ce0554",
+   "s": 12420
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-love-heart.webp",
+   "h": "e81de80b2151982914c60e9c9b80991e5041eb4bfdbf9b7ed0c7991d2f6be3bd",
+   "s": 8632
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-mint.webp",
+   "h": "c0642218adb8ce5f8ac4ba688cffff3c42fb217ecad66211c81eee0dac2b768e",
+   "s": 15482
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-peach.webp",
+   "h": "480c45c75d491a064a46694ed01e24311b0c48bf08ac05784d4f25f947b004fe",
+   "s": 18316
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-pretty-bow.webp",
+   "h": "2a3e67af9c4aa1225d58b110111aa16bc9e28c6872825081d78608c05f75c71b",
+   "s": 15242
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-rose.webp",
+   "h": "425bf52c3b09e99bcda7389d6fe9c14edb9e51cf52e0aa1ce8c60a74e8c143c9",
+   "s": 16418
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-roulette-giant.webp",
+   "h": "208f3e49ee910a9e14972299e2c8b217d8f8646b846f289f73feb2b60e5d7258",
+   "s": 27378
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-roulette.webp",
+   "h": "615d385ec169643387af96e3b867d87ba35440379f0ce5c3ff78db220389d050",
+   "s": 23054
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-modern-sky.webp",
+   "h": "a67f46ad12b5561c53b14a3618bcdaeac993843b6c4b0b5447f33633106ff8c5",
+   "s": 13954
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-pink-doodle.webp",
+   "h": "eb7cfd4b09b45ffc7ccbe2abebfad9f8d92bf641bb7cca5d035568805e68987a",
+   "s": 7482
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-red-energy.webp",
+   "h": "e7e0ca2f985190a2f7e2c7b49b2ab14e26f93284c57649edf422767d2efc6411",
+   "s": 25866
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-rich-blue-angel.webp",
+   "h": "ac206f4435c597cd9ce77e153189d21bc82a4f458852aa01805755c84d294d96",
+   "s": 65676
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-rich-green-patchwork.webp",
+   "h": "ba5563a98ae687cb651dcd490b1dbd9aef665179613f74e03f4bd850d3293fe5",
+   "s": 76180
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-rich-pink-lace.webp",
+   "h": "f559384f3ce1e0b08947605e371f2069c15ab9a879f6d878e45e1167ef650302",
+   "s": 62878
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-rich-purple-ribbon.webp",
+   "h": "11942b61ae632938a964669b78f3372b5fd59a2c09e84201da7162dcdc40e2fe",
+   "s": 115260
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-rich-red-comic.webp",
+   "h": "9081cd260fc1e92681ac90b124787e2b65c0283b3f5b518f899385a8e1d39b2b",
+   "s": 103290
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-rich-yellow-carnival.webp",
+   "h": "413ffcc8ae869d4c665d462a9586cd8d336b28a325bb3758c2b8f7c0faf8f51e",
+   "s": 63972
+  },
+  {
+   "p": "_internal/web/sig_assets/bg-yellow-party.webp",
+   "h": "409894d835ffd7a09485921d4d7b1fd64bb259f6b8b2c987d0d7165a0eed752e",
+   "s": 8332
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-angel-wings.webp",
+   "h": "f63f3d72d56729bcc49abfc4cae8911239becd4e66a865f96ba86a9e6415a03c",
+   "s": 69408
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-cloud-bubble.webp",
+   "h": "1a9d6bd7e20a98a993eb7a2342d32bf16f5e61d0121383220388545ae3a1e0a2",
+   "s": 58570
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-cloud-halo.webp",
+   "h": "7250201f1922118005cb7abfcf10931c6f16ad881064639f6d5d3b51e396d06f",
+   "s": 69920
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-comic-burst.webp",
+   "h": "6d7e4ef4fbb265b6c63e032b8089bbf48312d471d2444d9def76f7c6b7b85ece",
+   "s": 89920
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-crescent-orbit.webp",
+   "h": "a6db1123fcc5b98f4f7a99b846275e1992b75262984582961f46b1eabb6bfd4f",
+   "s": 66670
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-curly-doodles.webp",
+   "h": "4763d512a33b9cc802957c3dbba2846cc73ebf00a459e51dfea96d8efc6cefce",
+   "s": 55474
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-feather-chain.webp",
+   "h": "b9dfac3e5586495ffa29faa5410c6678ed692dea32ecee11b9eaabb9f550f270",
+   "s": 74640
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-flame-swoosh.webp",
+   "h": "a0b353aa27468f1edcc98bae6ec796075b8c2a28545b6ee03ce8b8fefc23e73e",
+   "s": 65002
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-flower-lace.webp",
+   "h": "23bc217f77e4e51e24728f579ebc65cfec6b42bca5caf7577097089794077836",
+   "s": 74286
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-halo-ring.webp",
+   "h": "358dfac38fcb5b2a2344b4c594757d25a1b5425bae4e55698942f29a2b04ca96",
+   "s": 34838
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-heart-cluster.webp",
+   "h": "3f4b682040778f93860089be0daa595aa1cb3f51f8574fd00ea7b6da88ab386c",
+   "s": 66800
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-heart-crown.webp",
+   "h": "4c09dfc6aab4501a74f13ff455710827bb52f1feaa2424472ab9fc30285f93ba",
+   "s": 69828
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-lace-oval.webp",
+   "h": "46ba11741c706f0de74db66f399f778040198bc8e476bcde7cb01581581506e2",
+   "s": 56384
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-lightning-cluster.webp",
+   "h": "b3166b72b58e97d4fad42d2d36fee1fd9b5d066b7fd7acd52c31153e7c0e1fa2",
+   "s": 67282
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-pearl-heart-ring.webp",
+   "h": "e3ce8383854362f6fa6ec54df57a301bb4f3f31b2af08f8f6ed57ce04f644ed1",
+   "s": 56086
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-ribbon-bow.webp",
+   "h": "c5a0823bb06f93dc08b7434ad5f16d9fa6e6babcea778e4e32e86ed267249d6c",
+   "s": 69670
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-roulette-wheel.webp",
+   "h": "02683b413f0d8cf7e3768f5778a4d0e733bfbf27c00e5b4d0e849a8aa1e9f483",
+   "s": 72046
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-sparkle-cluster.webp",
+   "h": "a5735f61016edcb851dacb4a8334b6e447a0089921bcd150b2555dcfdc8f47d0",
+   "s": 43372
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-speed-lines.webp",
+   "h": "737f94417a4a937f8a6a9ce5b2a7d4f332e8def05fea9c8c0da8541463eb9d44",
+   "s": 94014
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-star-wand.webp",
+   "h": "b69ab1e4498f493cb74935353dd91d29463862296ae8e94256f4bd9224e271de",
+   "s": 67216
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-starburst.webp",
+   "h": "831dbcccd35470b29fefaa2184fe167e34f53ac324ed7721f7d4b4b4f62015b3",
+   "s": 90020
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-target-rings.webp",
+   "h": "0571fbdee98ce44dfa86a70d6a2c95a473855aa6bb05c15fe511fa24d7b2fcad",
+   "s": 78632
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-twin-circle-frame.webp",
+   "h": "d37c1d4aff9a974aa71e77bff960e4408297428d25214ffa754effce787c2012",
+   "s": 51650
+  },
+  {
+   "p": "_internal/web/sig_assets/props/img-wheel-spokes.webp",
+   "h": "130098655cd11a3fee8569405a917049a5872c5fe94a410bd7ca87c9942cb37a",
+   "s": 56578
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat12486-double-heart-frame.webp",
+   "h": "e991113ab228636e6841e1e042d48127f9ac8e7f4de6fc6ca9764d12d85539ec",
+   "s": 37350
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat12486-envelopes.webp",
+   "h": "076cb017a331e489b4687a65d7e4b7232a87c247563e25e3ad225d08fec8a4cd",
+   "s": 42008
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat12486-heart-bow.webp",
+   "h": "4b7893532d66f586f153acd247930ee33414e9b2ab770e537ac6a2226d1c4681",
+   "s": 51642
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat12486-heart-confetti.webp",
+   "h": "a186cd3db7438ba8f7792727285655fca12524014f23504fd5754ba478b2d421",
+   "s": 33152
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat12486-heart-garland.webp",
+   "h": "158eb6750c7f079fc7f4bd2bc7821e3b188d3e3da5a297b284d00d8235179e72",
+   "s": 20188
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat12486-layered-hearts.webp",
+   "h": "a12e43299e4c11b0450a3a2e089b03112fd9d3733ab6a17f1a48a376af765c3e",
+   "s": 47842
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat14xx-cloud.webp",
+   "h": "84cb41409fe3a0ab5008cd4cc5b38b5eca85b58c54a2373ea94fc12f9cda5b95",
+   "s": 33934
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat14xx-feather.webp",
+   "h": "867584127b15439c008065629f15b078d2823e8d38d87ca804095ae8bf54fe99",
+   "s": 41030
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat14xx-halo-bow.webp",
+   "h": "f12ccfab7c48507d608f0b49cf3edcfd548b22265b846f35abb77a70dc7e399e",
+   "s": 64530
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat14xx-halo.webp",
+   "h": "7c672e606ec5d17069a302c2c323661a6335259ff83e159fa26e1c18cde40f5f",
+   "s": 31150
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat14xx-sparkles.webp",
+   "h": "e1868b2d87e94c4eea7cbf4a9b5b219008d2ae246ad978bf00971c61028c23cf",
+   "s": 34270
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat14xx-wings.webp",
+   "h": "8a4c9c2460e53bd65d7fbcabe70a0de83ceaf650b081028fa935a998679f4c76",
+   "s": 40194
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat1xx-bow.webp",
+   "h": "c566d70637499b54dc53b4b2260c66dcb58290ac45ff4c2bd7670e6e38314f5a",
+   "s": 58374
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat1xx-cloud-bubble.webp",
+   "h": "9badcc02ba53c468e69b2fec505bd6277668e313af3f98afd3be6896e3eae762",
+   "s": 45728
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat1xx-flowers.webp",
+   "h": "8911ac22a07991ac807b9dedc60ee67108392ffe33393e49138431229f7bbb60",
+   "s": 58942
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat1xx-heart-sparkle.webp",
+   "h": "f9c17f68f40f8e0ae91f36f6ce261eafef9323e699fd4c30bf58d6eec5a1cefc",
+   "s": 48184
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat1xx-ribbon-loop.webp",
+   "h": "1f4d53576f868b59789cf249534620a5b5d189acdb75c643a64aa6d2b23348ae",
+   "s": 42666
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat1xx-speech-bubble.webp",
+   "h": "5d7f76a19b9bba277bb284539c0bc022163f517cfc1a42f68fd0c3a630da5c6e",
+   "s": 42876
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat28xx-bow.webp",
+   "h": "10372e2a033a1fdd4d147e475e7d1c6aec201d9ef30e6d036e09089ecbc4fe1f",
+   "s": 59098
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat28xx-flowers.webp",
+   "h": "0c76309d9c0fde880fa7b3e2a1d08f787e27735c9eabf0de810f38e18dba980c",
+   "s": 57902
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat28xx-lace-corner.webp",
+   "h": "3d793e08b15b1aaf988bc3f207759d091e5b4bfb1a9d1bafedc4572646242952",
+   "s": 43946
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat28xx-mirror.webp",
+   "h": "71a204e05f6723de90b1b1849f11b24e12a96357910bdd7a35ce716d04f7822b",
+   "s": 39562
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat28xx-pearls.webp",
+   "h": "09aefec2b06646641116108ee979d5168bd2223c283c2a6f27b09511fcd481b6",
+   "s": 19704
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat28xx-sparkles.webp",
+   "h": "161535112a51cc0ca8a17c64777231bdb354414a65d7397afca430a7db24e449",
+   "s": 37482
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat33-checker-ribbon.webp",
+   "h": "39a5a84521ceb0e55d1fc66342fb69a2eede8143793802b4c9e135ceade34fa8",
+   "s": 21452
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat33-loop-arrow.webp",
+   "h": "6f74408f59f946c63a48a0c99f1021beb0040c3574e1fd1bfbe2b9554024aada",
+   "s": 32858
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat33-plus-dots.webp",
+   "h": "57b6c671ce7a6d6ab9c74f34be40fba86d65ca8f7b485452007e040e98a7ba84",
+   "s": 46392
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat33-spirals.webp",
+   "h": "9d00288842c68432d9f450666067fc46d6767c99fbd0364de6e11becff7c6969",
+   "s": 52136
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat33-twin-wheels.webp",
+   "h": "33b82c080d3cf8f161932799f858d64b2a355de4df28545dcb03236b693e6f05",
+   "s": 51976
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat33-wheel-small.webp",
+   "h": "fceecf2d41245fa634ed7bf8226a65abb1924515a3cd7a4370635f3c89a23750",
+   "s": 66088
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat330-checker-pennants.webp",
+   "h": "8d02a713dbc3a42eee5977bb307da76a9a7ebe405c18b4a3df1768557deb7d99",
+   "s": 45504
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat330-clover.webp",
+   "h": "11b3d3cb7550b0a9eea61b070490c703e765d6bed43890f9b7599f9abad833e4",
+   "s": 50812
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat330-rim-fragment.webp",
+   "h": "535c29c6f73b9b5885faf81c939993a86c722c3c411957f2bcea25308fa31e5c",
+   "s": 46396
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat330-spin-arrow.webp",
+   "h": "3cc3214f7114412114961f9841e48ca0eda9d2fb88cfe848473997f1708f44ca",
+   "s": 37606
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat330-tickets.webp",
+   "h": "40fb97c762bd32d0c896d3a098d0ea3f9bb093bde7499c6b25ef7393cafdcba7",
+   "s": 65198
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat330-wheel-large.webp",
+   "h": "77dfa2e2470b85ff418d14727b33d9ac19deaee0baead827e9269ceb69e328a4",
+   "s": 78232
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat486-cupid-heart.webp",
+   "h": "d02f77c380e435d73fde7958450f910899cd13a20d9277b5293aa0e1bc80d2c9",
+   "s": 37854
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat486-double-hearts.webp",
+   "h": "164e760bda4eef4f614fd2b28af94620c9093382ac4bb7ab8b589e8cc77cb04c",
+   "s": 36666
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat486-envelope.webp",
+   "h": "758a982e50daa6580f23fdcd29b5ae5b116385adf7d4f7d22cc3ad8db84868c2",
+   "s": 47628
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat486-heart-flower.webp",
+   "h": "bdc6ef698c7469bad96bd14ab625ac4223efdc447e24f8a6719d75fd473a0343",
+   "s": 54832
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat486-heart-frame.webp",
+   "h": "4106c668ff786040b05607d89129c9bb9dc05292eec825896bd52c93bf6602a8",
+   "s": 44460
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat486-heart-petals.webp",
+   "h": "ae8348e6683e0e3a87bf82ffd4d6104849d2339f7964536cec6ed2ed596ac616",
+   "s": 48544
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat57xx-heart-lock.webp",
+   "h": "75022ae4aed52b8f02f0a4c75efe486eed1fc030066921d909ff98ca9b5fbeaf",
+   "s": 48224
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat57xx-heart-medallion.webp",
+   "h": "46107ab18fd94b1057bee2d77345037d59e96d600192900f34e61c90f86d85fd",
+   "s": 57498
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat57xx-key.webp",
+   "h": "66e3d224bf9359d884b2fe5273f66315b0b9c3e714abcfd2a3327f89945608ca",
+   "s": 37196
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat57xx-linked-hearts.webp",
+   "h": "f0d6286600350601fec91cc81f1e24bd626697c2c6176629db9519c5d72aa5a5",
+   "s": 66304
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat57xx-ribbon-bow.webp",
+   "h": "dd11466f0caadd5a1174db5ae6ff895fc6ea9dc5cf257d3bad00f7253934ea6a",
+   "s": 54850
+  },
+  {
+   "p": "_internal/web/sig_assets/props_category/cat57xx-seal-tag.webp",
+   "h": "d67c8abd4f4165733913b216f4f227fce52a3465525b056842dc5d6e443fd9c0",
+   "s": 61396
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-blue-bow.webp",
+   "h": "08b9a8ee2c73024c7b86cc910f39fdcf18182111f75182750f59342367f40198",
+   "s": 56276
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-blue-bubbles.webp",
+   "h": "3a7a7b836217cdf02972fcd91b08fd1aeea99d0e891f5a0577f1975fbdd23f6b",
+   "s": 39562
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-blue-cloud.webp",
+   "h": "1b7b74f41eb4cd2f7aa07c8c0691a0675cb1e058ebcd7d9a8038bca3f135083f",
+   "s": 35850
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-blue-halo.webp",
+   "h": "b6647165c123e6322d090ccc4fd39e58bec33713537d29e9c55eb8ea5e0f2110",
+   "s": 33922
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-blue-sparkles.webp",
+   "h": "9066164b30ad3f634adfc6804d3e5dbdca31896cea8d55412c59e12c5c54a682",
+   "s": 36638
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-blue-wings.webp",
+   "h": "be6bc1045fe8cfb64544c9042ba87d80bff600116a440446e7de2868f09d6c44",
+   "s": 41148
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-gray-arrow.webp",
+   "h": "2c963fbe5a75a8ea9afe190705815d890824f534d71d0e392508131bc4ec8486",
+   "s": 24764
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-gray-burst.webp",
+   "h": "174336d3c1091c2c3266b54da2ff4f6875d89034da323798bdfbfe5608ad1a64",
+   "s": 31166
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-gray-pluses.webp",
+   "h": "d756cc850d54148d42b54d7d448ae909cef4fa3bfc241f8a5d4f021f7602d480",
+   "s": 43348
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-gray-roulette.webp",
+   "h": "63ee3f8daca09ff31a25b71e86ca17bcd24404697578ba5070f16ee374967121",
+   "s": 41764
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-gray-spirals.webp",
+   "h": "422372a9e33d6f85c506bac8e7b13da158773aacc4c8ae419edb9092eb1d4bf0",
+   "s": 34548
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-gray-wheel.webp",
+   "h": "3b5d25b736632f2e2091376d6291410668556d04e5b2b41c11ead16550d5d5b9",
+   "s": 73466
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-green-bow.webp",
+   "h": "c89b574b534e942b7d24573b5424f73db77a2b31c3b1f0e1ad18964569b761ba",
+   "s": 66808
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-green-bubble.webp",
+   "h": "484b569f4e39e8a47b5f849c37191c74510a9e66155fdefe4a5ceb365f55ddd2",
+   "s": 45324
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-green-clovers.webp",
+   "h": "7584de274e266f70a11a4d643eb0877e5c4e694a913bcec3a87957afc37c1b82",
+   "s": 67142
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-green-curls.webp",
+   "h": "074c2636fea27da04c05a7f0d224020750e95729d8f5c95f6b43972b1b745da4",
+   "s": 71452
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-green-flowers.webp",
+   "h": "5e205075fdc6b353152a4128637f9630391e88ff9818d0ba260c66e632624572",
+   "s": 39984
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-green-gingham.webp",
+   "h": "b938b6a7b0fcb3649c928c4a8f642792478b35a612c388b6653614f1f455b2c3",
+   "s": 53268
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-orange-butterflies.webp",
+   "h": "5ea5888c88a4d63ef86852b8f00305509b5d856704a2a1b50f28f9f9ca1e39ba",
+   "s": 62168
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-orange-confetti.webp",
+   "h": "bfb1b771ea4ee6bee4b2078001d80764b8a19e7350a7437b9e2538bafc75703d",
+   "s": 38288
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-orange-flowers.webp",
+   "h": "d927b9aa1e15c7617883af9a3bfb3d96c2f540b10b90d7f22938dd276c042769",
+   "s": 50570
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-orange-hearts.webp",
+   "h": "0eef2fb0e44085c2359ba16d467300a9790152ce976b38a21dd149c7a0c2b47f",
+   "s": 47114
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-orange-rays.webp",
+   "h": "b3ffc44c5cfcf4e36d7e1a1c44ca84d4a64350d80a2c3384bc0eaea92839c20d",
+   "s": 23238
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-orange-rings.webp",
+   "h": "79046a15fab083715bb2e0935b3f09da71f4d31b809af433623b7ba98fc97d3b",
+   "s": 53496
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-pink-bow.webp",
+   "h": "e9d0b05beab922776fd8b9b9649700d932ad2c978f535d226f31ef5b4df4b5ac",
+   "s": 59008
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-pink-bubble.webp",
+   "h": "6693c573f3e64479a9504063a7c193e076486430d9c566f366bbce3a0fcebec8",
+   "s": 45402
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-pink-flowers.webp",
+   "h": "f1376d5ecd33be11c701694f33467ed6f80ed0836a41d83dbf212a5fb8df5a16",
+   "s": 52840
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-pink-heart-cluster.webp",
+   "h": "ccf16eb012704bad8793fa9313d476e666d9b93e3de6b2e7f3fd8e4f4b2cb06e",
+   "s": 56086
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-pink-heart-ring.webp",
+   "h": "76cf5726636e9ee3a92ff848bae2b411dbb20d5f74fba90f14259dc269182920",
+   "s": 55154
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-pink-sparkles.webp",
+   "h": "f56117d7485c662f8bc429c68f63e65314324937c577a9213704e9e68a476bda",
+   "s": 49682
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-purple-bows.webp",
+   "h": "c4c2011a70484f273b0901403460e026c4bacf0733a8e6dfadfa0df8f2c6b110",
+   "s": 43644
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-purple-dots.webp",
+   "h": "f8a93ae473085801f5b72a014d1984489a9cae6cdc930d2bbd6493f8f7b94958",
+   "s": 17592
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-purple-flowers.webp",
+   "h": "44a56c65bda91e45d2412364f79a5c6b750bbb0074d2cb06421548fcb4470e40",
+   "s": 44602
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-purple-heart-lock.webp",
+   "h": "21f6f446766e92a1a88053a7c01ea4c77de38adf3770b7ad0dcab0c29352d902",
+   "s": 50440
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-purple-scalloped-ring.webp",
+   "h": "edb6088256999a4925ecbcdf7dee2e5f080bc40860b249da995927f1f266024f",
+   "s": 57786
+  },
+  {
+   "p": "_internal/web/sig_assets/props_flat/flat-purple-sparkles.webp",
+   "h": "9d56f21ad1f4d763bf6d68a0772dea2d809ebb3f3788caf1521d61ac9145bdf5",
+   "s": 51826
+  },
+  {
    "p": "_internal/web/vendor/ort-wasm-simd.wasm",
    "h": "f533b5f21790563d7556c611c3835ac65848ee326da2689aac54ed7d9cc8c6a4",
    "s": 10595041
@@ -3161,8 +3966,8 @@
   },
   {
    "p": "_internal/web/version.json",
-   "h": "73da7a6842653264aef9b28e5714620c8459bc9024082854bfad92f5b091d863",
-   "s": 179
+   "h": "82519d33f10dd51ad7c51323dc9775ac30ceaf8d76a4f02fbd2037ee7c209c91",
+   "s": 178
   }
  ],
  "files2": [
