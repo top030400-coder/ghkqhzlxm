@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-18 v3</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-18 v4</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -9780,15 +9780,43 @@ window.gifenc=exports;})();
     var def = BANNERS[bnType];
     root.querySelectorAll('.lay').forEach(function (el) {
       var sel = bnSelOf(el);
-      /* 🔒 잠긴 레이어 — 스테이지에서 선택·드래그·휠 전부 막음(인스펙터에서 잠금 해제) */
+      /* 🔒 잠긴 레이어 — 조작은 막되 클릭은 아래로 통과시킨다(시그풍과 같은 규칙).
+         예전엔 클릭이 잠긴 레이어에서 그냥 죽어서, 그리기·소품을 잠가도
+         그 아래 텍스트를 캔버스에서 못 잡았다. */
       var lobj = bnLayerObj(sel);
-      if (lobj && lobj.lock) { el.style.cursor = 'default'; return; }
+      if (lobj && lobj.lock) { el.style.cursor = 'default'; el.style.pointerEvents = 'none'; return; }
       /* 드래그 = 상하좌우 자유 이동 */
       el.addEventListener('pointerdown', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        /* 투명한 그리기 레이어면 아래 레이어가 눌리게 넘긴다 */
-        var real = bnResolveHit(el, ev);
+        /* ★ 선택 우선권 — 이미 선택해 둔 레이어의 프레임 안에서 시작한 드래그는
+           히트 판정을 다시 하지 않는다. 그린 선이 텍스트 위를 지나가면 텍스트를
+           집을 때마다 그리기 레이어가 선택을 뺏어가 "위치 조정이 안 된다"가 됐다.
+           (레이어 목록에서 텍스트를 선택해 두면 캔버스에서 바로 끌 수 있게 된다) */
+        var mineSel = bnSelOf(el);
+        var isMine = bnSel && bnSel.kind === mineSel.kind &&
+          (bnSel.idx === undefined || bnSel.idx === mineSel.idx);
+        if (!isMine && bnSel) {
+          var q = bnSel.kind === 'bg' ? '.lay[data-lk="bg"]'
+            : bnSel.kind === 'txt' ? '.lay[data-lk="txt"][data-ti="' + bnSel.idx + '"]'
+            : '.lay[data-lk="char"][data-ci="' + bnSel.idx + '"]';
+          var selEl = root.querySelector(q);
+          var selObj = selEl ? bnLayerObj(bnSel) : null;
+          if (selEl && selObj && !selObj.lock && !selObj.hide) {
+            var sr = selEl.getBoundingClientRect();
+            if (ev.clientX >= sr.left && ev.clientX <= sr.right &&
+                ev.clientY >= sr.top && ev.clientY <= sr.bottom) {
+              selEl.dispatchEvent(new PointerEvent('pointerdown', {
+                pointerId: ev.pointerId, pointerType: ev.pointerType,
+                clientX: ev.clientX, clientY: ev.clientY, buttons: ev.buttons,
+                bubbles: true, cancelable: true
+              }));
+              return;
+            }
+          }
+        }
+        /* 투명한 그리기 레이어면 아래 레이어가 눌리게 넘긴다 (선택된 자신은 건너뛰지 않음) */
+        var real = isMine ? el : bnResolveHit(el, ev);
         if (real !== el) {
           if (real) {
             real.dispatchEvent(new PointerEvent('pointerdown', {
