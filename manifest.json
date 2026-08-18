@@ -1,6 +1,6 @@
 {
- "version": "2026-08-17_v1",
- "date": "2026-08-17",
+ "version": "2026-08-18_v1",
+ "date": "2026-08-18",
  "notes": "■ 2026-08-15 (30차) — 설치 파일이 빠지면 인증 없이 열리던 문제 수정\n\n【 🔒 라이선스 인증 】\n- 앱 폴더를 다른 컴퓨터로 <복사> 해서 옮기면, 인증에 필요한 설정 파일이\n  빠지는 경우가 있었습니다. 그때 프로그램이 <설정 안 됨> 으로 보고\n  인증을 묻지 않고 열렸습니다(송출컴 등 두 번째 PC 사례).\n- 이제는 그 상태면 <설치 파일이 일부 빠졌어요> 안내가 뜨고,\n  다시 설치하는 방법을 알려드립니다.\n  ※ 폴더를 복사하지 마시고, 받으신 압축 파일을 새로 푸는 것이 안전합니다.\n    작업물(.pbk)은 따로 저장돼 있어 지워지지 않습니다.\n- 인증이 아닌 사유(오프라인 유예·기록 손상)로 열린 경우, 프로그램 이름 옆에\n  작게 사유가 표시됩니다. 문의하실 때 그 문구를 알려주시면 빠릅니다.",
  "page": "https://github.com/top030400-coder/ghkqhzlxm",
  "files": [
@@ -41,8 +41,8 @@
   },
   {
    "p": "_internal/web/editor.html",
-   "h": "3e3df63b24f97affcec574db3c31977c215c903d5fdd872464d36d156916955b",
-   "s": 1325003
+   "h": "5c95ab00a8776b8440abc9196bf5ddfddc1a8fd92de0c3920cdf4688e6894bb7",
+   "s": 1334926
   },
   {
    "p": "_internal/web/engine.css",
@@ -106,13 +106,13 @@
   },
   {
    "p": "_internal/web/signature_balloon.css",
-   "h": "9236fba0ecbf0def6aef7b9574f1a9023049589453d97fd8a3564454bf299a42",
-   "s": 23359
+   "h": "e94fa01786b6adf4d59f88556e636e6c25ed7f44055a9816bc2d75724dbd9ba8",
+   "s": 32509
   },
   {
    "p": "_internal/web/signature_balloon.js",
-   "h": "48371ba421cb832374baf2ef1ca2b67037efe5981978ef209bb0c35d369e6c6c",
-   "s": 247587
+   "h": "125475fc93c9c5ced2f19db7efc31096e9958c38f11bb92da730cd4af504c6f8",
+   "s": 356463
   },
   {
    "p": "_internal/web/art/airmail.png",
@@ -3966,7 +3966,7 @@
   },
   {
    "p": "_internal/web/version.json",
-   "h": "82519d33f10dd51ad7c51323dc9775ac30ceaf8d76a4f02fbd2037ee7c209c91",
+   "h": "05a0d0acde9bc91e95962268243c685b9c749ac50cd233cb701575a33c360207",
    "s": 178
   }
  ],
@@ -4160,11 +4160,6 @@
    "p": "_internal/clr_loader/netfx.py",
    "h": "d07bd46ed65d7b43ff575999aef145132e7e9fd07321f1a3e27f2b3bd3736718",
    "s": 1894
-  },
-  {
-   "p": "_internal/clr_loader/py.typed",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/clr_loader/types.py",
@@ -4400,11 +4395,6 @@
    "p": "_internal/fontTools/cffLib/width.py",
    "h": "dcbf4d588d2e42b247bc717f22f0bfb5b5b572af78ce00c43d28ee6ddba0f2a3",
    "s": 6284
-  },
-  {
-   "p": "_internal/fontTools/colorLib/__init__.py",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/fontTools/colorLib/builder.py",
@@ -4915,11 +4905,6 @@
    "p": "_internal/fontTools/misc/plistlib/__init__.py",
    "h": "7683ea946af2d66472c12ba9d1a867c2e4fb98d782961610f36cbb91df3a8564",
    "s": 21794
-  },
-  {
-   "p": "_internal/fontTools/misc/plistlib/py.typed",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/fontTools/mtiLib/__init__.py",
@@ -5987,11 +5972,6 @@
    "s": 24808
   },
   {
-   "p": "_internal/fontTools/varLib/avar/__init__.py",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
-  },
-  {
    "p": "_internal/fontTools/varLib/avar/__main__.py",
    "h": "20b00cb14cbd5a184e2e34bb5e154a459b5e6988d8531f854fab1a853ecf49d1",
    "s": 1842
@@ -6090,11 +6070,6 @@
    "p": "_internal/fonttools-4.63.0.dist-info/RECORD",
    "h": "7c3ca09ad90c3ca83297b363dde0a1525f5d3f7086c2f429b2e492b9b9448671",
    "s": 52275
-  },
-  {
-   "p": "_internal/fonttools-4.63.0.dist-info/REQUESTED",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/fonttools-4.63.0.dist-info/WHEEL",
@@ -6229,11 +6204,6 @@
    "p": "_internal/numpy-2.3.5.dist-info/RECORD",
    "h": "f417968cd484b1d68a64be9f23939340f87957727cc7a6f92b042b759c8a38f7",
    "s": 110571
-  },
-  {
-   "p": "_internal/numpy-2.3.5.dist-info/REQUESTED",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/numpy-2.3.5.dist-info/WHEEL",
@@ -6464,11 +6434,6 @@
    "p": "_internal/onnxruntime/quantization/CalTableFlatBuffers/TrtTable.py",
    "h": "bebb9e2cfcb6455e51dcc49d21092a5bb4f10d248a3cca0e8b14aecc8b2fda81",
    "s": 2682
-  },
-  {
-   "p": "_internal/onnxruntime/quantization/CalTableFlatBuffers/__init__.py",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/onnxruntime/quantization/execution_providers/qnn/__init__.py",
@@ -6751,11 +6716,6 @@
    "s": 1182
   },
   {
-   "p": "_internal/onnxruntime/tools/mobile_helpers/__init__.py",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
-  },
-  {
    "p": "_internal/onnxruntime/tools/mobile_helpers/coreml_supported_mlprogram_ops.md",
    "h": "9114e3a9dea71ed4096b0109f833bf1fa80914aeffb6385e7d5ef01b29fc4f7b",
    "s": 3114
@@ -6799,11 +6759,6 @@
    "p": "_internal/onnxruntime/tools/ort_format_model/utils.py",
    "h": "ad444205df7fdb5e1271563d7641c5df159b9a1de10066de0cf1d725594c9a69",
    "s": 2595
-  },
-  {
-   "p": "_internal/onnxruntime/tools/ort_format_model/ort_flatbuffers_py/__init__.py",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/onnxruntime/tools/ort_format_model/ort_flatbuffers_py/fbs/ArgType.py",
@@ -7034,11 +6989,6 @@
    "p": "_internal/onnxruntime/tools/ort_format_model/ort_flatbuffers_py/fbs/__init__.py",
    "h": "11f908aeb79417a4eb718a41a35349f06395fe9fe8fd85e0ddf4a9b413795d4a",
    "s": 251
-  },
-  {
-   "p": "_internal/onnxruntime/tools/qdq_helpers/__init__.py",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/onnxruntime/tools/qdq_helpers/optimize_qdq_model.py",
@@ -7861,11 +7811,6 @@
    "s": 60839
   },
   {
-   "p": "_internal/onnxruntime-1.28.0.dist-info/REQUESTED",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
-  },
-  {
    "p": "_internal/onnxruntime-1.28.0.dist-info/WHEEL",
    "h": "f767fbbf21c4fc6662c119c3d88d39bc24ff4b7f54be4472ba0b980c028e19bf",
    "s": 101
@@ -8476,11 +8421,6 @@
    "s": 8531
   },
   {
-   "p": "_internal/pywebview-6.2.1.dist-info/REQUESTED",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
-  },
-  {
    "p": "_internal/pywebview-6.2.1.dist-info/WHEEL",
    "h": "69e6228a0d35958183cc1812f07c565ce837b95eb51bd8a33acba9fa4f68d6c9",
    "s": 91
@@ -8544,11 +8484,6 @@
    "p": "_internal/webview/models.py",
    "h": "1edc757df94f4cfc5902e93b7a6c1ba9c161747ab46334d747e9af484a5beaf5",
    "s": 568
-  },
-  {
-   "p": "_internal/webview/py.typed",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/webview/screen.py",
@@ -8669,11 +8604,6 @@
    "p": "_internal/webview/lib/runtimes/win-x86/native/WebView2Loader.dll",
    "h": "04814b2c59314c6452d61b821a4a3a5c5f8e8577b55b985f6a7a4b59f8907ec5",
    "s": 121928
-  },
-  {
-   "p": "_internal/webview/platforms/__init__.py",
-   "h": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "s": 0
   },
   {
    "p": "_internal/webview/platforms/cef.py",

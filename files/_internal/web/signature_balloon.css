@@ -156,6 +156,7 @@ body.sigOn #sigView{
 }
 
 .sig-stage-card{
+  position:relative;
   min-width:0;
   display:grid;
   grid-template-rows:auto 1fr auto;
@@ -164,16 +165,19 @@ body.sigOn #sigView{
 
 .sig-stage-top{
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   justify-content:space-between;
+  flex-wrap:wrap;
   gap:10px;
   padding:11px 14px;
   border-bottom:1px solid #ece5ef;
 }
 
 .sig-stage-title{
+  flex:1 1 auto;
   display:flex;
   align-items:center;
+  flex-wrap:wrap;
   gap:8px;
   min-width:0;
 }
@@ -196,10 +200,74 @@ body.sigOn #sigView{
 }
 
 .sig-toolbar{
+  width:100%;
   display:flex;
   align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
   gap:5px;
 }
+
+.sig-toolbar button{
+  flex:none;
+  white-space:nowrap;
+}
+
+.sig-project-tools{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-right:4px;
+  padding-right:8px;
+  border-right:1px solid #e4dae7;
+}
+
+.sig-history-tools{display:flex;align-items:center;gap:4px}
+.sig-icon-btn{min-width:32px;padding:0 8px;font-size:17px;line-height:1}
+
+#sigProjectFile{display:none}
+
+.sig-project-state{
+  max-width:128px;
+  overflow:hidden;
+  color:#7a6c80;
+  font-size:9px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.sig-project-state.is-dirty{
+  color:#c5426a;
+  font-weight:800;
+}
+
+.sig-project-state.is-dirty::before{content:"● ";font-size:7px}
+.sig-project-state.is-busy{color:#6b5794}
+
+#sigView.is-project-busy .sig-stage,
+#sigView.is-project-busy .sig-panel{
+  pointer-events:none;
+  opacity:.72;
+}
+
+.sig-snap-toggle{
+  min-height:31px;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:0 9px;
+  border:1px solid #d8cddd;
+  border-radius:8px;
+  background:#fff;
+  color:#493f4e;
+  font-size:10px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+
+.sig-snap-toggle input{accent-color:#1b9978}
+.sig-snap-toggle small{color:#8c7e91;font-size:8px}
 
 .sig-curve-quick{
   display:flex;
@@ -258,10 +326,15 @@ body.sigOn #sigView{
 }
 
 .sig-btn{
+  flex:0 0 auto;
   min-height:31px;
   padding:0 10px;
   font-size:11px;
+  white-space:nowrap;
 }
+
+.sig-btn:disabled,
+.sig-snap-toggle:has(input:disabled){opacity:.45;cursor:default}
 
 .sig-btn:hover,
 .sig-mini-btn:hover,
@@ -324,6 +397,7 @@ body.sigOn #sigView{
   display:flex;
   align-items:center;
   justify-content:space-between;
+  flex-wrap:wrap;
   gap:8px;
   min-height:55px;
   padding:9px 13px;
@@ -331,9 +405,77 @@ body.sigOn #sigView{
 }
 
 .sig-foot-note{
+  flex:1 1 220px;
   color:#7d7084;
   font-size:10px;
   line-height:1.45;
+}
+
+.sig-busy-overlay[hidden],
+.sig-confirm-modal[hidden]{display:none !important}
+
+.sig-busy-overlay{
+  position:absolute;
+  z-index:35;
+  inset:0;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  background:rgba(247,241,248,.72);
+  backdrop-filter:blur(2px);
+}
+
+.sig-busy-card{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  max-width:min(360px,90%);
+  padding:13px 17px;
+  border:1px solid #dbcfe0;
+  border-radius:13px;
+  color:#4c3e53;
+  background:#fff;
+  box-shadow:0 12px 35px rgba(54,35,64,.18);
+  font-size:12px;
+}
+
+.sig-busy-spinner{
+  width:18px;
+  height:18px;
+  border:3px solid #efdce4;
+  border-top-color:#e65a84;
+  border-radius:50%;
+  animation:sig-spin .8s linear infinite;
+}
+
+@keyframes sig-spin{to{transform:rotate(360deg)}}
+
+.sig-export-name{
+  min-width:150px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:#756779;
+  font-size:9px;
+  white-space:nowrap;
+}
+
+.sig-export-name input{
+  min-width:0;
+  width:130px;
+  height:31px;
+  padding:0 8px;
+  border:1px solid #d8cddd;
+  border-radius:8px;
+  color:#44384a;
+  background:#fff;
+  font:inherit;
+  font-size:10px;
+}
+
+.sig-export-name input:focus{
+  border-color:#e06086;
+  outline:2px solid rgba(224,96,134,.14);
 }
 
 .sig-export-actions{
@@ -366,6 +508,22 @@ body.sigOn #sigView{
   padding:10px 11px 28px;
 }
 
+.sig-selected-layer-bar{
+  flex:0 0 auto;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto auto;
+  align-items:center;
+  gap:6px;
+  padding:8px 11px;
+  border-bottom:1px solid #ece5ef;
+  background:#fff7fb;
+}
+
+.sig-selected-layer-bar>span{color:#917e98;font-size:9px}
+.sig-selected-layer-bar>strong{overflow:hidden;color:#46364c;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.sig-selected-layer-bar .sig-btn{min-height:28px;padding:0 7px;font-size:9px}
+.sig-selected-layer-bar .is-locked{border-color:#8d7a95;background:#eee9f0}
+
 .sig-section{
   padding:10px 4px 12px;
   border-bottom:1px solid #eee8f1;
@@ -374,6 +532,59 @@ body.sigOn #sigView{
 .sig-section:last-child{
   border-bottom:0;
 }
+
+.sig-output-section{padding:0;border-bottom:0}
+.sig-output-section>summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:12px 4px;
+  color:#3e3343;
+  font-size:12px;
+  font-weight:900;
+  cursor:pointer;
+}
+.sig-output-section>summary small{color:#9a8c9f;font-size:9px;font-weight:500}
+.sig-output-body{padding:0 4px 14px}
+.sig-output-body>p{margin:0 0 8px;color:#7c6e82;font-size:9px;line-height:1.45}
+.sig-output-control{
+  display:grid;
+  grid-template-columns:66px minmax(70px,1fr) 62px;
+  align-items:center;
+  gap:7px;
+  margin:7px 0;
+}
+.sig-output-control label{color:#665a6c;font-size:10px}
+.sig-output-control input[type="range"]{width:100%;accent-color:#1b9978}
+.sig-output-control input[type="number"]{
+  width:100%;
+  min-width:0;
+  height:30px;
+  padding:0 6px;
+  border:1px solid #dcd3e0;
+  border-radius:7px;
+  background:#fff;
+  color:#4c404f;
+  font:inherit;
+  font-size:10px;
+}
+.sig-output-actions{display:flex;align-items:center;justify-content:space-between;gap:7px;margin:9px 0}
+.sig-output-actions span{color:#7b6a81;font-size:8px;line-height:1.35}
+.sig-output-preview-wrap{
+  min-height:126px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:8px;
+  border:1px solid #ded4e1;
+  border-radius:10px;
+  background-color:#f5f1f6;
+  background-image:linear-gradient(45deg,#e7e1e9 25%,transparent 25%),linear-gradient(-45deg,#e7e1e9 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e7e1e9 75%),linear-gradient(-45deg,transparent 75%,#e7e1e9 75%);
+  background-size:12px 12px;
+  background-position:0 0,0 6px,6px -6px,-6px 0;
+}
+.sig-output-preview-wrap canvas{display:block;max-width:100%;max-height:220px;object-fit:contain;pointer-events:none}
 
 .sig-section-title{
   display:flex;
@@ -404,6 +615,10 @@ body.sigOn #sigView{
   grid-template-columns:58px minmax(0,1fr);
 }
 
+.sig-field-top{
+  align-items:start;
+}
+
 .sig-field label,
 .sig-check{
   color:#665a6c;
@@ -412,6 +627,7 @@ body.sigOn #sigView{
 
 .sig-field input[type="text"],
 .sig-field input[type="number"],
+.sig-field textarea,
 .sig-field select{
   width:100%;
   height:31px;
@@ -426,8 +642,17 @@ body.sigOn #sigView{
   font-size:11px;
 }
 
+.sig-field textarea{
+  height:auto;
+  min-height:68px;
+  padding:7px 8px;
+  resize:vertical;
+  line-height:1.4;
+}
+
 .sig-field input[type="text"]:focus,
 .sig-field input[type="number"]:focus,
+.sig-field textarea:focus,
 .sig-field select:focus{
   border-color:#9d7eaa;
   box-shadow:0 0 0 2px rgba(157,126,170,.12);
@@ -446,6 +671,100 @@ body.sigOn #sigView{
   border-radius:8px;
   background:white;
   cursor:pointer;
+}
+
+.sig-field output{
+  float:right;
+  color:#9a6175;
+  font-size:9px;
+  font-variant-numeric:tabular-nums;
+}
+
+.sig-font-upload{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:5px;
+  margin:7px 0 10px 93px;
+}
+
+.sig-font-upload > label{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:30px;
+  cursor:pointer;
+}
+
+.sig-font-upload > span{
+  color:#8b7b91;
+  font-size:9px;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+
+.sig-font-upload > span.warn,
+#sigTextPropStatus.warn{
+  color:#bd3f61;
+}
+
+.sig-font-upload input[type="file"]{
+  display:none;
+}
+
+.sig-outline-editor{
+  display:grid;
+  gap:6px;
+  margin:9px 0;
+  padding:8px;
+  border:1px solid #e4d9e7;
+  border-radius:10px;
+  background:#fcf9fd;
+}
+
+.sig-outline-row{
+  display:grid;
+  grid-template-columns:88px 32px minmax(54px,1fr) 34px;
+  align-items:center;
+  gap:5px;
+  min-width:0;
+}
+
+.sig-outline-row > .sig-check{
+  min-height:27px;
+  white-space:nowrap;
+}
+
+.sig-outline-row > input[type="color"]{
+  width:32px;
+  height:28px;
+  padding:2px;
+  border:1px solid #dcd3e0;
+  border-radius:7px;
+  background:#fff;
+  cursor:pointer;
+}
+
+.sig-outline-row > input[type="range"]{
+  width:100%;
+  min-width:0;
+  accent-color:#e85f87;
+}
+
+.sig-outline-row > output{
+  color:#8d6070;
+  font-size:8px;
+  font-variant-numeric:tabular-nums;
+  text-align:right;
+}
+
+.sig-outline-row.is-disabled > :not(.sig-check){
+  opacity:.42;
+}
+
+.sig-text-prop-button{
+  width:100%;
+  min-height:32px;
+  margin-top:6px;
 }
 
 .sig-two{
@@ -514,6 +833,8 @@ body.sigOn #sigView{
   margin-top:5px;
   overflow-wrap:anywhere;
 }
+
+.sig-upload-note.warn{color:#bd3f61}
 
 .sig-upload-count{
   display:flex;
@@ -721,6 +1042,33 @@ body.sigOn #sigView{
   background:rgba(35,27,42,.58);
   backdrop-filter:blur(4px);
 }
+
+.sig-confirm-modal{
+  position:fixed;
+  z-index:10080;
+  inset:0;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  background:rgba(35,27,42,.58);
+  backdrop-filter:blur(5px);
+}
+
+.sig-confirm-card{
+  width:min(420px,calc(100vw - 36px));
+  padding:20px;
+  border:1px solid #d9cddd;
+  border-radius:16px;
+  color:#433649;
+  background:#fffafd;
+  box-shadow:0 24px 70px rgba(39,22,48,.3);
+}
+
+.sig-confirm-card>strong{display:block;font-size:16px}
+.sig-confirm-card>p{margin:10px 0 18px;color:#75667b;font-size:12px;line-height:1.55;white-space:pre-line}
+.sig-confirm-actions{display:flex;justify-content:flex-end;gap:8px}
+
+body.sig-confirming{overflow:hidden}
 
 .sig-mask-dialog{
   width:min(1240px,calc(100vw - 24px));
@@ -1026,6 +1374,86 @@ body.sigOn #sigView{
   border:1px solid #e7dde9;
   border-radius:11px;
   background:#fff;
+}
+
+.sig-mask-shape-tuner{
+  margin-top:9px;
+  border:1px solid #dfd2e3;
+  border-radius:10px;
+  background:#fcf9fd;
+  overflow:hidden;
+}
+
+.sig-mask-shape-tuner[hidden]{display:none !important}
+
+.sig-mask-shape-tuner summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:9px 10px;
+  color:#49344f;
+  font-size:10px;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.sig-mask-shape-tuner summary small{color:#938399;font-size:8px;font-weight:500}
+.sig-mask-shape-panel{display:grid;gap:7px;padding:0 10px 9px}
+.sig-mask-shape-panel[hidden]{display:none !important}
+
+.sig-mask-shape-panel label{
+  display:grid;
+  grid-template-columns:78px minmax(80px,1fr) 64px;
+  align-items:center;
+  gap:7px;
+  color:#65576a;
+  font-size:9px;
+}
+
+.sig-mask-shape-panel input[type="range"]{width:100%;accent-color:#e35c86}
+.sig-mask-shape-panel input[type="number"]{
+  width:100%;
+  min-height:28px;
+  padding:3px 5px;
+  border:1px solid #d9cedd;
+  border-radius:7px;
+  background:#fff;
+  font:inherit;
+}
+
+.sig-mask-shape-actions{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  align-items:center;
+  gap:6px;
+  padding:8px 10px;
+  border-top:1px solid #ebe2ed;
+  background:#fff;
+}
+
+.sig-mask-shape-actions span{color:#89778f;font-size:8px}
+.sig-mask-shape-actions button,
+.sig-mask-align-grid button{
+  min-height:29px;
+  padding:4px 8px;
+  border:1px solid #d9cedd;
+  border-radius:8px;
+  background:#fff;
+  color:#514156;
+  font:inherit;
+  font-size:9px;
+  cursor:pointer;
+}
+
+.sig-mask-shape-actions button.primary{border-color:#e45c84;background:#ed668d;color:#fff}
+.sig-mask-shape-actions button:disabled{opacity:.45;cursor:default}
+
+.sig-mask-align-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:6px;
+  margin-top:7px;
 }
 
 .sig-mask-tool-section[hidden],

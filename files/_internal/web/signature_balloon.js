@@ -3,6 +3,7 @@
 
   const W = 293;
   const H = 248;
+  const SAFE_TOP = 84;
   const CONTENT_H = 164;
   const ASSET_DIR = "sig_assets/";
   const KB_LIMIT = 50000;
@@ -13,10 +14,41 @@
   const DPR = 2;
   const MOBILE_NUMBER_SIZE = 55;
   const PC_NUMBER_SIZE = 38;
+  const MASK_SCALE = 2;
+  const MASK_W = W * MASK_SCALE;
+  const MASK_H = H * MASK_SCALE;
+  const MASK_SAFE_TOP = SAFE_TOP * MASK_SCALE;
   const MASK_HISTORY_LIMIT = 50;
-  const MASK_LIBRARY_KEY = "photobookKit.sigMaskLibrary.v1";
+  const MASK_LIBRARY_KEY = "photobookKit.sigMaskLibrary.v2";
+  const MASK_LIBRARY_LEGACY_KEY = "photobookKit.sigMaskLibrary.v1";
   const MASK_LIBRARY_SLOTS = 6;
   const MASK_BRUSH_PRESETS = { s: 8, m: 18, l: 34, xl: 56 };
+  const SNAP_DISTANCE = 4;
+  const DOME_SEED_DEFAULTS = Object.freeze({ sideDrop: 48.02, shoulder: 29.20 });
+  const DOME_LOW_DEFAULTS = Object.freeze({ apex: 112.68, sideDrop: 48.02, shoulder: 29.20 });
+  const DOME_HIGH_DEFAULTS = Object.freeze({ apex: 90.68, sideDrop: 48.02, shoulder: 29.20 });
+  const HEART_SEED_DEFAULTS = Object.freeze({ height: 155.9904, notchDepth: 27.4195, notchWidth: 31.19, asymmetry: 0 });
+  const OUTPUT_PROFILE_TYPES = Object.freeze(["mobile", "pc", "weflab"]);
+  const OUTPUT_PROFILE_LABELS = Object.freeze({ mobile: "모바일 293×248", pc: "PC 195×145", weflab: "위플랩 668×374" });
+  const OUTPUT_PROFILE_LIMITS = Object.freeze({
+    mobile: { x: 146, y: 124 },
+    pc: { x: 97, y: 72 },
+    weflab: { x: 334, y: 187 }
+  });
+  const TEXT_PROP_RENDER_SCALE = 4;
+  const TEXT_PROP_MAX_RASTER_SIZE = 2048;
+  const SIG_PROJECT_SCHEMA_VERSION = 1;
+  const SIG_PROJECT_VERSION = 2;
+  const SIG_PROJECT_BROWSER_SUFFIX = ".pbsig.json";
+  const SIG_DEFAULT_EXPORT_BASE = "sigballoon";
+  const SIG_PROJECT_MAX_BROWSER_BYTES = 224 * 1024 * 1024;
+  const PHRASE_FONT_OPTIONS = [
+    { key: "sig-jua", label: "BM JUA · 기본", family: '\"SigJua\",\"Arial Rounded MT Bold\",sans-serif' },
+    { key: "rounded", label: "둥근 고딕", family: '\"Arial Rounded MT Bold\",\"Pretendard\",\"Noto Sans KR\",sans-serif' },
+    { key: "sans", label: "깔끔한 고딕", family: '\"Pretendard\",\"Noto Sans KR\",\"Malgun Gothic\",sans-serif' },
+    { key: "serif", label: "명조", family: '\"Noto Serif KR\",\"Batang\",\"Times New Roman\",serif' },
+    { key: "bold", label: "굵은 제목체", family: 'Impact,\"Arial Black\",\"Pretendard\",\"Noto Sans KR\",sans-serif' }
+  ];
 
   const textureFiles = {
     catRoulette33: "bg-cat-roulette33.webp",
@@ -518,9 +550,18 @@
       y: 139,
       size: 34,
       rot: -2,
+      fontKey: "sig-jua",
+      lineHeight: .83,
       fill: "#ffffff",
       stroke: "#ff628e",
+      innerStrokeEnabled: true,
+      innerStrokeWidth: .075,
+      middleStrokeEnabled: true,
+      middleStroke: "#ffffff",
+      middleStrokeWidth: .14,
+      outerStrokeEnabled: true,
       shadow: "#8d3152",
+      outerStrokeWidth: .2,
       locked: false
     },
     num1: {
@@ -542,9 +583,16 @@
       locked: false
     },
     props: [],
+    outputProfiles: {
+      mobile: { x: 0, y: 0, scale: 1 },
+      pc: { x: 0, y: 0, scale: 1 },
+      weflab: { x: 0, y: 0, scale: 1 }
+    },
     selected: { kind: "character", index: -1 },
+    snapEnabled: true,
     showGuides: true,
-    previewDark: false
+    previewDark: false,
+    exportBaseName: SIG_DEFAULT_EXPORT_BASE
   };
 
   const images = {};
@@ -554,11 +602,20 @@
   let view;
   let stage;
   let dragging = null;
+  let activeSnapGuides = null;
   let layerHitCanvas = null;
   let layerHitCtx = null;
   const imageAlphaBoundsCache = new WeakMap();
   let renderQueued = false;
   let customPropSequence = 0;
+  let customPhraseFontSequence = 0;
+  const customPhraseFonts = new Map();
+  let projectDirty = false;
+  let projectIoBusy = false;
+  let currentProjectPath = "";
+  let projectIoGeneration = 0;
+  let sigConfirmResolver = null;
+  let sigConfirmPreviousFocus = null;
   const MAIN_HISTORY_LIMIT = 60;
   let mainUndoStack = [];
   let mainRedoStack = [];
@@ -568,6 +625,10 @@
   let maskEditorCanvas = null;
   let maskEditorCtx = null;
   let maskWorkingCanvas = null;
+  let maskShapeSession = null;
+  let outputPreviewType = "mobile";
+  let outputPreviewTimer = 0;
+  let outputProfileHistoryBefore = null;
   let maskHistory = [];
   let maskHistoryIndex = -1;
   let maskGesture = null;
@@ -585,6 +646,68 @@
 
   function deepCopy(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function nextPaint() {
+    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
+
+  function settleSigConfirm(accepted) {
+    const dialog = document.getElementById("sigConfirmDialog");
+    if (dialog) dialog.hidden = true;
+    document.body.classList.remove("sig-confirming");
+    const resolve = sigConfirmResolver;
+    sigConfirmResolver = null;
+    const previousFocus = sigConfirmPreviousFocus;
+    sigConfirmPreviousFocus = null;
+    if (previousFocus?.isConnected && typeof previousFocus.focus === "function") {
+      try { previousFocus.focus({ preventScroll: true }); } catch (_) { previousFocus.focus(); }
+    }
+    if (resolve) resolve(!!accepted);
+  }
+
+  function askSigConfirm(message, options = {}) {
+    const dialog = document.getElementById("sigConfirmDialog");
+    if (!dialog) return Promise.resolve(window.confirm(String(message || "계속할까?")));
+    if (sigConfirmResolver) settleSigConfirm(false);
+    sigConfirmPreviousFocus = document.activeElement;
+    document.getElementById("sigConfirmTitle").textContent = options.title || "확인";
+    document.getElementById("sigConfirmMessage").textContent = String(message || "계속할까?");
+    document.getElementById("sigConfirmAccept").textContent = options.confirmLabel || "계속";
+    document.getElementById("sigConfirmCancel").textContent = options.cancelLabel || "취소";
+    dialog.hidden = false;
+    document.body.classList.add("sig-confirming");
+    requestAnimationFrame(() => {
+      if (!dialog.hidden) document.getElementById("sigConfirmAccept")?.focus();
+    });
+    return new Promise(resolve => { sigConfirmResolver = resolve; });
+  }
+
+  function bindSigConfirm() {
+    const dialog = document.getElementById("sigConfirmDialog");
+    document.getElementById("sigConfirmAccept")?.addEventListener("click", () => settleSigConfirm(true));
+    document.getElementById("sigConfirmCancel")?.addEventListener("click", () => settleSigConfirm(false));
+    dialog?.addEventListener("pointerdown", event => {
+      if (event.target === dialog) settleSigConfirm(false);
+    });
+    document.addEventListener("keydown", event => {
+      if (!dialog || dialog.hidden) return;
+      event.stopImmediatePropagation();
+      if (event.ctrlKey || event.metaKey || event.altKey) event.preventDefault();
+      if (event.key === "Tab") {
+        event.preventDefault();
+        const accept = document.getElementById("sigConfirmAccept");
+        const cancel = document.getElementById("sigConfirmCancel");
+        (event.shiftKey
+          ? (document.activeElement === accept ? cancel : accept)
+          : (document.activeElement === cancel ? accept : cancel))?.focus();
+        return;
+      }
+      if (event.key === "Escape" || event.key === "Enter") {
+        event.preventDefault();
+        settleSigConfirm(event.key === "Enter" && document.activeElement?.id !== "sigConfirmCancel");
+      }
+    }, true);
   }
 
   function hexToRgba(hex, alpha) {
@@ -609,6 +732,42 @@
     return String(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   }
 
+  function phraseFontRecord(fontKey) {
+    return PHRASE_FONT_OPTIONS.find(font => font.key === fontKey)
+      || customPhraseFonts.get(fontKey)
+      || PHRASE_FONT_OPTIONS[0];
+  }
+
+  function phraseFontFamily(layer = state.phrase) {
+    return phraseFontRecord(layer?.fontKey || "sig-jua").family;
+  }
+
+  function phraseLineHeight(layer) {
+    const value = Number(layer?.lineHeight);
+    return Number.isFinite(value) ? clamp(value, .55, 1.6) : .83;
+  }
+
+  function phraseStrokeRatio(layer, key, fallback) {
+    const value = Number(layer?.[key]);
+    return Math.max(0, Number.isFinite(value) ? value : fallback);
+  }
+
+  function phraseStrokeWidth(layer, key, fallback) {
+    return phraseStrokeRatio(layer, key, fallback) * Number(layer?.size || 0);
+  }
+
+  function renderPhraseFontOptions() {
+    const select = document.getElementById("sigPhraseFont");
+    if (!select) return;
+    const options = [
+      ...PHRASE_FONT_OPTIONS,
+      ...Array.from(customPhraseFonts.values())
+    ];
+    select.innerHTML = options.map(font => `<option value="${escapeHtml(font.key)}">${escapeHtml(font.label)}</option>`).join("");
+    if (!options.some(font => font.key === state.phrase.fontKey)) state.phrase.fontKey = "sig-jua";
+    select.value = state.phrase.fontKey;
+  }
+
   function propDefaults(type, index = 0) {
     return {
       type,
@@ -630,7 +789,7 @@
   function createInterface() {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "signature_balloon.css?v=20260817-v17-5-main-undo";
+    css.href = "signature_balloon.css?v=20260818-v18-freedom-rc2";
     document.head.appendChild(css);
 
     const tabs = document.getElementById("modeTabs");
@@ -667,6 +826,16 @@
               <span class="sig-badge">하단 직선 고정</span>
             </div>
             <div class="sig-toolbar">
+              <div class="sig-project-tools" aria-label="시그풍 프로젝트">
+                <button type="button" class="sig-btn" id="sigProjectOpen">프로젝트 열기</button>
+                <button type="button" class="sig-btn primary" id="sigProjectSave">프로젝트 저장</button>
+                <span class="sig-project-state" id="sigProjectState" title="아직 프로젝트 파일로 저장하지 않았어.">새 프로젝트</span>
+                <input id="sigProjectFile" type="file" accept=".json,.pbsig.json,application/json">
+              </div>
+              <div class="sig-history-tools" aria-label="작업 기록">
+                <button type="button" class="sig-btn sig-icon-btn" id="sigUndo" title="되돌리기 · Ctrl+Z" aria-label="되돌리기" disabled>↶</button>
+                <button type="button" class="sig-btn sig-icon-btn" id="sigRedo" title="다시 실행 · Ctrl+Y" aria-label="다시 실행" disabled>↷</button>
+              </div>
               <div class="sig-curve-quick" aria-label="배경판 모양">
                 <span>배경판</span>
                 <div class="sig-seg">
@@ -676,8 +845,14 @@
               </div>
               <button type="button" class="sig-btn" id="sigDark">어두운 화면</button>
               <button type="button" class="sig-btn" id="sigGuides">가이드 숨김</button>
+              <label class="sig-snap-toggle" title="레이어를 중앙선·안전선·캔버스 가장자리에 붙여줘. 드래그 중 Alt를 누르면 잠시 꺼져."><input id="sigSnapEnabled" type="checkbox" checked> 위치 스냅 <small>Alt 우회</small></label>
               <button type="button" class="sig-btn" id="sigAutoFit">내용에 맞춰 자르기</button>
+              <button type="button" class="sig-btn" id="sigJumpLayers">레이어·잠금</button>
+              <button type="button" class="sig-btn" id="sigJumpOutput">출력별 보정</button>
             </div>
+          </div>
+          <div class="sig-busy-overlay" id="sigBusyOverlay" hidden aria-live="assertive" aria-busy="true">
+            <div class="sig-busy-card"><span class="sig-busy-spinner" aria-hidden="true"></span><strong id="sigBusyMessage">처리 중…</strong></div>
           </div>
           <div class="sig-stage" id="sigStage">
             <div class="sig-canvas-wrap">
@@ -688,8 +863,9 @@
             <div class="sig-stage-foot">
               <div class="sig-foot-note">
                 보이는 부분을 바로 잡아 이동 · 모서리 손잡이로 크기 조절<br>
-                배경판은 일자로 시작하거나 알파 마스크를 직접 그려 만들 수 있어.
+                모바일은 상단 84px이 저장 때 반드시 투명해져. 배경판은 직접 그려 만들 수 있어.
               </div>
+              <label class="sig-export-name" for="sigExportBaseName"><span>저장 파일명</span><input id="sigExportBaseName" type="text" value="${SIG_DEFAULT_EXPORT_BASE}" maxlength="80" spellcheck="false"></label>
               <div class="sig-export-actions">
                 <button type="button" class="sig-btn" id="sigExportMobile">모바일 PNG</button>
                 <button type="button" class="sig-btn" id="sigExportPc">PC PNG</button>
@@ -707,6 +883,11 @@
             <h3>레이어와 스타일</h3>
             <p>숫자는 BM-JUA · 빨강 채움 · 흰 3px · 검정 2px, 모바일 55pt / PC 38pt로 고정돼.</p>
           </div>
+          <div class="sig-selected-layer-bar" id="sigSelectedLayerBar">
+            <span>선택</span><strong id="sigSelectedLayerName">캐릭터</strong>
+            <button type="button" class="sig-btn" id="sigSelectedLayerLock">🔓 잠금</button>
+            <button type="button" class="sig-btn" id="sigLayerListJump">전체 목록</button>
+          </div>
           <div class="sig-scroll sig-controls">
             <section class="sig-section">
               <div class="sig-section-title">1. 캐릭터</div>
@@ -715,6 +896,7 @@
                 <button type="button" class="sig-btn" id="sigCharRemove">지우기</button>
                 <input id="sigCharFile" type="file" accept="image/png,image/webp,image/jpeg">
               </div>
+              <div class="sig-upload-note" id="sigCharStatus">PNG · WebP · JPEG를 불러올 수 있어.</div>
               <div class="sig-two">
                 <div class="sig-field compact"><label>X</label><input id="sigCharX" type="number" min="-100" max="393"></div>
                 <div class="sig-field compact"><label>Y</label><input id="sigCharY" type="number" min="-100" max="348"></div>
@@ -726,17 +908,48 @@
 
             <section class="sig-section">
               <div class="sig-section-title">2. 문구 <span class="sig-help">줄바꿈 가능</span></div>
-              <div class="sig-field"><label>문구</label><input id="sigPhraseText" type="text" value="사랑해"></div>
+              <div class="sig-field sig-field-top"><label for="sigPhraseText">문구</label><textarea id="sigPhraseText" rows="3">사랑해</textarea></div>
+              <div class="sig-field">
+                <label for="sigPhraseFont">글꼴</label>
+                <select id="sigPhraseFont">
+                  ${PHRASE_FONT_OPTIONS.map(font => `<option value="${font.key}">${escapeHtml(font.label)}</option>`).join("")}
+                </select>
+              </div>
+              <div class="sig-font-upload">
+                <label class="sig-btn primary" for="sigPhraseFontFile">TTF · OTF · WOFF 추가</label>
+                <span id="sigPhraseFontStatus">프로젝트 저장 시 글꼴도 함께 보관돼.</span>
+                <input id="sigPhraseFontFile" type="file" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2,application/font-woff">
+              </div>
               <div class="sig-two">
                 <div class="sig-field compact"><label>X</label><input id="sigPhraseX" type="number" min="-100" max="393"></div>
                 <div class="sig-field compact"><label>Y</label><input id="sigPhraseY" type="number" min="-100" max="348"></div>
               </div>
               <div class="sig-field"><label>글자 크기</label><input id="sigPhraseSize" type="range" min="12" max="64" step="1"></div>
               <div class="sig-field"><label>회전</label><input id="sigPhraseRot" type="range" min="-30" max="30" step="1"></div>
-              <div class="sig-two">
-                <div class="sig-field compact"><label>안쪽</label><input id="sigPhraseFill" type="color"></div>
-                <div class="sig-field compact"><label>테두리</label><input id="sigPhraseStroke" type="color"></div>
+              <div class="sig-field"><label>줄 간격 <output id="sigPhraseLineHeightValue">83%</output></label><input id="sigPhraseLineHeight" type="range" min="55" max="160" step="1"></div>
+              <div class="sig-field"><label>글자 안쪽</label><input id="sigPhraseFill" type="color"></div>
+              <div class="sig-outline-editor" aria-label="문구 3단 테두리">
+                <div class="sig-outline-row">
+                  <label class="sig-check"><input id="sigPhraseInnerEnabled" type="checkbox"> 1단 안쪽선</label>
+                  <input id="sigPhraseStroke" type="color" aria-label="1단 안쪽선 색">
+                  <input id="sigPhraseInnerWidth" type="range" min="0" max="40" step="0.5" aria-label="1단 안쪽선 굵기">
+                  <output id="sigPhraseInnerWidthValue">7.5%</output>
+                </div>
+                <div class="sig-outline-row">
+                  <label class="sig-check"><input id="sigPhraseMiddleEnabled" type="checkbox"> 2단 중간선</label>
+                  <input id="sigPhraseMiddleStroke" type="color" aria-label="2단 중간선 색">
+                  <input id="sigPhraseMiddleWidth" type="range" min="0" max="40" step="0.5" aria-label="2단 중간선 굵기">
+                  <output id="sigPhraseMiddleWidthValue">14%</output>
+                </div>
+                <div class="sig-outline-row">
+                  <label class="sig-check"><input id="sigPhraseOuterEnabled" type="checkbox"> 3단 바깥선</label>
+                  <input id="sigPhraseShadow" type="color" aria-label="3단 바깥선 색">
+                  <input id="sigPhraseOuterWidth" type="range" min="0" max="40" step="0.5" aria-label="3단 바깥선 굵기">
+                  <output id="sigPhraseOuterWidthValue">20%</output>
+                </div>
               </div>
+              <button type="button" class="sig-btn primary sig-text-prop-button" id="sigPhraseToProp">현재 문구를 PNG 소품으로 복제</button>
+              <div class="sig-upload-note" id="sigTextPropStatus">복제본은 원본 문구와 따로 이동 · 회전 · 크기 조절 · 잠금할 수 있어.</div>
             </section>
 
             <section class="sig-section">
@@ -747,6 +960,7 @@
                 <div class="sig-field compact"><label>Y</label><input id="sigNum1Y" type="number" min="-100" max="348"></div>
               </div>
               <div class="sig-field"><label>크기 · 공식 고정 55pt</label><input id="sigNum1Size" type="range" min="55" max="55" step="1" value="55" disabled></div>
+              <button type="button" class="sig-btn sig-text-prop-button" id="sigNum1ToProp">숫자 1을 장식 PNG로 복제</button>
               <label class="sig-check"><input id="sigNum2Enable" type="checkbox"> 두 번째 숫자 사용</label>
               <div id="sigNum2Fields">
                 <div class="sig-field"><label>두 번째</label><input id="sigNum2Text" type="text" inputmode="numeric" value="46"></div>
@@ -755,6 +969,7 @@
                   <div class="sig-field compact"><label>Y</label><input id="sigNum2Y" type="number" min="-100" max="348"></div>
                 </div>
                 <div class="sig-field"><label>크기 · 공식 고정 55pt</label><input id="sigNum2Size" type="range" min="55" max="55" step="1" value="55" disabled></div>
+                <button type="button" class="sig-btn sig-text-prop-button" id="sigNum2ToProp">숫자 2를 장식 PNG로 복제</button>
               </div>
             </section>
 
@@ -777,7 +992,7 @@
               <div class="sig-custom-upload">
                 <div class="sig-upload">
                   <label class="sig-btn primary" for="sigBgFile">투명 배경판 PNG</label>
-                  <button type="button" class="sig-btn" id="sigBgRemove">업로드 해제</button>
+                  <button type="button" class="sig-btn" id="sigBgRemove">배경 그림만 해제</button>
                   <input id="sigBgFile" type="file" accept="image/png,.png">
                 </div>
                 <div class="sig-upload-note" id="sigBgUploadName">투명 PNG는 원색 유지 또는 알파만 재색칠할 수 있어</div>
@@ -914,6 +1129,28 @@
               </div>
               <div class="sig-upload-note sig-lock-note">잠근 레이어와 PNG의 투명한 부분은 클릭이 뒤로 통과해.</div>
             </section>
+
+            <details class="sig-section sig-output-section" id="sigOutputSection">
+              <summary><span>6. 출력별 내용 보정</span><small>필요할 때만 열기</small></summary>
+              <div class="sig-output-body">
+                <p>배경판은 그대로 두고 캐릭터·문구·소품만 옮기거나 키워. 숫자는 공식 크기를 유지하고 위치만 함께 보정돼.</p>
+                <div class="sig-field">
+                  <label for="sigOutputType">확인할 출력</label>
+                  <select id="sigOutputType"><option value="mobile">모바일 293×248</option><option value="pc">PC 195×145</option><option value="weflab">위플랩 668×374</option></select>
+                </div>
+                <div class="sig-output-control">
+                  <label for="sigOutputXRange">가로 X</label><input id="sigOutputXRange" type="range" step="1"><input id="sigOutputX" type="number" step="1">
+                </div>
+                <div class="sig-output-control">
+                  <label for="sigOutputYRange">세로 Y</label><input id="sigOutputYRange" type="range" step="1"><input id="sigOutputY" type="number" step="1">
+                </div>
+                <div class="sig-output-control">
+                  <label for="sigOutputScaleRange">내용 크기</label><input id="sigOutputScaleRange" type="range" min="0.5" max="1.5" step="0.01"><input id="sigOutputScale" type="number" min="0.5" max="1.5" step="0.01">
+                </div>
+                <div class="sig-output-actions"><span id="sigOutputStatus">기본값 · 원본 픽셀 유지</span><button type="button" class="sig-btn" id="sigOutputReset">이 출력 초기화</button></div>
+                <div class="sig-output-preview-wrap"><canvas id="sigOutputPreviewCanvas" width="293" height="248" aria-label="선택한 출력 전용 미리보기"></canvas></div>
+              </div>
+            </details>
           </div>
         </aside>
 
@@ -938,7 +1175,7 @@
               <div class="sig-mask-main">
                 <div class="sig-mask-canvas-wrap" id="sigMaskViewport">
                   <div class="sig-mask-canvas-frame" id="sigMaskCanvasFrame">
-                    <canvas id="sigMaskCanvas" width="${W * DPR}" height="${H * DPR}"></canvas>
+                    <canvas id="sigMaskCanvas" width="${MASK_W}" height="${MASK_H}"></canvas>
                     <div class="sig-mask-safe-label">SOOP 상단 84px 보호영역</div>
                     <div class="sig-mask-center-guide" id="sigMaskCenterGuide" hidden><span>대칭 중심</span></div>
                     <div class="sig-mask-cursor is-topline" id="sigMaskCursor" hidden aria-hidden="true"><span>T</span></div>
@@ -954,6 +1191,21 @@
                     <button type="button" data-mask-seed="organic"><canvas width="86" height="48"></canvas><span>유기형 판</span></button>
                     <button type="button" data-mask-seed="blank"><canvas width="86" height="48"></canvas><span>빈판</span></button>
                   </div>
+                  <details class="sig-mask-shape-tuner" id="sigMaskShapeTuner" hidden>
+                    <summary><span id="sigMaskShapeTitle">시작 모양 세부 조절</span><small>슬라이더와 숫자를 함께 사용</small></summary>
+                    <div class="sig-mask-shape-panel" data-mask-shape-panel="dome" hidden>
+                      <label><span>꼭대기 Y</span><input type="range" min="84" max="150" step="0.01" data-mask-shape-param="apex"><input type="number" min="84" max="150" step="0.01" data-mask-shape-number="apex"></label>
+                      <label><span>양옆 내려감</span><input type="range" min="8" max="100" step="0.01" data-mask-shape-param="sideDrop"><input type="number" min="8" max="100" step="0.01" data-mask-shape-number="sideDrop"></label>
+                      <label><span>어깨 내려감</span><input type="range" min="0" max="100" step="0.01" data-mask-shape-param="shoulder"><input type="number" min="0" max="100" step="0.01" data-mask-shape-number="shoulder"></label>
+                    </div>
+                    <div class="sig-mask-shape-panel" data-mask-shape-panel="heart" hidden>
+                      <label><span>하트 높이</span><input type="range" min="110" max="164" step="0.01" data-mask-shape-param="height"><input type="number" min="110" max="164" step="0.01" data-mask-shape-number="height"></label>
+                      <label><span>골 깊이</span><input type="range" min="8" max="55" step="0.01" data-mask-shape-param="notchDepth"><input type="number" min="8" max="55" step="0.01" data-mask-shape-number="notchDepth"></label>
+                      <label><span>골 너비</span><input type="range" min="12" max="80" step="0.01" data-mask-shape-param="notchWidth"><input type="number" min="12" max="80" step="0.01" data-mask-shape-number="notchWidth"></label>
+                      <label><span>좌우 비대칭</span><input type="range" min="-30" max="30" step="0.1" data-mask-shape-param="asymmetry"><input type="number" min="-30" max="30" step="0.1" data-mask-shape-number="asymmetry"></label>
+                    </div>
+                    <div class="sig-mask-shape-actions"><span id="sigMaskShapeStatus">기본값 · 기존 모양과 동일</span><button type="button" id="sigMaskShapeReset">초기값</button><button type="button" class="primary" id="sigMaskShapeConfirm">현재값 확정</button></div>
+                  </details>
                 </div>
                 <div class="sig-mask-library-panel">
                   <div class="sig-mask-section-head"><strong>내 모양 보관함</strong><span>6칸 · 이 PC에 저장</span></div>
@@ -995,6 +1247,9 @@
                     <button type="button" id="sigMaskFlipX">↔ 좌우반전</button><button type="button" id="sigMaskSmooth">부드럽게</button>
                     <button type="button" id="sigMaskFillHoles">구멍 메우기</button><button type="button" id="sigMaskRemoveSpecks">작은 점 제거</button>
                   </div>
+                  <div class="sig-mask-align-grid" aria-label="마스크 빠른 정렬">
+                    <button type="button" id="sigMaskAlignCenter">가운데</button><button type="button" id="sigMaskAlignSafe">안전선</button><button type="button" id="sigMaskAlignBottom">바닥</button>
+                  </div>
                   <label class="sig-mask-speck"><span>작은 점 기준</span><input id="sigMaskSpeckSize" type="number" min="4" max="300" step="1" value="28"><em>px 이하</em></label>
                 </section>
                 <section class="sig-mask-tool-section">
@@ -1013,6 +1268,13 @@
               </div>
               <div class="sig-mask-confirm"><span class="sig-mask-cancel-note">취소하면 열기 전 모양은 그대로 유지돼.</span><button type="button" class="sig-btn" id="sigMaskCancel">취소</button><button type="button" class="sig-btn primary" id="sigMaskApply">배경판에 적용</button></div>
             </div>
+          </div>
+        </div>
+        <div class="sig-confirm-modal" id="sigConfirmDialog" hidden role="dialog" aria-modal="true" aria-labelledby="sigConfirmTitle" aria-describedby="sigConfirmMessage">
+          <div class="sig-confirm-card">
+            <strong id="sigConfirmTitle">확인</strong>
+            <p id="sigConfirmMessage"></p>
+            <div class="sig-confirm-actions"><button type="button" class="sig-btn" id="sigConfirmCancel">취소</button><button type="button" class="sig-btn primary" id="sigConfirmAccept">계속</button></div>
           </div>
         </div>
       </div>`;
@@ -1174,7 +1436,8 @@
       primary: preset.theme.primary,
       secondary: preset.theme.secondary,
       tintOpacity: preset.theme.modern || preset.theme.simple || preset.theme.key.startsWith("flat") ? 0 : 12,
-      pattern: preset.theme.pattern
+      pattern: preset.theme.pattern,
+      maskPaintMode: "theme"
     };
     if (!preserveContent) {
       Object.assign(backgroundUpdate, {
@@ -1187,10 +1450,6 @@
       });
     }
     Object.assign(state.background, backgroundUpdate);
-    state.phrase.fill = "#ffffff";
-    state.phrase.stroke = preset.theme.accent;
-    state.phrase.shadow = mixHex(preset.theme.accent, "#28222c", .48);
-
     if (!preserveContent) {
       state.placementIndex = 0;
       Object.assign(state.character, deepCopy(preset.layout.char));
@@ -1202,6 +1461,7 @@
       Object.assign(state.num1, deepCopy(preset.layout.num1), { enabled: true, size: MOBILE_NUMBER_SIZE, rot: 0 });
       Object.assign(state.num2, deepCopy(preset.layout.num2), { size: MOBILE_NUMBER_SIZE, rot: 0 });
       state.props = buildPropsForPreset(preset);
+      state.selected = { kind: "character", index: -1 };
     }
 
     if (!preserveContent && preset.theme.categoryMode) {
@@ -1209,7 +1469,6 @@
       state.num1.text = preset.theme.defaultNum || state.num1.text;
       state.num2.enabled = false;
     }
-    state.selected = { kind: "character", index: -1 };
     syncControls();
     renderLayerList();
     highlightPreset();
@@ -1222,15 +1481,33 @@
     if (!layout) return;
     const historyBefore = beginMainChange();
     state.placementIndex = index;
-    Object.assign(state.character, deepCopy(layout.char));
-    Object.assign(state.phrase, deepCopy(layout.phrase));
-    Object.assign(state.num1, deepCopy(layout.num1), { enabled: true, size: MOBILE_NUMBER_SIZE, rot: 0 });
-    Object.assign(state.num2, deepCopy(layout.num2), { size: MOBILE_NUMBER_SIZE, rot: 0 });
-
-    const theme = modernThemes.find(item => item.texture === state.background.texture) || modernThemes[0];
-    const customProps = state.props.filter(prop => prop.customImage);
-    state.props = [...buildPropsForPreset({ theme, layout, layoutIndex: index }), ...customProps];
-    state.selected = { kind: "character", index: -1 };
+    if (!state.character.locked && layout.char) {
+      ["x", "y", "scale", "rot"].forEach(key => {
+        if (layout.char[key] != null) state.character[key] = layout.char[key];
+      });
+    }
+    if (!state.phrase.locked && layout.phrase) {
+      ["x", "y", "size", "rot"].forEach(key => {
+        if (layout.phrase[key] != null) state.phrase[key] = layout.phrase[key];
+      });
+    }
+    if (!state.num1.locked && layout.num1) {
+      ["x", "y"].forEach(key => {
+        if (layout.num1[key] != null) state.num1[key] = layout.num1[key];
+      });
+      state.num1.enabled = true;
+      state.num1.size = MOBILE_NUMBER_SIZE;
+      state.num1.rot = 0;
+    }
+    if (!state.num2.locked && layout.num2) {
+      ["x", "y"].forEach(key => {
+        if (layout.num2[key] != null) state.num2[key] = layout.num2[key];
+      });
+      state.num2.enabled = !!layout.num2.enabled;
+      state.num2.size = MOBILE_NUMBER_SIZE;
+      state.num2.rot = 0;
+    }
+    // 배치 프리셋은 기존 소품·색·텍스트를 건드리지 않는다. 잠근 핵심 레이어도 그대로 둔다.
     syncControls();
     renderLayerList();
     requestRender();
@@ -1314,10 +1591,129 @@
     return out;
   }
 
-  function cloneMaskCanvas(source) {
-    const out = createLogicalCanvas();
-    if (source) out.getContext("2d", { alpha: true }).drawImage(source, 0, 0, W, H);
+  function createMaskCanvas() {
+    const out = document.createElement("canvas");
+    out.width = MASK_W;
+    out.height = MASK_H;
     return out;
+  }
+
+  function withMaskLogicalTransform(context, draw) {
+    context.save();
+    context.scale(MASK_SCALE, MASK_SCALE);
+    try {
+      return draw(context);
+    } finally {
+      context.restore();
+    }
+  }
+
+  function drawMaskLogical(context, mask, dx = 0, dy = 0, dw = W, dh = H) {
+    if (!mask) return;
+    context.drawImage(mask, 0, 0, mask.width, mask.height, dx, dy, dw, dh);
+  }
+
+  function normalizeStoredMaskCanvas(source) {
+    const out = createMaskCanvas();
+    if (!source) return out;
+    const context = out.getContext("2d", { alpha: true });
+    const sourceWidth = Number(source.naturalWidth || source.width || 0);
+    const sourceHeight = Number(source.naturalHeight || source.height || 0);
+    // v1 masks were exactly 293×248. Nearest-neighbour promotion preserves their
+    // coverage exactly while all new editing continues on the 2× alpha surface.
+    context.imageSmoothingEnabled = !(sourceWidth === W && sourceHeight === H);
+    context.drawImage(source, 0, 0, sourceWidth || W, sourceHeight || H, 0, 0, MASK_W, MASK_H);
+    context.imageSmoothingEnabled = true;
+    context.globalCompositeOperation = "source-in";
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, MASK_W, MASK_H);
+    context.globalCompositeOperation = "source-over";
+    context.clearRect(0, 0, MASK_W, MASK_SAFE_TOP);
+    return out;
+  }
+
+  function cloneMaskCanvas(source) {
+    return normalizeStoredMaskCanvas(source);
+  }
+
+  function normalizeOutputProfile(type, value = null) {
+    const limits = OUTPUT_PROFILE_LIMITS[type] || OUTPUT_PROFILE_LIMITS.mobile;
+    const source = value || {};
+    return {
+      x: Math.round(clamp(Number(source.x) || 0, -limits.x, limits.x) * 10) / 10,
+      y: Math.round(clamp(Number(source.y) || 0, -limits.y, limits.y) * 10) / 10,
+      scale: Math.round(clamp(Number(source.scale) || 1, .5, 1.5) * 100) / 100
+    };
+  }
+
+  function outputProfile(type) {
+    if (!OUTPUT_PROFILE_TYPES.includes(type)) type = "mobile";
+    state.outputProfiles[type] = normalizeOutputProfile(type, state.outputProfiles[type]);
+    return state.outputProfiles[type];
+  }
+
+  function outputProfileIsIdentity(value) {
+    return !!value && value.x === 0 && value.y === 0 && value.scale === 1;
+  }
+
+  function cloneOutputProfiles(source = state.outputProfiles) {
+    const out = source && typeof source === "object" ? deepCopy(source) : {};
+    OUTPUT_PROFILE_TYPES.forEach(type => {
+      const preserved = out[type] && typeof out[type] === "object" ? out[type] : {};
+      out[type] = Object.assign({}, preserved, normalizeOutputProfile(type, source?.[type]));
+    });
+    return out;
+  }
+
+  function projectDisplayName(path = currentProjectPath) {
+    const value = String(path || "").replace(/\\/g, "/");
+    return value.split("/").pop() || "새 프로젝트";
+  }
+
+  function syncProjectStatus(message = "") {
+    const status = document.getElementById("sigProjectState");
+    if (!status) return;
+    const name = projectDisplayName();
+    status.textContent = message || (projectDirty ? `변경됨 · ${name}` : currentProjectPath ? `저장됨 · ${name}` : "새 프로젝트");
+    status.classList.toggle("is-dirty", projectDirty);
+    status.classList.toggle("is-busy", projectIoBusy);
+    status.title = currentProjectPath || (projectDirty ? "저장하지 않은 변경이 있어." : "아직 프로젝트 파일로 저장하지 않았어.");
+  }
+
+  function setProjectDirty(dirty = true) {
+    projectDirty = !!dirty;
+    syncProjectStatus();
+  }
+
+  function updateMainHistoryUi() {
+    const undo = document.getElementById("sigUndo");
+    const redo = document.getElementById("sigRedo");
+    if (undo) {
+      undo.disabled = projectIoBusy || !mainUndoStack.length;
+      undo.title = mainUndoStack.length ? `되돌리기 · ${mainUndoStack.length}단계 · Ctrl+Z` : "되돌릴 작업 없음 · Ctrl+Z";
+    }
+    if (redo) {
+      redo.disabled = projectIoBusy || !mainRedoStack.length;
+      redo.title = mainRedoStack.length ? `다시 실행 · ${mainRedoStack.length}단계 · Ctrl+Y` : "다시 실행할 작업 없음 · Ctrl+Y";
+    }
+  }
+
+  function setProjectIoBusy(busy, message = "") {
+    projectIoBusy = !!busy;
+    if (view) {
+      view.classList.toggle("is-project-busy", projectIoBusy);
+      view.setAttribute("aria-busy", String(projectIoBusy));
+    }
+    ["sigProjectOpen", "sigProjectSave", "sigExportMobile", "sigExportPc", "sigExportBoth", "sigExportWeflab", "sigExportAll"].forEach(id => {
+      const control = document.getElementById(id);
+      if (control) control.disabled = projectIoBusy;
+    });
+    const overlay = document.getElementById("sigBusyOverlay");
+    const busyMessage = document.getElementById("sigBusyMessage");
+    if (overlay) overlay.hidden = !projectIoBusy;
+    if (busyMessage) busyMessage.textContent = message || "처리 중…";
+    updateMainHistoryUi();
+    syncProjectStatus(message);
   }
 
   function captureMainSnapshot() {
@@ -1334,14 +1730,21 @@
       placementIndex: state.placementIndex,
       background: Object.assign({}, state.background, {
         customBackup: state.background.customBackup ? Object.assign({}, state.background.customBackup) : null,
-        maskCanvas: state.background.maskCanvas ? cloneMaskCanvas(state.background.maskCanvas) : null
+        // Applied masks are immutable: the studio always edits a private clone and
+        // commits a new canvas. Keeping the reference avoids 60 × 1.16 MB snapshots.
+        maskCanvas: state.background.maskCanvas || null
       }),
       character: Object.assign({}, state.character),
       phrase: Object.assign({}, state.phrase),
       num1: Object.assign({}, state.num1),
       num2: Object.assign({}, state.num2),
       props: state.props.map(prop => Object.assign({}, prop)),
+      outputProfiles: cloneOutputProfiles(),
       selected: Object.assign({}, state.selected),
+      snapEnabled: state.snapEnabled !== false,
+      showGuides: state.showGuides !== false,
+      previewDark: !!state.previewDark,
+      exportBaseName: String(state.exportBaseName || SIG_DEFAULT_EXPORT_BASE),
       customPropAssets
     };
   }
@@ -1378,6 +1781,8 @@
     if (JSON.stringify(left.phrase) !== JSON.stringify(right.phrase)) return false;
     if (JSON.stringify(left.num1) !== JSON.stringify(right.num1) || JSON.stringify(left.num2) !== JSON.stringify(right.num2)) return false;
     if (JSON.stringify(left.props) !== JSON.stringify(right.props)) return false;
+    if (JSON.stringify(left.outputProfiles) !== JSON.stringify(right.outputProfiles)) return false;
+    if (left.snapEnabled !== right.snapEnabled || left.showGuides !== right.showGuides || left.previewDark !== right.previewDark || left.exportBaseName !== right.exportBaseName) return false;
     return true;
   }
 
@@ -1387,14 +1792,19 @@
     state.placementIndex = snapshot.placementIndex;
     Object.assign(state.background, snapshot.background, {
       customBackup: snapshot.background.customBackup ? Object.assign({}, snapshot.background.customBackup) : null,
-      maskCanvas: snapshot.background.maskCanvas ? cloneMaskCanvas(snapshot.background.maskCanvas) : null
+      maskCanvas: snapshot.background.maskCanvas || null
     });
     Object.assign(state.character, snapshot.character);
     Object.assign(state.phrase, snapshot.phrase);
     Object.assign(state.num1, snapshot.num1);
     Object.assign(state.num2, snapshot.num2);
     state.props = snapshot.props.map(prop => Object.assign({}, prop));
+    state.outputProfiles = cloneOutputProfiles(snapshot.outputProfiles);
     state.selected = Object.assign({}, snapshot.selected);
+    state.snapEnabled = snapshot.snapEnabled !== false;
+    state.showGuides = snapshot.showGuides !== false;
+    state.previewDark = !!snapshot.previewDark;
+    state.exportBaseName = String(snapshot.exportBaseName || SIG_DEFAULT_EXPORT_BASE);
     if (state.selected.kind === "prop" && !state.props[state.selected.index]) {
       state.selected = { kind: "character", index: -1 };
     }
@@ -1419,6 +1829,7 @@
 
   function beginMainChange() {
     if (!mainHistoryReady) return null;
+    commitOutputProfileEdit();
     flushMainHistoryBurst();
     return captureMainSnapshot();
   }
@@ -1437,6 +1848,8 @@
     mainUndoStack.push(before);
     if (mainUndoStack.length > MAIN_HISTORY_LIMIT) mainUndoStack.shift();
     mainRedoStack = [];
+    updateMainHistoryUi();
+    setProjectDirty(true);
   }
 
   function beginMainHistoryBurst() {
@@ -1452,9 +1865,11 @@
     mainBurstBefore = null;
     mainUndoStack = [];
     mainRedoStack = [];
+    updateMainHistoryUi();
   }
 
   function mainUndo() {
+    commitOutputProfileEdit();
     flushMainHistoryBurst();
     if (!mainUndoStack.length) {
       showExportStatus("되돌릴 시그풍 작업이 없어.", true);
@@ -1463,11 +1878,14 @@
     const previous = mainUndoStack.pop();
     mainRedoStack.push(captureMainSnapshot());
     restoreMainSnapshot(previous);
+    updateMainHistoryUi();
+    setProjectDirty(true);
     showExportStatus(`시그풍 작업을 되돌렸어 · 남은 단계 ${mainUndoStack.length}`);
     return true;
   }
 
   function mainRedo() {
+    commitOutputProfileEdit();
     flushMainHistoryBurst();
     if (!mainRedoStack.length) {
       showExportStatus("다시 실행할 시그풍 작업이 없어.", true);
@@ -1477,39 +1895,56 @@
     mainUndoStack.push(captureMainSnapshot());
     if (mainUndoStack.length > MAIN_HISTORY_LIMIT) mainUndoStack.shift();
     restoreMainSnapshot(next);
+    updateMainHistoryUi();
+    setProjectDirty(true);
     showExportStatus(`시그풍 작업을 다시 실행했어 · 남은 단계 ${mainRedoStack.length}`);
     return true;
   }
 
   function createStraightMask(top = 84) {
-    const out = createLogicalCanvas();
+    const out = createMaskCanvas();
     const outCtx = out.getContext("2d", { alpha: true });
     outCtx.fillStyle = "#ffffff";
-    outCtx.fillRect(0, clamp(top, 84, H), W, H);
+    outCtx.fillRect(0, clamp(top, SAFE_TOP, H) * MASK_SCALE, MASK_W, MASK_H);
     return out;
   }
 
   function fitImageToCanvas(img) {
     const out = createLogicalCanvas();
     const outCtx = out.getContext("2d", { alpha: true });
-    const iw = img.naturalWidth || img.width || W;
-    const ih = img.naturalHeight || img.height || H;
-    const scale = Math.min(W / iw, H / ih);
+    drawImageContainBottom(outCtx, img);
+    return out;
+  }
+
+  function fitImageToMaskCanvas(img) {
+    const iw = Number(img.naturalWidth || img.width || W);
+    const ih = Number(img.naturalHeight || img.height || H);
+    if (iw === W && ih === H || iw === MASK_W && ih === MASK_H) return normalizeStoredMaskCanvas(img);
+    const out = createMaskCanvas();
+    const outCtx = out.getContext("2d", { alpha: true });
+    const scale = Math.min(MASK_W / iw, MASK_H / ih);
     const dw = iw * scale;
     const dh = ih * scale;
-    outCtx.drawImage(img, (W - dw) / 2, H - dh, dw, dh);
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = "high";
+    outCtx.drawImage(img, (MASK_W - dw) / 2, MASK_H - dh, dw, dh);
+    outCtx.globalCompositeOperation = "source-in";
+    outCtx.fillStyle = "#ffffff";
+    outCtx.fillRect(0, 0, MASK_W, MASK_H);
+    outCtx.globalCompositeOperation = "source-over";
+    enforceMaskSafeArea(out);
     return out;
   }
 
   function alphaMaskFromCanvas(source) {
-    const out = createLogicalCanvas();
+    const out = createMaskCanvas();
     const outCtx = out.getContext("2d", { alpha: true });
-    outCtx.drawImage(source, 0, 0, W, H);
+    outCtx.drawImage(source, 0, 0, source.width || W, source.height || H, 0, 0, MASK_W, MASK_H);
     outCtx.globalCompositeOperation = "source-in";
     outCtx.fillStyle = "#ffffff";
-    outCtx.fillRect(0, 0, W, H);
+    outCtx.fillRect(0, 0, MASK_W, MASK_H);
     outCtx.globalCompositeOperation = "source-over";
-    outCtx.clearRect(0, 0, W, 84);
+    outCtx.clearRect(0, 0, MASK_W, MASK_SAFE_TOP);
     return out;
   }
 
@@ -1523,46 +1958,51 @@
   }
 
   function tintMask(mask, color) {
-    const out = createLogicalCanvas();
+    const out = createMaskCanvas();
     const outCtx = out.getContext("2d", { alpha: true });
-    outCtx.drawImage(mask, 0, 0);
+    outCtx.drawImage(mask, 0, 0, mask.width, mask.height, 0, 0, MASK_W, MASK_H);
     outCtx.globalCompositeOperation = "source-in";
     outCtx.fillStyle = color;
-    outCtx.fillRect(0, 0, W, H);
+    outCtx.fillRect(0, 0, MASK_W, MASK_H);
     outCtx.globalCompositeOperation = "source-over";
     return out;
   }
 
   function drawExpandedMask(c, mask, color, radius) {
-    const r = Math.max(0, Math.round(radius || 0));
+    const logicalRadius = Math.max(0, Number(radius) || 0);
+    const r = Math.max(0, Math.round(logicalRadius * MASK_SCALE));
     if (!r) return;
-    const key = `${color}:${r}`;
+    const key = `${color}:${r}:${MASK_SCALE}`;
     let cached = maskOutlineCache.get(mask);
     if (!cached) {
       cached = new Map();
       maskOutlineCache.set(mask, cached);
     }
     if (cached.has(key)) {
-      c.drawImage(cached.get(key), 0, 0);
+      drawMaskLogical(c, cached.get(key));
       return;
     }
-    const expanded = createLogicalCanvas();
+    const expanded = createMaskCanvas();
     const expandedCtx = expanded.getContext("2d", { alpha: true });
     const tinted = tintMask(mask, color);
-    for (let y = -r; y <= r; y++) {
-      for (let x = -r; x <= r; x++) {
-        if (x * x + y * y <= r * r) expandedCtx.drawImage(tinted, x, y);
+    // Iterate in logical pixels and scale offsets onto the raw surface. This keeps
+    // the old O(r²) draw count instead of making the 2× mask four times more costly.
+    const steps = Math.ceil(logicalRadius);
+    for (let y = -steps; y <= steps; y++) {
+      for (let x = -steps; x <= steps; x++) {
+        if (x * x + y * y <= logicalRadius * logicalRadius) expandedCtx.drawImage(tinted, x * MASK_SCALE, y * MASK_SCALE);
       }
     }
     if (cached.size > 8) cached.clear();
     cached.set(key, expanded);
-    c.drawImage(expanded, 0, 0);
+    drawMaskLogical(c, expanded);
   }
 
   function captureMaskAlpha(source = maskWorkingCanvas) {
-    if (!source) return new Uint8ClampedArray(W * H);
-    const data = source.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(0, 0, W, H).data;
-    const alpha = new Uint8ClampedArray(W * H);
+    if (!source) return new Uint8ClampedArray(MASK_W * MASK_H);
+    const canonical = source.width === MASK_W && source.height === MASK_H ? source : normalizeStoredMaskCanvas(source);
+    const data = canonical.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(0, 0, MASK_W, MASK_H).data;
+    const alpha = new Uint8ClampedArray(MASK_W * MASK_H);
     for (let i = 0, p = 3; i < alpha.length; i++, p += 4) alpha[i] = data[p];
     return alpha;
   }
@@ -1590,14 +2030,31 @@
 
   function enforceMaskSafeArea(target = maskWorkingCanvas) {
     if (!target) return;
-    target.getContext("2d", { alpha: true }).clearRect(0, 0, W, 84);
+    target.getContext("2d", { alpha: true }).clearRect(0, 0, target.width, MASK_SAFE_TOP);
     if (target === maskWorkingCanvas) invalidateWorkingMask();
+  }
+
+  function symmetrizeMaskAlpha(target) {
+    if (!target || target.width !== MASK_W || target.height !== MASK_H) return;
+    const context = target.getContext("2d", { alpha: true, willReadFrequently: true });
+    const image = context.getImageData(0, 0, MASK_W, MASK_H);
+    for (let y = MASK_SAFE_TOP; y < MASK_H; y++) {
+      for (let x = 0; x < MASK_W / 2; x++) {
+        const left = (y * MASK_W + x) * 4;
+        const right = (y * MASK_W + (MASK_W - 1 - x)) * 4;
+        const alpha = Math.round((image.data[left + 3] + image.data[right + 3]) / 2);
+        image.data[left] = image.data[left + 1] = image.data[left + 2] = 255;
+        image.data[right] = image.data[right + 1] = image.data[right + 2] = 255;
+        image.data[left + 3] = image.data[right + 3] = alpha;
+      }
+    }
+    context.putImageData(image, 0, 0);
   }
 
   function restoreMaskAlpha(alpha) {
     if (!maskWorkingCanvas || !alpha) return;
     const workCtx = maskWorkingCanvas.getContext("2d", { alpha: true, willReadFrequently: true });
-    const image = workCtx.createImageData(W, H);
+    const image = workCtx.createImageData(MASK_W, MASK_H);
     for (let i = 0, p = 0; i < alpha.length; i++, p += 4) {
       image.data[p] = 255;
       image.data[p + 1] = 255;
@@ -1638,6 +2095,7 @@
   }
 
   function maskUndo() {
+    leaveMaskShapeTuner(true);
     if (maskHistoryIndex <= 0) return;
     restoreMaskAlpha(maskHistory[--maskHistoryIndex]);
     updateMaskHistoryButtons();
@@ -1645,6 +2103,7 @@
   }
 
   function maskRedo() {
+    leaveMaskShapeTuner(true);
     if (maskHistoryIndex >= maskHistory.length - 1) return;
     restoreMaskAlpha(maskHistory[++maskHistoryIndex]);
     updateMaskHistoryButtons();
@@ -1715,15 +2174,17 @@
       smooth = next;
     }
     const workCtx = target.getContext("2d", { alpha: true });
-    workCtx.clearRect(0, 0, W, H);
-    workCtx.beginPath();
-    workCtx.moveTo(0, smooth[0]);
-    for (let x = 1; x <= W; x++) workCtx.lineTo(x, smooth[x]);
-    workCtx.lineTo(W, H);
-    workCtx.lineTo(0, H);
-    workCtx.closePath();
-    workCtx.fillStyle = "#ffffff";
-    workCtx.fill();
+    workCtx.clearRect(0, 0, MASK_W, MASK_H);
+    withMaskLogicalTransform(workCtx, logicalCtx => {
+      logicalCtx.beginPath();
+      logicalCtx.moveTo(0, smooth[0]);
+      for (let x = 1; x <= W; x++) logicalCtx.lineTo(x, smooth[x]);
+      logicalCtx.lineTo(W, H);
+      logicalCtx.lineTo(0, H);
+      logicalCtx.closePath();
+      logicalCtx.fillStyle = "#ffffff";
+      logicalCtx.fill();
+    });
     enforceMaskSafeArea(target);
     return true;
   }
@@ -1731,111 +2192,187 @@
   function applyClosedOutline(points, target = maskWorkingCanvas, mirror = maskMirrorEnabled()) {
     if (!target || !validClosedOutlineGesture(points)) return false;
     const workCtx = target.getContext("2d", { alpha: true });
-    const fillPolygon = source => {
-      workCtx.beginPath();
-      source.forEach((point, index) => index ? workCtx.lineTo(point.x, point.y) : workCtx.moveTo(point.x, point.y));
-      workCtx.closePath();
-      workCtx.fill();
-    };
-    workCtx.save();
-    workCtx.beginPath();
-    workCtx.rect(0, 84, W, H - 84);
-    workCtx.clip();
-    workCtx.fillStyle = "#ffffff";
-    workCtx.globalCompositeOperation = "source-over";
-    fillPolygon(points);
-    if (mirror) fillPolygon(points.map(point => ({ x: W - point.x, y: point.y })));
-    workCtx.restore();
+    withMaskLogicalTransform(workCtx, logicalCtx => {
+      const fillPolygon = source => {
+        logicalCtx.beginPath();
+        source.forEach((point, index) => index ? logicalCtx.lineTo(point.x, point.y) : logicalCtx.moveTo(point.x, point.y));
+        logicalCtx.closePath();
+        logicalCtx.fill();
+      };
+      logicalCtx.save();
+      logicalCtx.beginPath();
+      logicalCtx.rect(0, SAFE_TOP, W, H - SAFE_TOP);
+      logicalCtx.clip();
+      logicalCtx.fillStyle = "#ffffff";
+      logicalCtx.globalCompositeOperation = "source-over";
+      fillPolygon(points);
+      if (mirror) fillPolygon(points.map(point => ({ x: W - point.x, y: point.y })));
+      logicalCtx.restore();
+    });
     enforceMaskSafeArea(target);
     return true;
   }
 
   function rasterizeBackgroundMask(bg = state.background) {
     if (bg.mask === "alpha-custom" && bg.maskCanvas) return cloneMaskCanvas(bg.maskCanvas);
-    const out = createLogicalCanvas();
+    const out = createMaskCanvas();
     const outCtx = out.getContext("2d", { alpha: true });
-    backgroundPath(outCtx, bg);
-    outCtx.fillStyle = "#ffffff";
-    outCtx.fill();
+    withMaskLogicalTransform(outCtx, logicalCtx => {
+      backgroundPath(logicalCtx, bg);
+      logicalCtx.fillStyle = "#ffffff";
+      logicalCtx.fill();
+    });
     enforceMaskSafeArea(out);
     return out;
   }
 
-  function createDomeSeed(apexY) {
-    const out = createLogicalCanvas();
+  function maskShapeDefaults(kind) {
+    if (kind === "dome-low") return Object.assign({}, DOME_LOW_DEFAULTS);
+    if (kind === "dome-high") return Object.assign({}, DOME_HIGH_DEFAULTS);
+    if (kind === "heart-wide") return Object.assign({}, HEART_SEED_DEFAULTS);
+    return null;
+  }
+
+  function maskShapeFamily(kind) {
+    if (kind === "dome-low" || kind === "dome-high") return "dome";
+    if (kind === "heart-wide") return "heart";
+    return "";
+  }
+
+  function normalizedMaskShapeValues(kind, values = null) {
+    const defaults = maskShapeDefaults(kind);
+    if (!defaults) return null;
+    const source = Object.assign({}, defaults, values || {});
+    if (maskShapeFamily(kind) === "dome") {
+      source.apex = clamp(Number(source.apex), 84, 150);
+      source.sideDrop = clamp(Number(source.sideDrop), 8, 100);
+      source.shoulder = clamp(Number(source.shoulder), 0, source.sideDrop);
+    } else {
+      source.height = clamp(Number(source.height), 110, 164);
+      source.notchDepth = clamp(Number(source.notchDepth), 8, 55);
+      source.notchWidth = clamp(Number(source.notchWidth), 12, 80);
+      source.asymmetry = clamp(Number(source.asymmetry), -30, 30);
+    }
+    return source;
+  }
+
+  function maskShapeValuesAreDefault(kind, values) {
+    const defaults = maskShapeDefaults(kind);
+    const current = normalizedMaskShapeValues(kind, values);
+    return !!defaults && Object.keys(defaults).every(key => Math.abs(Number(defaults[key]) - Number(current[key])) < 1e-9);
+  }
+
+  function createDomeSeed(apexY, sideDrop = DOME_SEED_DEFAULTS.sideDrop, shoulder = DOME_SEED_DEFAULTS.shoulder) {
+    const out = createMaskCanvas();
     const outCtx = out.getContext("2d", { alpha: true });
     const centerX = W / 2;
-    const sideDrop = 48.02;
     const sideY = apexY + sideDrop;
     // 실제 초록/파랑 돔의 깨끗한 외곽 픽셀에 직접 피팅한 2개 cubic.
     // 두 프리셋은 같은 곡선을 쓰고 apexY만 22px 이동한다.
     const nearSideX = 21.84;
     const nearCenterX = 67.92;
-    const nearSideY = apexY + 29.20;
-    outCtx.beginPath();
-    outCtx.moveTo(0, sideY);
-    outCtx.bezierCurveTo(
-      nearSideX, nearSideY,
-      nearCenterX, apexY,
-      centerX, apexY
-    );
-    outCtx.bezierCurveTo(
-      W - nearCenterX, apexY,
-      W - nearSideX, nearSideY,
-      W, sideY
-    );
-    outCtx.lineTo(W, H);
-    outCtx.lineTo(0, H);
-    outCtx.closePath();
-    outCtx.fillStyle = "#ffffff";
-    outCtx.fill();
+    const nearSideY = apexY + shoulder;
+    withMaskLogicalTransform(outCtx, logicalCtx => {
+      logicalCtx.beginPath();
+      logicalCtx.moveTo(0, sideY);
+      logicalCtx.bezierCurveTo(
+        nearSideX, nearSideY,
+        nearCenterX, apexY,
+        centerX, apexY
+      );
+      logicalCtx.bezierCurveTo(
+        W - nearCenterX, apexY,
+        W - nearSideX, nearSideY,
+        W, sideY
+      );
+      logicalCtx.lineTo(W, H);
+      logicalCtx.lineTo(0, H);
+      logicalCtx.closePath();
+      logicalCtx.fillStyle = "#ffffff";
+      logicalCtx.fill();
+    });
+    symmetrizeMaskAlpha(out);
     enforceMaskSafeArea(out);
     return out;
   }
 
-  function createMaskSeed(kind) {
-    if (kind === "blank") return createLogicalCanvas();
+  function drawLegacyHeartSeed(outCtx) {
+    // v17.4의 literal vector path. 기본값은 같은 곡선을 2× 면에 그린 뒤
+    // asymmetry=0 계약에 맞춰 좌우 알파만 정확히 대칭화한다.
+    outCtx.translate(0, 5);
+    outCtx.beginPath();
+    outCtx.moveTo(32.5436, H);
+    outCtx.ellipse(75.8961, 175.7948, 74.5011, 88.7852, 0, 2.191865, 1.5 * Math.PI);
+    outCtx.bezierCurveTo(105.55, 87.01, 130.97, 102.68, 146.5, 115);
+    outCtx.bezierCurveTo(162.16, 103.19, 187.80, 88.1515, 217.7038, 88.1515);
+    outCtx.ellipse(217.7038, 174.9415, 73.0561, 86.7901, 0, 1.5 * Math.PI, 7.283765);
+    outCtx.lineTo(32.5436, H);
+    outCtx.closePath();
+  }
+
+  function createHeartSeed(values = null) {
+    const params = normalizedMaskShapeValues("heart-wide", values);
+    const out = createMaskCanvas();
+    const outCtx = out.getContext("2d", { alpha: true });
+    withMaskLogicalTransform(outCtx, logicalCtx => {
+      if (maskShapeValuesAreDefault("heart-wide", params)) {
+        drawLegacyHeartSeed(logicalCtx);
+      } else {
+        const heightScale = params.height / HEART_SEED_DEFAULTS.height;
+        const mapY = value => H - (H - value) * heightScale;
+        const averageLobeTop = mapY((92.0096 + 93.1515) / 2);
+        const desiredNotchY = averageLobeTop + params.notchDepth;
+        const notchShiftY = desiredNotchY - mapY(120);
+        const handleMidX = (130.97 + 162.16) / 2 + params.asymmetry * .5;
+        const leftHandleX = handleMidX - params.notchWidth / 2;
+        const rightHandleX = handleMidX + params.notchWidth / 2;
+        const notchX = 146.5 + params.asymmetry;
+        logicalCtx.beginPath();
+        logicalCtx.moveTo(32.5436, mapY(H + 5));
+        logicalCtx.ellipse(75.8961, mapY(180.7948), 74.5011, 88.7852 * heightScale, 0, 2.191865, 1.5 * Math.PI);
+        logicalCtx.bezierCurveTo(105.55, mapY(92.01), leftHandleX, mapY(107.68) + notchShiftY * .55, notchX, desiredNotchY);
+        logicalCtx.bezierCurveTo(rightHandleX, mapY(108.19) + notchShiftY * .55, 187.80, mapY(93.1515), 217.7038, mapY(93.1515));
+        logicalCtx.ellipse(217.7038, mapY(179.9415), 73.0561, 86.7901 * heightScale, 0, 1.5 * Math.PI, 7.283765);
+        logicalCtx.lineTo(32.5436, mapY(H + 5));
+        logicalCtx.closePath();
+      }
+      logicalCtx.fillStyle = "#ffffff";
+      logicalCtx.fill();
+    });
+    if (Math.abs(params.asymmetry) < 1e-9) symmetrizeMaskAlpha(out);
+    enforceMaskSafeArea(out);
+    return out;
+  }
+
+  function createMaskSeed(kind, values = null) {
+    if (kind === "blank") return createMaskCanvas();
     // 두 돔은 완전히 같은 타원 곡률이며 높은 돔만 22px 위로 평행 이동한다.
     // 기존 포물선보다 양끝을 48px 낮춰 실제 시그 레퍼런스의 큰 아치에 맞춘다.
-    if (kind === "dome-low") return createDomeSeed(112.68);
-    if (kind === "dome-high") return createDomeSeed(90.68);
+    if (kind === "dome-low" || kind === "dome-high") {
+      const params = normalizedMaskShapeValues(kind, values);
+      return createDomeSeed(params.apex, params.sideDrop, params.shoulder);
+    }
     if (kind === "heart-wide") {
       // 오렌지 레퍼런스의 실제 바깥선을 맞춘 판형 하트.
       // 좌우의 큰 세로 타원 로브와 깊은 중앙 골을 쓰고, 하단은 캔버스 아래로
       // 이어지는 큰 하트가 출력 영역에서 잘린 것처럼 자연스럽게 닫는다.
-      const out = createLogicalCanvas();
-      const outCtx = out.getContext("2d", { alpha: true });
-      // 레퍼런스 좌표는 최종 바깥 외곽 기준이다. 기본 이중 외곽선이 약 5px
-      // 바깥으로 팽창하므로 채움 마스크를 5px 내려 최종 꼭대기 여백을 보존한다.
-      outCtx.translate(0, 5);
-      outCtx.beginPath();
-      outCtx.moveTo(32.5436, H);
-      // 바깥쪽 큰 타원 로브는 유지하되, 두 타원의 깊은 교차점까지 따라가지
-      // 않는다. 봉우리 이후 안쪽만 cubic으로 이어 골 깊이를 약 27px로 제한한다.
-      outCtx.ellipse(75.8961, 175.7948, 74.5011, 88.7852, 0, 2.191865, 1.5 * Math.PI);
-      outCtx.bezierCurveTo(105.55, 87.01, 130.97, 102.68, 146.5, 115);
-      outCtx.bezierCurveTo(162.16, 103.19, 187.80, 88.1515, 217.7038, 88.1515);
-      outCtx.ellipse(217.7038, 174.9415, 73.0561, 86.7901, 0, 1.5 * Math.PI, 7.283765);
-      outCtx.lineTo(32.5436, H);
-      outCtx.closePath();
-      outCtx.fillStyle = "#ffffff";
-      outCtx.fill();
-      enforceMaskSafeArea(out);
-      return out;
+      return createHeartSeed(values);
     }
     if (kind === "organic") {
-      const out = createLogicalCanvas();
+      const out = createMaskCanvas();
       const outCtx = out.getContext("2d", { alpha: true });
-      outCtx.beginPath();
-      outCtx.moveTo(0, 125);
-      outCtx.bezierCurveTo(20, 99, 58, 92, 96, 103);
-      outCtx.bezierCurveTo(131, 83, 184, 88, 210, 104);
-      outCtx.bezierCurveTo(242, 96, 277, 105, W, 128);
-      outCtx.lineTo(W, H);
-      outCtx.lineTo(0, H);
-      outCtx.closePath();
-      outCtx.fillStyle = "#ffffff";
-      outCtx.fill();
+      withMaskLogicalTransform(outCtx, logicalCtx => {
+        logicalCtx.beginPath();
+        logicalCtx.moveTo(0, 125);
+        logicalCtx.bezierCurveTo(20, 99, 58, 92, 96, 103);
+        logicalCtx.bezierCurveTo(131, 83, 184, 88, 210, 104);
+        logicalCtx.bezierCurveTo(242, 96, 277, 105, W, 128);
+        logicalCtx.lineTo(W, H);
+        logicalCtx.lineTo(0, H);
+        logicalCtx.closePath();
+        logicalCtx.fillStyle = "#ffffff";
+        logicalCtx.fill();
+      });
       enforceMaskSafeArea(out);
       return out;
     }
@@ -1845,9 +2382,79 @@
     return rasterizeBackgroundMask(configs[kind] || configs.straight);
   }
 
+  function formatMaskShapeValue(value) {
+    return String(Math.round(Number(value) * 10000) / 10000);
+  }
+
+  function syncMaskShapeTuner() {
+    const tuner = document.getElementById("sigMaskShapeTuner");
+    if (!tuner) return;
+    const family = maskShapeSession ? maskShapeFamily(maskShapeSession.kind) : "";
+    tuner.hidden = !family;
+    if (!family) return;
+    tuner.open = true;
+    tuner.querySelectorAll("[data-mask-shape-panel]").forEach(panel => {
+      panel.hidden = panel.dataset.maskShapePanel !== family;
+    });
+    const title = document.getElementById("sigMaskShapeTitle");
+    if (title) title.textContent = family === "dome" ? "돔 곡선 세부 조절" : "하트 곡선 세부 조절";
+    Object.entries(maskShapeSession.values).forEach(([key, value]) => {
+      tuner.querySelectorAll(`[data-mask-shape-param="${key}"], [data-mask-shape-number="${key}"]`).forEach(input => {
+        input.value = formatMaskShapeValue(value);
+      });
+    });
+    const status = document.getElementById("sigMaskShapeStatus");
+    if (status) status.textContent = maskShapeSession.dirty
+      ? "미확정 · 모양만 미리 보는 중"
+      : maskShapeValuesAreDefault(maskShapeSession.kind, maskShapeSession.values)
+        ? "기본값 · 기존 모양과 동일"
+        : "현재값 확정됨";
+    document.getElementById("sigMaskShapeConfirm")?.toggleAttribute("disabled", !maskShapeSession.dirty);
+  }
+
+  function confirmMaskShapeParameters() {
+    if (!maskShapeSession?.dirty) return false;
+    commitMaskHistory();
+    maskShapeSession.dirty = false;
+    maskShapeSession.beforeAlpha = null;
+    syncMaskShapeTuner();
+    return true;
+  }
+
+  function leaveMaskShapeTuner(commit = true) {
+    if (commit) confirmMaskShapeParameters();
+    maskShapeSession = null;
+    syncMaskShapeTuner();
+  }
+
+  function previewMaskShapeParameter(key, value) {
+    if (!maskShapeSession || !(key in maskShapeSession.values)) return;
+    if (!maskShapeSession.beforeAlpha) maskShapeSession.beforeAlpha = captureMaskAlpha();
+    const nextValues = normalizedMaskShapeValues(maskShapeSession.kind, Object.assign({}, maskShapeSession.values, { [key]: Number(value) }));
+    maskShapeSession.values = nextValues;
+    maskWorkingCanvas = createMaskSeed(maskShapeSession.kind, nextValues);
+    maskShapeSession.dirty = !maskAlphaEquals(maskShapeSession.beforeAlpha, captureMaskAlpha());
+    syncMaskShapeTuner();
+    renderMaskEditor();
+  }
+
+  function resetMaskShapeParameters() {
+    if (!maskShapeSession) return;
+    if (!maskShapeSession.beforeAlpha) maskShapeSession.beforeAlpha = captureMaskAlpha();
+    maskShapeSession.values = maskShapeDefaults(maskShapeSession.kind);
+    maskWorkingCanvas = createMaskSeed(maskShapeSession.kind, maskShapeSession.values);
+    maskShapeSession.dirty = !maskAlphaEquals(maskShapeSession.beforeAlpha, captureMaskAlpha());
+    syncMaskShapeTuner();
+    renderMaskEditor();
+  }
+
   function applyMaskSeed(kind) {
+    confirmMaskShapeParameters();
     replaceWorkingMask(createMaskSeed(kind));
     commitMaskHistory();
+    const values = maskShapeDefaults(kind);
+    maskShapeSession = values ? { kind, values, beforeAlpha: null, dirty: false } : null;
+    syncMaskShapeTuner();
     renderMaskEditor();
     const label = document.querySelector(`[data-mask-seed="${kind}"] span`)?.textContent || "시작";
     const tip = document.getElementById("sigMaskTip");
@@ -1868,7 +2475,7 @@
       }
       const seed = createMaskSeed(button.dataset.maskSeed);
       const colored = tintMask(seed, "#ed6f99");
-      thumbCtx.drawImage(colored, 0, 84, W, H - 84, 0, 0, thumb.width, thumb.height);
+      thumbCtx.drawImage(colored, 0, MASK_SAFE_TOP, MASK_W, MASK_H - MASK_SAFE_TOP, 0, 0, thumb.width, thumb.height);
     });
   }
 
@@ -1885,7 +2492,7 @@
   function drawMaskPreview(c, sourceMask = maskWorkingCanvas) {
     const previewMode = !!document.getElementById("sigMaskPreviewMode")?.checked;
     if (!previewMode) {
-      c.drawImage(tintMask(sourceMask, "rgba(255,105,145,.78)"), 0, 0);
+      drawMaskLogical(c, tintMask(sourceMask, "rgba(255,105,145,.78)"));
       return;
     }
     const color = document.getElementById("sigMaskPreviewColor")?.value || state.background.maskFillColor || "#ff9bb7";
@@ -1893,7 +2500,7 @@
       // The outline dilation is intentionally deferred until pointer-up. At the
       // largest double-outline setting it requires thousands of compositing
       // operations, while the fill-only preview stays responsive during a stroke.
-      c.drawImage(tintMask(sourceMask, color), 0, 0);
+      drawMaskLogical(c, tintMask(sourceMask, color));
       return;
     }
     if (state.background.maskDoubleOutline && state.background.maskOuterWidth > 0) {
@@ -1902,7 +2509,7 @@
     if (state.background.maskStrokeWidth > 0) {
       drawExpandedMask(c, sourceMask, state.background.maskStrokeColor || "#ff7697", state.background.maskStrokeWidth);
     }
-    c.drawImage(tintMask(sourceMask, color), 0, 0);
+    drawMaskLogical(c, tintMask(sourceMask, color));
   }
 
   function drawTopLineGesture(c, points, mirror) {
@@ -1970,12 +2577,12 @@
 
   function renderMaskEditor() {
     if (!maskEditorCtx || !maskWorkingCanvas) return;
-    maskEditorCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    maskEditorCtx.setTransform(MASK_SCALE, 0, 0, MASK_SCALE, 0, 0);
     maskEditorCtx.clearRect(0, 0, W, H);
     drawMaskChecker(maskEditorCtx);
     let previewMask = maskWorkingCanvas;
     if (maskGesture?.tool === "topline" && validTopLineGesture(maskGesture.points)) {
-      const toplineMask = createLogicalCanvas();
+      const toplineMask = createMaskCanvas();
       if (applyTopLine(maskGesture.points, toplineMask, maskGesture.mirror)) previewMask = toplineMask;
     }
     drawMaskPreview(maskEditorCtx, previewMask);
@@ -2115,6 +2722,7 @@
 
   function openMaskStudio() {
     maskWorkingCanvas = rasterizeBackgroundMask(state.background);
+    maskShapeSession = null;
     resetMaskHistory();
     const modal = document.getElementById("sigMaskStudio");
     modal.hidden = false;
@@ -2127,6 +2735,7 @@
     document.getElementById("sigMaskCenterGuide").hidden = !maskMirrorEnabled();
     refreshMaskSeedThumbnails();
     refreshMaskLibrary();
+    syncMaskShapeTuner();
     renderMaskEditor();
   }
 
@@ -2134,14 +2743,19 @@
     return !!maskWorkingCanvas && !!maskHistory[0] && !maskAlphaEquals(maskHistory[0], captureMaskAlpha());
   }
 
-  function closeMaskStudio(force = false) {
-    if (!force && maskStudioDirty() && !window.confirm("아직 적용하지 않은 마스크 수정이 있어. 변경을 버리고 닫을까?")) return false;
+  async function closeMaskStudio(force = false) {
+    if (!force && maskStudioDirty() && !(await askSigConfirm("아직 적용하지 않은 마스크 수정이 있어. 변경을 버리고 닫을까?", {
+      title: "마스크 변경 버리기",
+      confirmLabel: "버리고 닫기"
+    }))) return false;
     cancelMaskAnimationFrames();
     document.getElementById("sigMaskStudio").hidden = true;
     document.body.classList.remove("sig-mask-editing");
     maskGesture = null;
     maskPointerInside = false;
     maskPointerPoint = null;
+    maskShapeSession = null;
+    syncMaskShapeTuner();
     updateMaskCursor();
     maskWorkingCanvas = null;
     maskHistory = [];
@@ -2150,6 +2764,7 @@
   }
 
   function applyMaskStudio() {
+    confirmMaskShapeParameters();
     if (!captureMaskAlpha(maskWorkingCanvas).some(alpha => alpha > 0)) {
       const tip = document.getElementById("sigMaskTip");
       if (tip) tip.textContent = "빈 판은 적용할 수 없어. ‘더하기’, ‘윗모양 자동채움’, ‘윤곽 자동채움’으로 모양을 먼저 만들어줘.";
@@ -2201,55 +2816,100 @@
   function paintMaskSegment(from, to, tool, mirror = maskMirrorEnabled()) {
     const workCtx = maskWorkingCanvas.getContext("2d", { alpha: true });
     const size = maskBrushSize();
-    workCtx.save();
-    workCtx.beginPath();
-    workCtx.rect(0, 84, W, H - 84);
-    workCtx.clip();
-    workCtx.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
-    workCtx.strokeStyle = "#ffffff";
-    workCtx.fillStyle = "#ffffff";
-    workCtx.lineWidth = size;
-    workCtx.lineCap = "round";
-    workCtx.lineJoin = "round";
-    paintSingleMaskSegment(workCtx, from, to, tool, size);
-    if (mirror) paintSingleMaskSegment(workCtx, { x: W - from.x, y: from.y }, { x: W - to.x, y: to.y }, tool, size);
-    workCtx.restore();
+    withMaskLogicalTransform(workCtx, logicalCtx => {
+      logicalCtx.save();
+      logicalCtx.beginPath();
+      logicalCtx.rect(0, SAFE_TOP, W, H - SAFE_TOP);
+      logicalCtx.clip();
+      logicalCtx.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
+      logicalCtx.strokeStyle = "#ffffff";
+      logicalCtx.fillStyle = "#ffffff";
+      logicalCtx.lineWidth = size;
+      logicalCtx.lineCap = "round";
+      logicalCtx.lineJoin = "round";
+      paintSingleMaskSegment(logicalCtx, from, to, tool, size);
+      if (mirror) paintSingleMaskSegment(logicalCtx, { x: W - from.x, y: from.y }, { x: W - to.x, y: to.y }, tool, size);
+      logicalCtx.restore();
+    });
     enforceMaskSafeArea();
   }
 
   function replaceWorkingMask(next) {
     if (!next) return;
-    maskWorkingCanvas = next;
+    if (maskShapeSession) leaveMaskShapeTuner(true);
+    maskWorkingCanvas = next.width === MASK_W && next.height === MASK_H ? next : normalizeStoredMaskCanvas(next);
     enforceMaskSafeArea();
+  }
+
+  function maskAlphaBounds(source = maskWorkingCanvas) {
+    if (!source) return null;
+    const data = source.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(0, 0, MASK_W, MASK_H).data;
+    let minX = MASK_W;
+    let minY = MASK_H;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < MASK_H; y++) {
+      for (let x = 0; x < MASK_W; x++) {
+        if (!data[(y * MASK_W + x) * 4 + 3]) continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+    return maxX < minX ? null : {
+      minX: minX / MASK_SCALE,
+      minY: minY / MASK_SCALE,
+      maxX: maxX / MASK_SCALE,
+      maxY: maxY / MASK_SCALE
+    };
+  }
+
+  function alignWorkingMask(kind) {
+    if (!maskWorkingCanvas) return false;
+    leaveMaskShapeTuner(true);
+    const bounds = maskAlphaBounds();
+    if (!bounds) return false;
+    let dx = 0;
+    let dy = 0;
+    if (kind === "center") dx = Math.round((W / 2 - (bounds.minX + bounds.maxX + 1 / MASK_SCALE) / 2) * MASK_SCALE) / MASK_SCALE;
+    else if (kind === "safe") dy = SAFE_TOP - bounds.minY;
+    else if (kind === "bottom") dy = H - 1 / MASK_SCALE - bounds.maxY;
+    applyMaskTransform({ dx, dy });
+    const tip = document.getElementById("sigMaskTip");
+    if (tip) tip.textContent = kind === "center" ? "배경판을 캔버스 가운데에 맞췄어." : kind === "safe" ? "배경판의 첫 픽셀을 84px 안전선에 맞췄어." : "배경판을 캔버스 바닥에 맞췄어.";
+    return true;
   }
 
   function applyMaskTransform({ dx = 0, dy = 0, scaleX = 1, scaleY = 1 } = {}) {
     if (!maskWorkingCanvas) return;
+    leaveMaskShapeTuner(true);
     const source = cloneMaskCanvas(maskWorkingCanvas);
-    const next = createLogicalCanvas();
+    const next = createMaskCanvas();
     const nextCtx = next.getContext("2d", { alpha: true });
     const centerX = W / 2;
     const centerY = 84 + (H - 84) / 2;
-    nextCtx.save();
-    nextCtx.translate(centerX + dx, centerY + dy);
-    nextCtx.scale(scaleX, scaleY);
-    nextCtx.translate(-centerX, -centerY);
-    nextCtx.drawImage(source, 0, 0);
-    nextCtx.restore();
+    withMaskLogicalTransform(nextCtx, logicalCtx => {
+      logicalCtx.translate(centerX + dx, centerY + dy);
+      logicalCtx.scale(scaleX, scaleY);
+      logicalCtx.translate(-centerX, -centerY);
+      drawMaskLogical(logicalCtx, source);
+    });
     replaceWorkingMask(next);
     commitMaskHistory();
     renderMaskEditor();
   }
 
   function writeWorkingMaskAlpha(alpha) {
-    const next = createLogicalCanvas();
+    leaveMaskShapeTuner(true);
+    const next = createMaskCanvas();
     const nextCtx = next.getContext("2d", { alpha: true, willReadFrequently: true });
-    const image = nextCtx.createImageData(W, H);
+    const image = nextCtx.createImageData(MASK_W, MASK_H);
     for (let i = 0, p = 0; i < alpha.length; i++, p += 4) {
       image.data[p] = 255;
       image.data[p + 1] = 255;
       image.data[p + 2] = 255;
-      image.data[p + 3] = i < W * 84 ? 0 : alpha[i];
+      image.data[p + 3] = i < MASK_W * MASK_SAFE_TOP ? 0 : alpha[i];
     }
     nextCtx.putImageData(image, 0, 0);
     replaceWorkingMask(next);
@@ -2257,21 +2917,22 @@
 
   function smoothWorkingMask() {
     const source = captureMaskAlpha();
+    const horizontal = new Float32Array(source.length);
     const next = new Uint8ClampedArray(source.length);
-    const radius = 2;
-    for (let y = 84; y < H; y++) {
-      for (let x = 0; x < W; x++) {
+    const radius = 2 * MASK_SCALE;
+    const diameter = radius * 2 + 1;
+    for (let y = MASK_SAFE_TOP; y < MASK_H; y++) {
+      for (let x = 0; x < MASK_W; x++) {
         let sum = 0;
-        let count = 0;
-        for (let yy = -radius; yy <= radius; yy++) {
-          const sy = clamp(y + yy, 84, H - 1);
-          for (let xx = -radius; xx <= radius; xx++) {
-            const sx = clamp(x + xx, 0, W - 1);
-            sum += source[sy * W + sx];
-            count++;
-          }
-        }
-        next[y * W + x] = Math.round(sum / count);
+        for (let xx = -radius; xx <= radius; xx++) sum += source[y * MASK_W + clamp(x + xx, 0, MASK_W - 1)];
+        horizontal[y * MASK_W + x] = sum / diameter;
+      }
+    }
+    for (let y = MASK_SAFE_TOP; y < MASK_H; y++) {
+      for (let x = 0; x < MASK_W; x++) {
+        let sum = 0;
+        for (let yy = -radius; yy <= radius; yy++) sum += horizontal[clamp(y + yy, MASK_SAFE_TOP, MASK_H - 1) * MASK_W + x];
+        next[y * MASK_W + x] = Math.round(sum / diameter);
       }
     }
     writeWorkingMaskAlpha(next);
@@ -2281,34 +2942,34 @@
 
   function fillWorkingMaskHoles() {
     const alpha = captureMaskAlpha();
-    const seen = new Uint8Array(W * H);
-    const queue = new Int32Array(W * (H - 84));
+    const seen = new Uint8Array(MASK_W * MASK_H);
+    const queue = new Int32Array(MASK_W * (MASK_H - MASK_SAFE_TOP));
     let head = 0;
     let tail = 0;
     const enqueue = index => {
-      if (index < W * 84 || index >= alpha.length || seen[index] || alpha[index] >= 128) return;
+      if (index < MASK_W * MASK_SAFE_TOP || index >= alpha.length || seen[index] || alpha[index] >= 128) return;
       seen[index] = 1;
       queue[tail++] = index;
     };
-    for (let x = 0; x < W; x++) {
-      enqueue(84 * W + x);
-      enqueue((H - 1) * W + x);
+    for (let x = 0; x < MASK_W; x++) {
+      enqueue(MASK_SAFE_TOP * MASK_W + x);
+      enqueue((MASK_H - 1) * MASK_W + x);
     }
-    for (let y = 84; y < H; y++) {
-      enqueue(y * W);
-      enqueue(y * W + W - 1);
+    for (let y = MASK_SAFE_TOP; y < MASK_H; y++) {
+      enqueue(y * MASK_W);
+      enqueue(y * MASK_W + MASK_W - 1);
     }
     while (head < tail) {
       const index = queue[head++];
-      const x = index % W;
-      const y = Math.floor(index / W);
+      const x = index % MASK_W;
+      const y = Math.floor(index / MASK_W);
       if (x > 0) enqueue(index - 1);
-      if (x < W - 1) enqueue(index + 1);
-      if (y > 84) enqueue(index - W);
-      if (y < H - 1) enqueue(index + W);
+      if (x < MASK_W - 1) enqueue(index + 1);
+      if (y > MASK_SAFE_TOP) enqueue(index - MASK_W);
+      if (y < MASK_H - 1) enqueue(index + MASK_W);
     }
     let filled = 0;
-    for (let index = W * 84; index < alpha.length; index++) {
+    for (let index = MASK_W * MASK_SAFE_TOP; index < alpha.length; index++) {
       if (alpha[index] < 128 && !seen[index]) {
         alpha[index] = 255;
         filled++;
@@ -2318,16 +2979,17 @@
     commitMaskHistory();
     renderMaskEditor();
     const tip = document.getElementById("sigMaskTip");
-    if (tip) tip.textContent = filled ? `닫힌 구멍 ${filled.toLocaleString()}px을 메웠어.` : "메울 수 있는 닫힌 구멍이 없어.";
+    if (tip) tip.textContent = filled ? `닫힌 구멍 약 ${Math.round(filled / (MASK_SCALE * MASK_SCALE)).toLocaleString()}px을 메웠어.` : "메울 수 있는 닫힌 구멍이 없어.";
   }
 
   function removeWorkingMaskSpecks() {
     const alpha = captureMaskAlpha();
-    const seen = new Uint8Array(W * H);
-    const threshold = Math.round(clamp(document.getElementById("sigMaskSpeckSize")?.value || 28, 4, 300));
+    const seen = new Uint8Array(MASK_W * MASK_H);
+    const logicalThreshold = Math.round(clamp(document.getElementById("sigMaskSpeckSize")?.value || 28, 4, 300));
+    const threshold = logicalThreshold * MASK_SCALE * MASK_SCALE;
     let removedPixels = 0;
     let removedGroups = 0;
-    for (let start = W * 84; start < alpha.length; start++) {
+    for (let start = MASK_W * MASK_SAFE_TOP; start < alpha.length; start++) {
       if (seen[start] || alpha[start] < 32) continue;
       const component = [];
       const queue = [start];
@@ -2335,15 +2997,15 @@
       for (let head = 0; head < queue.length; head++) {
         const index = queue[head];
         component.push(index);
-        const x = index % W;
-        const y = Math.floor(index / W);
+        const x = index % MASK_W;
+        const y = Math.floor(index / MASK_W);
         for (let yy = -1; yy <= 1; yy++) {
           for (let xx = -1; xx <= 1; xx++) {
             if (!xx && !yy) continue;
             const nx = x + xx;
             const ny = y + yy;
-            if (nx < 0 || nx >= W || ny < 84 || ny >= H) continue;
-            const next = ny * W + nx;
+            if (nx < 0 || nx >= MASK_W || ny < MASK_SAFE_TOP || ny >= MASK_H) continue;
+            const next = ny * MASK_W + nx;
             if (!seen[next] && alpha[next] >= 32) {
               seen[next] = 1;
               queue.push(next);
@@ -2361,15 +3023,19 @@
     commitMaskHistory();
     renderMaskEditor();
     const tip = document.getElementById("sigMaskTip");
-    if (tip) tip.textContent = removedGroups ? `작은 점 ${removedGroups}개 · ${removedPixels}px을 정리했어.` : `${threshold}px 이하의 떨어진 작은 점이 없어.`;
+    if (tip) tip.textContent = removedGroups ? `작은 점 ${removedGroups}개 · 약 ${Math.round(removedPixels / (MASK_SCALE * MASK_SCALE))}px을 정리했어.` : `${logicalThreshold}px 이하의 떨어진 작은 점이 없어.`;
   }
 
   function readMaskLibrary() {
     try {
-      const parsed = JSON.parse(localStorage.getItem(MASK_LIBRARY_KEY) || "[]");
+      const v2Raw = localStorage.getItem(MASK_LIBRARY_KEY);
+      const parsed = JSON.parse(v2Raw || "[]");
+      const legacy = JSON.parse(localStorage.getItem(MASK_LIBRARY_LEGACY_KEY) || "[]");
       return Array.from({ length: MASK_LIBRARY_SLOTS }, (_, index) => {
-        const item = parsed[index];
-        return item && typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:image/png") ? item : null;
+        const v2OwnsSlot = Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, index);
+        const item = v2OwnsSlot ? parsed[index] : legacy[index];
+        if (!item || typeof item.dataUrl !== "string" || !item.dataUrl.startsWith("data:image/png")) return null;
+        return Object.assign({}, item, { legacy: !v2OwnsSlot });
       });
     } catch (error) {
       const tip = document.getElementById("sigMaskTip");
@@ -2389,16 +3055,46 @@
     }
   }
 
-  function imageFromDataUrl(dataUrl) {
+  async function migrateLegacyMaskLibrary() {
+    if (localStorage.getItem(MASK_LIBRARY_KEY) || !localStorage.getItem(MASK_LIBRARY_LEGACY_KEY)) return false;
+    const items = readMaskLibrary();
+    const migrated = [];
+    try {
+      for (const item of items) {
+        if (!item) {
+          migrated.push(null);
+          continue;
+        }
+        const image = await imageFromDataUrl(item.dataUrl);
+        const mask = normalizeStoredMaskCanvas(image);
+        migrated.push({
+          dataUrl: mask.toDataURL("image/png"),
+          width: MASK_W,
+          height: MASK_H,
+          scale: MASK_SCALE,
+          savedAt: Number(item.savedAt) || Date.now()
+        });
+      }
+      // Only remove v1 after the complete promoted library was committed.
+      if (!writeMaskLibrary(migrated)) return false;
+      localStorage.removeItem(MASK_LIBRARY_LEGACY_KEY);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function imageFromDataUrl(dataUrl, errorMessage = "이미지 데이터를 읽지 못했어.") {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("저장된 모양을 읽지 못했어."));
+      img.onerror = () => reject(new Error(errorMessage));
       img.src = dataUrl;
     });
   }
 
   async function refreshMaskLibrary() {
+    await migrateLegacyMaskLibrary();
     const items = readMaskLibrary();
     const slots = document.querySelectorAll("[data-mask-slot]");
     for (const slot of slots) {
@@ -2423,14 +3119,7 @@
       if (!item) continue;
       try {
         const img = await imageFromDataUrl(item.dataUrl);
-        const colorCanvas = document.createElement("canvas");
-        colorCanvas.width = W;
-        colorCanvas.height = H;
-        const colorCtx = colorCanvas.getContext("2d", { alpha: true });
-        colorCtx.drawImage(img, 0, 0, W, H);
-        colorCtx.globalCompositeOperation = "source-in";
-        colorCtx.fillStyle = "#ef6d97";
-        colorCtx.fillRect(0, 0, W, H);
+        const colorCanvas = tintMask(normalizeStoredMaskCanvas(img), "#ef6d97");
         thumbCtx.drawImage(colorCanvas, 0, 0, canvasThumb.width, canvasThumb.height);
       } catch (error) {
         if (label) label.textContent = `${index + 1}번 · 손상됨`;
@@ -2442,7 +3131,13 @@
     if (!maskWorkingCanvas) return;
     const items = readMaskLibrary();
     try {
-      items[index] = { dataUrl: maskWorkingCanvas.toDataURL("image/png"), savedAt: Date.now() };
+      items[index] = {
+        dataUrl: maskWorkingCanvas.toDataURL("image/png"),
+        width: MASK_W,
+        height: MASK_H,
+        scale: MASK_SCALE,
+        savedAt: Date.now()
+      };
       if (writeMaskLibrary(items)) {
         refreshMaskLibrary();
         const tip = document.getElementById("sigMaskTip");
@@ -2459,9 +3154,7 @@
     if (!item) return;
     try {
       const img = await imageFromDataUrl(item.dataUrl);
-      const next = createLogicalCanvas();
-      next.getContext("2d", { alpha: true }).drawImage(img, 0, 0, W, H);
-      replaceWorkingMask(alphaMaskFromCanvas(next));
+      replaceWorkingMask(normalizeStoredMaskCanvas(img));
       commitMaskHistory();
       renderMaskEditor();
       const tip = document.getElementById("sigMaskTip");
@@ -2480,17 +3173,42 @@
 
   function bindMaskStudio() {
     ["sigMaskOpen", "sigMaskOpenTop"].forEach(id => document.getElementById(id)?.addEventListener("click", openMaskStudio));
-    ["sigMaskClose", "sigMaskCancel"].forEach(id => document.getElementById(id)?.addEventListener("click", () => closeMaskStudio(false)));
+    ["sigMaskClose", "sigMaskCancel"].forEach(id => document.getElementById(id)?.addEventListener("click", () => { void closeMaskStudio(false); }));
     document.getElementById("sigMaskApply").addEventListener("click", applyMaskStudio);
+    document.getElementById("sigMaskShapeConfirm").addEventListener("click", confirmMaskShapeParameters);
+    document.getElementById("sigMaskShapeReset").addEventListener("click", resetMaskShapeParameters);
+    document.querySelectorAll("[data-mask-shape-param]").forEach(input => {
+      input.addEventListener("input", () => previewMaskShapeParameter(input.dataset.maskShapeParam || input.dataset.maskShapeNumber, input.value));
+      input.addEventListener("change", () => previewMaskShapeParameter(input.dataset.maskShapeParam || input.dataset.maskShapeNumber, input.value));
+    });
+    document.querySelectorAll("[data-mask-shape-number]").forEach(input => {
+      let editPending = false;
+      input.addEventListener("input", () => { editPending = true; });
+      const commit = () => {
+        editPending = false;
+        previewMaskShapeParameter(input.dataset.maskShapeNumber, input.value);
+      };
+      input.addEventListener("change", commit);
+      input.addEventListener("blur", () => {
+        if (editPending) commit();
+      });
+      input.addEventListener("keydown", event => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        input.blur();
+      });
+    });
     document.getElementById("sigMaskUndo").addEventListener("click", maskUndo);
     document.getElementById("sigMaskRedo").addEventListener("click", maskRedo);
     document.getElementById("sigMaskClear").addEventListener("click", () => {
       if (!maskWorkingCanvas) return;
-      maskWorkingCanvas.getContext("2d").clearRect(0, 0, W, H);
+      leaveMaskShapeTuner(true);
+      maskWorkingCanvas.getContext("2d").clearRect(0, 0, MASK_W, MASK_H);
       commitMaskHistory();
       renderMaskEditor();
     });
     document.getElementById("sigMaskReset").addEventListener("click", () => {
+      leaveMaskShapeTuner(true);
       maskWorkingCanvas = createMaskSeed("straight");
       commitMaskHistory();
       renderMaskEditor();
@@ -2520,6 +3238,9 @@
     document.getElementById("sigMaskScaleDown").addEventListener("click", () => applyMaskTransform({ scaleX: .94, scaleY: .94 }));
     document.getElementById("sigMaskScaleUp").addEventListener("click", () => applyMaskTransform({ scaleX: 1.06, scaleY: 1.06 }));
     document.getElementById("sigMaskFlipX").addEventListener("click", () => applyMaskTransform({ scaleX: -1 }));
+    document.getElementById("sigMaskAlignCenter").addEventListener("click", () => alignWorkingMask("center"));
+    document.getElementById("sigMaskAlignSafe").addEventListener("click", () => alignWorkingMask("safe"));
+    document.getElementById("sigMaskAlignBottom").addEventListener("click", () => alignWorkingMask("bottom"));
     document.getElementById("sigMaskSmooth").addEventListener("click", smoothWorkingMask);
     document.getElementById("sigMaskFillHoles").addEventListener("click", fillWorkingMaskHoles);
     document.getElementById("sigMaskRemoveSpecks").addEventListener("click", removeWorkingMaskSpecks);
@@ -2547,6 +3268,7 @@
     maskEditorCanvas.addEventListener("pointerdown", event => {
       if (maskGesture || event.isPrimary === false || (event.pointerType === "mouse" && event.button !== 0)) return;
       event.preventDefault();
+      leaveMaskShapeTuner(true);
       const rawPoint = editorRawPoint(event);
       if (rawPoint.x < 0 || rawPoint.x > W || rawPoint.y < 84 || rawPoint.y > H) {
         const tip = document.getElementById("sigMaskTip");
@@ -2601,9 +3323,9 @@
               ? "변화 없음 · ‘깎기’는 분홍색 배경판 위에서 사용해줘."
               : "모양이 이전과 같아. 조금 다른 위치에 다시 그려줘.";
         } else if (completedGesture.tool === "brush") {
-          tip.textContent = `더하기 완료 · ${delta.added.toLocaleString()}px 추가됨 · Ctrl+Z로 되돌릴 수 있어.`;
+          tip.textContent = `더하기 완료 · 약 ${Math.round(delta.added / (MASK_SCALE * MASK_SCALE)).toLocaleString()}px 추가됨 · Ctrl+Z로 되돌릴 수 있어.`;
         } else if (completedGesture.tool === "eraser") {
-          tip.textContent = `깎기 완료 · ${delta.removed.toLocaleString()}px 제거됨 · Ctrl+Z로 되돌릴 수 있어.`;
+          tip.textContent = `깎기 완료 · 약 ${Math.round(delta.removed / (MASK_SCALE * MASK_SCALE)).toLocaleString()}px 제거됨 · Ctrl+Z로 되돌릴 수 있어.`;
         } else if (completedGesture.tool === "topline") {
           tip.textContent = "윗모양 적용 완료 · 방금 보라색 가이드 아래가 배경판으로 바뀌었어.";
         } else {
@@ -2663,7 +3385,7 @@
       if (!file) return;
       try {
         const img = await imageFromFile(file);
-        maskWorkingCanvas = alphaMaskFromCanvas(fitImageToCanvas(img));
+        maskWorkingCanvas = fitImageToMaskCanvas(img);
         enforceMaskSafeArea();
         commitMaskHistory();
         renderMaskEditor();
@@ -2673,7 +3395,7 @@
       event.currentTarget.value = "";
     });
     document.getElementById("sigMaskSave").addEventListener("click", () => {
-      maskWorkingCanvas.toBlob(blob => blob && downloadBlob(blob, "sig-background-mask-293x248.png"), "image/png");
+      maskWorkingCanvas.toBlob(blob => blob && downloadBlob(blob, `sig-background-mask-${MASK_W}x${MASK_H}.png`), "image/png");
     });
     document.addEventListener("keydown", event => {
       const modal = document.getElementById("sigMaskStudio");
@@ -2693,7 +3415,7 @@
       }
       if (key === "escape") {
         event.preventDefault();
-        closeMaskStudio(false);
+        void closeMaskStudio(false);
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -2816,11 +3538,13 @@
     c.drawImage(img, x + (width - dw) / 2 + offsetX, y + (height - dh) / 2 + offsetY, dw, dh);
   }
 
-  function drawImageContainBottom(c, img, x, y, width, height, scale = 1, offsetX = 0, offsetY = 0) {
-    if (!img || !img.naturalWidth) return;
-    const contain = Math.min(width / img.naturalWidth, height / img.naturalHeight) * scale;
-    const dw = img.naturalWidth * contain;
-    const dh = img.naturalHeight * contain;
+  function drawImageContainBottom(c, img, x = 0, y = 0, width = W, height = H, scale = 1, offsetX = 0, offsetY = 0) {
+    if (!img || !(img.naturalWidth || img.width)) return;
+    const imageWidth = img.naturalWidth || img.width;
+    const imageHeight = img.naturalHeight || img.height;
+    const contain = Math.min(width / imageWidth, height / imageHeight) * scale;
+    const dw = imageWidth * contain;
+    const dh = imageHeight * contain;
     c.drawImage(img, x + (width - dw) / 2 + offsetX, y + height - dh + offsetY, dw, dh);
   }
 
@@ -3150,9 +3874,18 @@
   }
 
   function drawBackgroundPaint(c, bg) {
-    if (bg.maskPaintMode === "original" && bg.customSourceCanvas) {
-      c.drawImage(bg.customSourceCanvas, 0, 0, W, H);
-      return;
+    if (bg.maskPaintMode === "original") {
+      // 위플랩은 고해상도 작업면에 원본을 직접 재렌더한다. 293×248 중간 캔버스를
+      // 먼저 확대하면 마스크만 2×여도 배경판 그림의 세부가 이미 손실된다.
+      if (bg.customImg && (bg.customImg.naturalWidth || bg.customImg.width)) {
+        drawImageContainBottom(c, bg.customImg, 0, 0, W, H);
+        return;
+      }
+      // 구형 프로젝트처럼 원본 이미지가 없는 경우에만 저장된 논리 캔버스로 폴백한다.
+      if (bg.customSourceCanvas) {
+        c.drawImage(bg.customSourceCanvas, 0, 0, W, H);
+        return;
+      }
     }
     if (bg.maskPaintMode === "solid" || bg.maskPaintMode === "recolor") {
       c.fillStyle = bg.maskFillColor || bg.secondary;
@@ -3227,13 +3960,13 @@
         }
         drawExpandedMask(c, mask, bg.maskStrokeColor, bg.maskStrokeWidth);
       }
-      const paint = createLogicalCanvas();
+      const paint = createMaskCanvas();
       const paintCtx = paint.getContext("2d", { alpha: true });
-      drawBackgroundPaint(paintCtx, bg);
+      withMaskLogicalTransform(paintCtx, logicalCtx => drawBackgroundPaint(logicalCtx, bg));
       paintCtx.globalCompositeOperation = "destination-in";
-      paintCtx.drawImage(mask, 0, 0);
+      paintCtx.drawImage(mask, 0, 0, mask.width, mask.height, 0, 0, MASK_W, MASK_H);
       paintCtx.globalCompositeOperation = "source-over";
-      c.drawImage(paint, 0, 0);
+      drawMaskLogical(c, paint);
       c.restore();
       return;
     }
@@ -3612,8 +4345,8 @@
     c.textBaseline = "middle";
     c.lineJoin = "round";
     c.lineCap = "round";
-    c.font = `${layer.size}px "SigJua","Arial Rounded MT Bold",sans-serif`;
-    const lineH = layer.size * .83;
+    c.font = `${layer.size}px ${numberStyle ? '"SigJua","Arial Rounded MT Bold",sans-serif' : phraseFontFamily(layer)}`;
+    const lineH = layer.size * (numberStyle ? .83 : phraseLineHeight(layer));
     const startY = -((lines.length - 1) * lineH) / 2;
     lines.forEach((line, i) => {
       const y = startY + i * lineH;
@@ -3627,21 +4360,29 @@
         c.fillStyle = "#ff0000";
         c.fillText(line, 0, y);
       } else {
-        c.shadowColor = layer.shadow || "rgba(0,0,0,.28)";
-        c.shadowBlur = 0;
-        c.shadowOffsetX = Math.max(1, layer.size * .055);
-        c.shadowOffsetY = Math.max(1, layer.size * .07);
-        c.strokeStyle = layer.shadow || "#6b3451";
-        c.lineWidth = Math.max(4, layer.size * .2);
-        c.strokeText(line, 0, y);
+        if (layer.outerStrokeEnabled !== false) {
+          c.shadowColor = layer.shadow || "rgba(0,0,0,.28)";
+          c.shadowBlur = 0;
+          c.shadowOffsetX = Math.max(1, layer.size * .055);
+          c.shadowOffsetY = Math.max(1, layer.size * .07);
+          c.strokeStyle = layer.shadow || "#6b3451";
+          c.lineWidth = phraseStrokeWidth(layer, "outerStrokeWidth", .2);
+          if (c.lineWidth > 0) c.strokeText(line, 0, y);
+        }
         c.shadowColor = "transparent";
-        c.strokeStyle = "#ffffff";
-        c.lineWidth = Math.max(3, layer.size * .14);
-        c.strokeText(line, 0, y);
-        c.strokeStyle = layer.stroke;
-        c.lineWidth = Math.max(1.8, layer.size * .075);
-        c.strokeText(line, 0, y);
-        c.fillStyle = layer.fill;
+        c.shadowOffsetX = 0;
+        c.shadowOffsetY = 0;
+        if (layer.middleStrokeEnabled !== false) {
+          c.strokeStyle = layer.middleStroke || "#ffffff";
+          c.lineWidth = phraseStrokeWidth(layer, "middleStrokeWidth", .14);
+          if (c.lineWidth > 0) c.strokeText(line, 0, y);
+        }
+        if (layer.innerStrokeEnabled !== false) {
+          c.strokeStyle = layer.stroke || "#ff628e";
+          c.lineWidth = phraseStrokeWidth(layer, "innerStrokeWidth", .075);
+          if (c.lineWidth > 0) c.strokeText(line, 0, y);
+        }
+        c.fillStyle = layer.fill || "#ffffff";
         c.fillText(line, 0, y);
       }
     });
@@ -3804,14 +4545,19 @@
   function textLocalBounds(target, numberStyle = false) {
     const measureCtx = ensureLayerHitSurface();
     const lines = String(target.text || "").split(/\\n|\n/);
-    const lineHeight = target.size * .83;
+    const lineHeight = target.size * (numberStyle ? .83 : phraseLineHeight(target));
     const startY = -((lines.length - 1) * lineHeight) / 2;
-    const strokePad = numberStyle ? 6 : Math.max(3, target.size * .11);
-    const shadowX = numberStyle ? 0 : Math.max(1, target.size * .055);
-    const shadowY = numberStyle ? 0 : Math.max(1, target.size * .07);
+    const phraseWidths = numberStyle ? [] : [
+      target.innerStrokeEnabled === false ? 0 : phraseStrokeWidth(target, "innerStrokeWidth", .075),
+      target.middleStrokeEnabled === false ? 0 : phraseStrokeWidth(target, "middleStrokeWidth", .14),
+      target.outerStrokeEnabled === false ? 0 : phraseStrokeWidth(target, "outerStrokeWidth", .2)
+    ];
+    const strokePad = numberStyle ? 6 : Math.max(1, ...phraseWidths.map(width => width / 2 + 1));
+    const shadowX = numberStyle || target.outerStrokeEnabled === false ? 0 : Math.max(1, target.size * .055);
+    const shadowY = numberStyle || target.outerStrokeEnabled === false ? 0 : Math.max(1, target.size * .07);
     measureCtx.save();
     measureCtx.setTransform(1, 0, 0, 1, 0, 0);
-    measureCtx.font = `${target.size}px "SigJua","Arial Rounded MT Bold",sans-serif`;
+    measureCtx.font = `${target.size}px ${numberStyle ? '"SigJua","Arial Rounded MT Bold",sans-serif' : phraseFontFamily(target)}`;
     measureCtx.textAlign = "center";
     measureCtx.textBaseline = "middle";
     let left = 0;
@@ -3885,18 +4631,41 @@
     return { x: dx * Math.cos(angle) - dy * Math.sin(angle), y: dx * Math.sin(angle) + dy * Math.cos(angle) };
   }
 
+  function frameWorldPoint(frame, localX, localY) {
+    const angle = (frame.rotation || 0) * Math.PI / 180;
+    return {
+      x: frame.cx + localX * Math.cos(angle) - localY * Math.sin(angle),
+      y: frame.cy + localX * Math.sin(angle) + localY * Math.cos(angle)
+    };
+  }
+
+  function resizeHandlePoint(ref) {
+    if (!canResizeLayer(ref)) return null;
+    const frame = selectionFrame(ref);
+    if (!frame) return null;
+    const corner = frameWorldPoint(frame, frame.width / 2, frame.height / 2);
+    // 선택 박스가 캔버스 밖으로 나가도 손잡이는 항상 화면 안에 남긴다.
+    return { x: clamp(corner.x, 6, W - 6), y: clamp(corner.y, 6, H - 6) };
+  }
+
   function resizeHandleHit(ref, point) {
-    if (!canResizeLayer(ref)) return false;
+    const handle = resizeHandlePoint(ref);
+    return !!handle && Math.hypot(point.x - handle.x, point.y - handle.y) <= 7;
+  }
+
+  function selectionFrameContains(ref, point) {
+    if (!ref || layerLocked(ref)) return false;
     const frame = selectionFrame(ref);
     if (!frame) return false;
     const local = frameLocalPoint(frame, point);
-    return Math.hypot(local.x - frame.width / 2, local.y - frame.height / 2) <= 7;
+    return Math.abs(local.x) <= frame.width / 2 && Math.abs(local.y) <= frame.height / 2;
   }
 
   function drawSelection(c) {
     const frame = selectionFrame();
     if (!frame) return;
     const locked = layerLocked(frame.ref);
+    const handle = !locked ? resizeHandlePoint(frame.ref) : null;
     c.save();
     c.translate(frame.cx, frame.cy);
     c.rotate(frame.rotation * Math.PI / 180);
@@ -3911,43 +4680,106 @@
       c.textAlign = "left";
       c.textBaseline = "bottom";
       c.fillText("잠금", -frame.width / 2 + 3, -frame.height / 2 - 2);
-    } else if (canResizeLayer(frame.ref)) {
+    }
+    c.restore();
+    if (handle) {
+      c.save();
       c.beginPath();
-      c.arc(frame.width / 2, frame.height / 2, 5, 0, Math.PI * 2);
+      c.arc(handle.x, handle.y, 5, 0, Math.PI * 2);
       c.fillStyle = "#ffffff";
       c.fill();
       c.lineWidth = 2;
       c.strokeStyle = "#3f2a9d";
       c.stroke();
+      c.restore();
+    }
+  }
+
+  function frameAxisBounds(frame) {
+    const radians = (frame.rotation || 0) * Math.PI / 180;
+    const halfWidth = Math.abs(Math.cos(radians)) * frame.width / 2 + Math.abs(Math.sin(radians)) * frame.height / 2;
+    const halfHeight = Math.abs(Math.sin(radians)) * frame.width / 2 + Math.abs(Math.cos(radians)) * frame.height / 2;
+    return { left: frame.cx - halfWidth, right: frame.cx + halfWidth, top: frame.cy - halfHeight, bottom: frame.cy + halfHeight };
+  }
+
+  function nearestSnap(candidates) {
+    return candidates
+      .filter(candidate => Math.abs(candidate.delta) <= SNAP_DISTANCE)
+      .sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta) || a.priority - b.priority)[0] || null;
+  }
+
+  function snapMovedLayer(ref, bypass = false) {
+    activeSnapGuides = null;
+    if (!state.snapEnabled || bypass) return null;
+    const target = layerTarget(ref);
+    const frame = selectionFrame(ref);
+    if (!target || !frame) return null;
+    const bounds = frameAxisBounds(frame);
+    const xSnap = nearestSnap([
+      { delta: W / 2 - frame.cx, line: W / 2, label: "가운데", priority: 0 },
+      { delta: -bounds.left, line: 0, label: "왼쪽 끝", priority: 1 },
+      { delta: W - bounds.right, line: W, label: "오른쪽 끝", priority: 1 }
+    ]);
+    const ySnap = nearestSnap([
+      { delta: 84 - bounds.top, line: 84, label: "84px 안전선", priority: 0 },
+      { delta: 84 - bounds.bottom, line: 84, label: "84px 안전선", priority: 1 },
+      { delta: -bounds.top, line: 0, label: "위쪽 끝", priority: 2 },
+      { delta: H - bounds.bottom, line: H, label: "바닥", priority: 2 }
+    ]);
+    if (xSnap) target.x += xSnap.delta;
+    if (ySnap) target.y += ySnap.delta;
+    if (xSnap || ySnap) activeSnapGuides = { x: xSnap, y: ySnap };
+    return activeSnapGuides;
+  }
+
+  function drawActiveSnapGuides(c) {
+    if (!activeSnapGuides) return;
+    c.save();
+    c.setLineDash([2, 2]);
+    c.strokeStyle = "rgba(28,153,119,.95)";
+    c.fillStyle = "rgba(20,116,91,.96)";
+    c.lineWidth = 1.2;
+    c.font = '8px "SigJua",Arial,sans-serif';
+    if (activeSnapGuides.x) {
+      const x = clamp(activeSnapGuides.x.line, .5, W - .5);
+      c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke();
+      c.textAlign = "left"; c.textBaseline = "top"; c.fillText(activeSnapGuides.x.label, clamp(x + 3, 3, W - 48), 4);
+    }
+    if (activeSnapGuides.y) {
+      const y = clamp(activeSnapGuides.y.line, .5, H - .5);
+      c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke();
+      c.textAlign = "right"; c.textBaseline = "bottom"; c.fillText(activeSnapGuides.y.label, W - 4, clamp(y - 3, 9, H - 3));
     }
     c.restore();
   }
 
   function drawGuides(c) {
-    if (!state.showGuides) return;
-    c.save();
-    c.setLineDash([3, 4]);
-    c.strokeStyle = "rgba(42,37,49,.28)";
-    c.lineWidth = .8;
-    c.beginPath();
-    c.moveTo(0, 84);
-    c.lineTo(W, 84);
-    c.stroke();
-    c.setLineDash([]);
-    c.fillStyle = "rgba(42,37,49,.62)";
-    c.font = '8px Arial,sans-serif';
-    c.textAlign = "left";
-    c.fillText("권장 투명 상단 84px", 5, 79);
-    c.strokeStyle = "rgba(236,37,55,.55)";
-    c.lineWidth = 1.2;
-    c.beginPath();
-    c.moveTo(0, H - .5);
-    c.lineTo(W, H - .5);
-    c.stroke();
-    c.fillStyle = "rgba(191,20,36,.8)";
-    c.textAlign = "right";
-    c.fillText("하단 수평 고정", W - 5, H - 5);
-    c.restore();
+    if (state.showGuides) {
+      c.save();
+      c.setLineDash([3, 4]);
+      c.strokeStyle = "rgba(42,37,49,.28)";
+      c.lineWidth = .8;
+      c.beginPath();
+      c.moveTo(0, 84);
+      c.lineTo(W, 84);
+      c.stroke();
+      c.setLineDash([]);
+      c.fillStyle = "rgba(42,37,49,.62)";
+      c.font = '8px Arial,sans-serif';
+      c.textAlign = "left";
+      c.fillText("필수 투명영역 84px · 저장 시 잘림", 5, 79);
+      c.strokeStyle = "rgba(236,37,55,.55)";
+      c.lineWidth = 1.2;
+      c.beginPath();
+      c.moveTo(0, H - .5);
+      c.lineTo(W, H - .5);
+      c.stroke();
+      c.fillStyle = "rgba(191,20,36,.8)";
+      c.textAlign = "right";
+      c.fillText("하단 수평 고정", W - 5, H - 5);
+      c.restore();
+    }
+    drawActiveSnapGuides(c);
   }
 
   function renderTo(c, options = {}) {
@@ -3964,6 +4796,9 @@
       drawOutlinedText(c, state.num1.text, state.num1, true);
       drawOutlinedText(c, state.num2.text, state.num2, true);
     }
+    // 메인 작업면은 모바일 기준이다. 저장 때 강제로 비우는 84px을 화면에서도
+    // 똑같이 비워 WYSIWYG를 지키고, 선택선/가이드만 그 위에 안내로 표시한다.
+    if (preview) c.clearRect(0, 0, W, SAFE_TOP);
     if (preview) drawGuides(c);
     if (preview && showSelection) drawSelection(c);
     c.restore();
@@ -3980,9 +4815,108 @@
     if (renderQueued) return;
     renderQueued = true;
     requestAnimationFrame(render);
+    requestOutputPreview();
+  }
+
+  function syncOutputProfileControls() {
+    if (!OUTPUT_PROFILE_TYPES.includes(outputPreviewType)) outputPreviewType = "mobile";
+    const profile = outputProfile(outputPreviewType);
+    const limits = OUTPUT_PROFILE_LIMITS[outputPreviewType];
+    const type = document.getElementById("sigOutputType");
+    if (type) type.value = outputPreviewType;
+    [["sigOutputXRange", "sigOutputX", "x"], ["sigOutputYRange", "sigOutputY", "y"], ["sigOutputScaleRange", "sigOutputScale", "scale"]].forEach(([rangeId, numberId, key]) => {
+      const range = document.getElementById(rangeId);
+      const number = document.getElementById(numberId);
+      const limit = key === "x" ? limits.x : key === "y" ? limits.y : 1.5;
+      const min = key === "scale" ? .5 : -limit;
+      const max = limit;
+      [range, number].forEach(input => {
+        if (!input) return;
+        input.min = String(min);
+        input.max = String(max);
+        input.value = String(profile[key]);
+      });
+    });
+    const status = document.getElementById("sigOutputStatus");
+    if (status) status.textContent = outputProfileIsIdentity(profile)
+      ? "기본값 · 원본 픽셀 유지"
+      : `${OUTPUT_PROFILE_LABELS[outputPreviewType]} · X ${profile.x}, Y ${profile.y}, ${Math.round(profile.scale * 100)}%`;
+  }
+
+  function outputCanvasForPreview(type = outputPreviewType) {
+    if (type === "pc") return makePcCanvas();
+    if (type === "weflab") return makeWeflabCanvas();
+    return makeMasterCanvas();
+  }
+
+  function renderOutputPreview() {
+    outputPreviewTimer = 0;
+    const section = document.getElementById("sigOutputSection");
+    const preview = document.getElementById("sigOutputPreviewCanvas");
+    if (!section?.open || !preview) return;
+    const source = outputCanvasForPreview(outputPreviewType);
+    preview.width = source.width;
+    preview.height = source.height;
+    const previewCtx = preview.getContext("2d", { alpha: true });
+    previewCtx.clearRect(0, 0, preview.width, preview.height);
+    previewCtx.drawImage(source, 0, 0);
+  }
+
+  function requestOutputPreview(immediate = false) {
+    const section = document.getElementById("sigOutputSection");
+    if (!section?.open) return;
+    if (outputPreviewTimer) clearTimeout(outputPreviewTimer);
+    outputPreviewTimer = setTimeout(renderOutputPreview, immediate ? 0 : 70);
+  }
+
+  function commitOutputProfileEdit() {
+    if (!outputProfileHistoryBefore) return;
+    const before = outputProfileHistoryBefore;
+    outputProfileHistoryBefore = null;
+    commitMainChange(before);
+  }
+
+  function setOutputProfileValue(key, value) {
+    if (!outputProfileHistoryBefore) outputProfileHistoryBefore = beginMainChange();
+    const next = Object.assign({}, outputProfile(outputPreviewType), { [key]: Number(value) });
+    state.outputProfiles[outputPreviewType] = normalizeOutputProfile(outputPreviewType, next);
+    syncOutputProfileControls();
+    requestRender();
+  }
+
+  function resetOutputProfile() {
+    commitOutputProfileEdit();
+    const before = beginMainChange();
+    state.outputProfiles[outputPreviewType] = { x: 0, y: 0, scale: 1 };
+    syncOutputProfileControls();
+    requestRender();
+    commitMainChange(before);
+  }
+
+  function syncPhraseStyleControls() {
+    const lineHeightValue = document.getElementById("sigPhraseLineHeightValue");
+    if (lineHeightValue) lineHeightValue.textContent = `${Math.round(phraseLineHeight(state.phrase) * 100)}%`;
+    const rows = [
+      ["sigPhraseInnerEnabled", "sigPhraseStroke", "sigPhraseInnerWidth", "sigPhraseInnerWidthValue", "innerStrokeEnabled", "innerStrokeWidth", .075],
+      ["sigPhraseMiddleEnabled", "sigPhraseMiddleStroke", "sigPhraseMiddleWidth", "sigPhraseMiddleWidthValue", "middleStrokeEnabled", "middleStrokeWidth", .14],
+      ["sigPhraseOuterEnabled", "sigPhraseShadow", "sigPhraseOuterWidth", "sigPhraseOuterWidthValue", "outerStrokeEnabled", "outerStrokeWidth", .2]
+    ];
+    rows.forEach(([toggleId, colorId, widthId, outputId, enabledKey, widthKey, fallback]) => {
+      const enabled = state.phrase[enabledKey] !== false;
+      const toggle = document.getElementById(toggleId);
+      const color = document.getElementById(colorId);
+      const width = document.getElementById(widthId);
+      const output = document.getElementById(outputId);
+      if (toggle) toggle.checked = enabled;
+      if (color) color.disabled = !enabled;
+      if (width) width.disabled = !enabled;
+      if (output) output.textContent = `${Math.round(phraseStrokeRatio(state.phrase, widthKey, fallback) * 1000) / 10}%`;
+      toggle?.closest(".sig-outline-row")?.classList.toggle("is-disabled", !enabled);
+    });
   }
 
   function syncControls() {
+    renderPhraseFontOptions();
     const customBgOption = document.querySelector('#sigBgTexture option[value="custom"]');
     if (customBgOption) customBgOption.disabled = !state.background.customImg;
     const alphaMaskOption = document.querySelector('#sigBgMask option[value="alpha-custom"]');
@@ -3998,6 +4932,17 @@
     }
     const maskStatus = document.getElementById("sigMaskStatus");
     if (maskStatus) maskStatus.textContent = isAlphaMask() ? "내 알파 마스크 적용 중 · 언제든 다시 편집 가능" : "일자 기본판 · 윗선 펜과 브러시로 자유롭게 수정";
+    const straightOnly = !isAlphaMask();
+    const bgTop = document.getElementById("sigBgTop");
+    const autoFit = document.getElementById("sigAutoFit");
+    if (bgTop) {
+      bgTop.disabled = !straightOnly;
+      bgTop.title = straightOnly ? "일자 배경판 시작선" : "직접 그린 모양은 배경판 작업실에서 수정해.";
+    }
+    if (autoFit) {
+      autoFit.disabled = !straightOnly;
+      autoFit.title = straightOnly ? "캐릭터와 문구에 맞춰 일자 시작선을 조정" : "직접 그린 모양은 배경판 작업실에서 수정해.";
+    }
     const map = {
       sigPlacement: state.placementIndex,
       sigCharX: state.character.x,
@@ -4009,8 +4954,15 @@
       sigPhraseY: state.phrase.y,
       sigPhraseSize: state.phrase.size,
       sigPhraseRot: state.phrase.rot,
+      sigPhraseFont: state.phrase.fontKey,
+      sigPhraseLineHeight: phraseLineHeight(state.phrase) * 100,
       sigPhraseFill: state.phrase.fill,
       sigPhraseStroke: state.phrase.stroke,
+      sigPhraseInnerWidth: phraseStrokeRatio(state.phrase, "innerStrokeWidth", .075) * 100,
+      sigPhraseMiddleStroke: state.phrase.middleStroke || "#ffffff",
+      sigPhraseMiddleWidth: phraseStrokeRatio(state.phrase, "middleStrokeWidth", .14) * 100,
+      sigPhraseShadow: state.phrase.shadow,
+      sigPhraseOuterWidth: phraseStrokeRatio(state.phrase, "outerStrokeWidth", .2) * 100,
       sigNum1Text: state.num1.text,
       sigNum1X: state.num1.x,
       sigNum1Y: state.num1.y,
@@ -4037,7 +4989,8 @@
       sigBgTintOpacity: state.background.tintOpacity,
       sigBgHue: state.background.hue,
       sigBgSaturation: state.background.saturation,
-      sigBgBrightness: state.background.brightness
+      sigBgBrightness: state.background.brightness,
+      sigExportBaseName: state.exportBaseName || SIG_DEFAULT_EXPORT_BASE
     };
     Object.entries(map).forEach(([id, value]) => {
       const el = document.getElementById(id);
@@ -4048,6 +5001,13 @@
     });
     const charFlip = document.getElementById("sigCharFlip");
     if (charFlip) charFlip.checked = state.character.flip;
+    const snapEnabled = document.getElementById("sigSnapEnabled");
+    if (snapEnabled) snapEnabled.checked = state.snapEnabled !== false;
+    if (stage) stage.classList.toggle("dark", !!state.previewDark);
+    const darkButton = document.getElementById("sigDark");
+    if (darkButton) darkButton.textContent = state.previewDark ? "밝은 화면" : "어두운 화면";
+    const guideButton = document.getElementById("sigGuides");
+    if (guideButton) guideButton.textContent = state.showGuides ? "가이드 숨김" : "가이드 표시";
     const num2Enable = document.getElementById("sigNum2Enable");
     if (num2Enable) num2Enable.checked = state.num2.enabled;
     const num2Fields = document.getElementById("sigNum2Fields");
@@ -4059,12 +5019,40 @@
       outerFields.style.opacity = state.background.maskDoubleOutline ? "1" : ".42";
       outerFields.style.pointerEvents = state.background.maskDoubleOutline ? "auto" : "none";
     }
+    syncPhraseStyleControls();
     syncLayerLockControls();
     syncPropControls();
+    syncOutputProfileControls();
   }
 
   function selectedProp() {
     return state.selected.kind === "prop" ? state.props[state.selected.index] : null;
+  }
+
+  function selectedLayerLabel(ref = state.selected) {
+    if (ref.kind === "character") return "캐릭터";
+    if (ref.kind === "phrase") return "문구";
+    if (ref.kind === "num1") return "숫자 1";
+    if (ref.kind === "num2") return "숫자 2";
+    if (ref.kind === "prop") {
+      const prop = state.props[ref.index];
+      return prop ? `소품 · ${propLabels[prop.type] || prop.type}` : "소품 없음";
+    }
+    return "선택 없음";
+  }
+
+  function syncSelectedLayerBar() {
+    const name = document.getElementById("sigSelectedLayerName");
+    const lock = document.getElementById("sigSelectedLayerLock");
+    const target = layerTarget(state.selected);
+    const locked = !!target && layerLocked(state.selected);
+    if (name) name.textContent = selectedLayerLabel();
+    if (lock) {
+      lock.disabled = !target;
+      lock.textContent = locked ? "🔒 잠금 해제" : "🔓 잠금";
+      lock.classList.toggle("is-locked", locked);
+      lock.setAttribute("aria-pressed", String(locked));
+    }
   }
 
   function syncLayerLockControls() {
@@ -4094,6 +5082,7 @@
       const field = document.getElementById(id);
       if (field) field.disabled = !!prop?.locked;
     });
+    syncSelectedLayerBar();
   }
 
   function setLayerLocked(ref, locked) {
@@ -4276,7 +5265,75 @@
     });
   }
 
+  function bindToggle(id, target, key, after) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", () => {
+      const historyBefore = beginMainChange();
+      target[key] = !!el.checked;
+      if (after) after();
+      requestRender();
+      commitMainChange(historyBefore);
+    });
+  }
+
   function bindControls() {
+    bindSigConfirm();
+    document.getElementById("sigUndo").addEventListener("click", mainUndo);
+    document.getElementById("sigRedo").addEventListener("click", mainRedo);
+    document.getElementById("sigSelectedLayerLock").addEventListener("click", () => {
+      if (layerTarget(state.selected)) toggleLayerLocked({ kind: state.selected.kind, index: state.selected.index });
+    });
+    const jumpToLayerList = () => {
+      const target = document.getElementById("sigCoreLayerList")?.closest(".sig-section");
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    ["sigJumpLayers", "sigLayerListJump"].forEach(id => document.getElementById(id)?.addEventListener("click", jumpToLayerList));
+    document.getElementById("sigJumpOutput").addEventListener("click", () => {
+      const section = document.getElementById("sigOutputSection");
+      section.open = true;
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+      syncOutputProfileControls();
+      requestOutputPreview(true);
+    });
+    document.getElementById("sigOutputSection").addEventListener("toggle", event => {
+      if (event.currentTarget.open) {
+        syncOutputProfileControls();
+        requestOutputPreview(true);
+      }
+    });
+    document.getElementById("sigOutputType").addEventListener("change", event => {
+      commitOutputProfileEdit();
+      outputPreviewType = OUTPUT_PROFILE_TYPES.includes(event.currentTarget.value) ? event.currentTarget.value : "mobile";
+      syncOutputProfileControls();
+      requestOutputPreview(true);
+    });
+    [["sigOutputXRange", "x"], ["sigOutputYRange", "y"], ["sigOutputScaleRange", "scale"]].forEach(([id, key]) => {
+      const input = document.getElementById(id);
+      input.addEventListener("input", () => setOutputProfileValue(key, input.value));
+      input.addEventListener("change", commitOutputProfileEdit);
+      input.addEventListener("blur", commitOutputProfileEdit);
+    });
+    [["sigOutputX", "x"], ["sigOutputY", "y"], ["sigOutputScale", "scale"]].forEach(([id, key]) => {
+      const input = document.getElementById(id);
+      let editPending = false;
+      input.addEventListener("input", () => { editPending = true; });
+      const commit = () => {
+        editPending = false;
+        setOutputProfileValue(key, input.value);
+        commitOutputProfileEdit();
+      };
+      input.addEventListener("change", commit);
+      input.addEventListener("blur", () => {
+        if (editPending) commit();
+      });
+      input.addEventListener("keydown", event => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        input.blur();
+      });
+    });
+    document.getElementById("sigOutputReset").addEventListener("click", resetOutputProfile);
     document.getElementById("sigPlacement").addEventListener("change", event => {
       applyPlacement(Number(event.target.value));
     });
@@ -4289,8 +5346,22 @@
     bindValue("sigPhraseY", state.phrase, "y");
     bindValue("sigPhraseSize", state.phrase, "size");
     bindValue("sigPhraseRot", state.phrase, "rot");
+    bindValue("sigPhraseFont", state.phrase, "fontKey", String);
+    bindValue("sigPhraseLineHeight", state.phrase, "lineHeight", value => Number(value) / 100, syncPhraseStyleControls);
     bindValue("sigPhraseFill", state.phrase, "fill", String);
     bindValue("sigPhraseStroke", state.phrase, "stroke", String);
+    bindValue("sigPhraseInnerWidth", state.phrase, "innerStrokeWidth", value => Number(value) / 100, syncPhraseStyleControls);
+    bindValue("sigPhraseMiddleStroke", state.phrase, "middleStroke", String);
+    bindValue("sigPhraseMiddleWidth", state.phrase, "middleStrokeWidth", value => Number(value) / 100, syncPhraseStyleControls);
+    bindValue("sigPhraseShadow", state.phrase, "shadow", String);
+    bindValue("sigPhraseOuterWidth", state.phrase, "outerStrokeWidth", value => Number(value) / 100, syncPhraseStyleControls);
+    bindToggle("sigPhraseInnerEnabled", state.phrase, "innerStrokeEnabled", syncPhraseStyleControls);
+    bindToggle("sigPhraseMiddleEnabled", state.phrase, "middleStrokeEnabled", syncPhraseStyleControls);
+    bindToggle("sigPhraseOuterEnabled", state.phrase, "outerStrokeEnabled", syncPhraseStyleControls);
+    document.getElementById("sigPhraseFontFile").addEventListener("change", loadCustomPhraseFont);
+    document.getElementById("sigPhraseToProp").addEventListener("click", event => cloneTextLayerToProp("phrase", event.currentTarget));
+    document.getElementById("sigNum1ToProp").addEventListener("click", event => cloneTextLayerToProp("num1", event.currentTarget));
+    document.getElementById("sigNum2ToProp").addEventListener("click", event => cloneTextLayerToProp("num2", event.currentTarget));
     bindValue("sigNum1Text", state.num1, "text", value => String(value).replace(/[^\d]/g, "").slice(0, 8));
     bindValue("sigNum1X", state.num1, "x");
     bindValue("sigNum1Y", state.num1, "y");
@@ -4366,8 +5437,6 @@
         state.background.motif = theme.motif || "none";
         state.background.tintOpacity = theme.modern || theme.simple || theme.key.startsWith("flat") ? 0 : 12;
         state.background.pattern = theme.pattern || "none";
-        state.phrase.stroke = theme.accent;
-        state.phrase.shadow = mixHex(theme.accent, "#28222c", .48);
       } else {
         state.background.modern = false;
         state.background.surface = "none";
@@ -4410,6 +5479,7 @@
       state.character.img = null;
       state.character.name = "";
       document.getElementById("sigCharFile").value = "";
+      document.getElementById("sigCharStatus").textContent = "캐릭터를 지웠어.";
       requestRender();
       commitMainChange(historyBefore);
     });
@@ -4420,6 +5490,7 @@
     });
     document.getElementById("sigPropCategoryFilter").addEventListener("change", renderImagePropGallery);
     document.getElementById("sigPropFile").addEventListener("change", loadCustomProps);
+    bindValue("sigExportBaseName", state, "exportBaseName", String);
 
     bindPropControl("sigPropX", "x");
     bindPropControl("sigPropY", "y");
@@ -4448,12 +5519,22 @@
     }));
     document.getElementById("sigDark").addEventListener("click", toggleDark);
     document.getElementById("sigGuides").addEventListener("click", toggleGuides);
+    document.getElementById("sigSnapEnabled").addEventListener("change", event => {
+      const historyBefore = beginMainChange();
+      state.snapEnabled = !!event.currentTarget.checked;
+      activeSnapGuides = null;
+      requestRender();
+      commitMainChange(historyBefore);
+    });
     document.getElementById("sigAutoFit").addEventListener("click", autoFitBackground);
     document.getElementById("sigExportMobile").addEventListener("click", event => exportFiles(["mobile"], event.currentTarget));
     document.getElementById("sigExportPc").addEventListener("click", event => exportFiles(["pc"], event.currentTarget));
     document.getElementById("sigExportBoth").addEventListener("click", event => exportFiles(["mobile", "pc"], event.currentTarget));
     document.getElementById("sigExportWeflab").addEventListener("click", event => exportFiles(["weflab"], event.currentTarget));
     document.getElementById("sigExportAll").addEventListener("click", event => exportFiles(["mobile", "pc", "weflab"], event.currentTarget));
+    document.getElementById("sigProjectSave").addEventListener("click", () => saveSigProject());
+    document.getElementById("sigProjectOpen").addEventListener("click", () => openSigProject());
+    document.getElementById("sigProjectFile").addEventListener("change", loadBrowserSigProjectFile);
     bindMaskStudio();
     bindCanvasInteractions();
   }
@@ -4480,6 +5561,194 @@
       commitMainChange(historyBefore);
       historyBefore = null;
     });
+  }
+
+  function isSupportedFontFile(file) {
+    if (!file) return false;
+    const type = String(file.type || "").toLowerCase();
+    if (["font/ttf", "font/otf", "font/woff", "font/woff2", "application/font-woff", "application/x-font-ttf", "application/x-font-opentype"].includes(type)) return true;
+    return /\.(ttf|otf|woff2?)$/i.test(String(file.name || ""));
+  }
+
+  function fileAsArrayBuffer(file) {
+    if (typeof file?.arrayBuffer === "function") return file.arrayBuffer();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("글꼴 파일을 읽지 못했어."));
+      reader.onload = () => resolve(reader.result);
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function canonicalFontMime(buffer) {
+    const bytes = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+    const magic = Array.from(bytes).map(value => String.fromCharCode(value)).join("");
+    if (bytes.length === 4 && bytes[0] === 0 && bytes[1] === 1 && bytes[2] === 0 && bytes[3] === 0 || magic === "true") return "font/ttf";
+    if (magic === "OTTO") return "font/otf";
+    if (magic === "wOFF") return "font/woff";
+    if (magic === "wOF2") return "font/woff2";
+    throw new Error("지원하는 TTF, OTF, WOFF, WOFF2 글꼴 형식이 아니야.");
+  }
+
+  function blobAsDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("파일 데이터를 읽지 못했어."));
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function loadCustomPhraseFont(event) {
+    const input = event.currentTarget;
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const status = document.getElementById("sigPhraseFontStatus");
+    const setStatus = (message, warn = false) => {
+      if (!status) return;
+      status.textContent = message;
+      status.classList.toggle("warn", warn);
+    };
+    if (!isSupportedFontFile(file)) {
+      setStatus("TTF, OTF, WOFF, WOFF2 글꼴만 추가할 수 있어.", true);
+      input.value = "";
+      return;
+    }
+    if (typeof FontFace !== "function" || !document.fonts?.add) {
+      setStatus("이 브라우저에서는 사용자 글꼴을 불러올 수 없어.", true);
+      input.value = "";
+      return;
+    }
+    setStatus(`${file.name} 읽는 중…`);
+    try {
+      const buffer = await fileAsArrayBuffer(file);
+      const mime = canonicalFontMime(buffer);
+      const dataUrl = await blobAsDataUrl(new Blob([buffer], { type: mime }));
+      customPhraseFontSequence += 1;
+      const key = `user-font-${Date.now()}-${customPhraseFontSequence}`;
+      const familyName = `SigUserFont_${customPhraseFontSequence}_${Date.now()}`;
+      const face = new FontFace(familyName, buffer);
+      await face.load();
+      document.fonts.add(face);
+      const historyBefore = beginMainChange();
+      const cleanName = String(file.name || "내 글꼴").replace(/\.[^.]+$/, "") || "내 글꼴";
+      customPhraseFonts.set(key, {
+        key,
+        label: `내 글꼴 · ${cleanName}`,
+        family: `"${familyName}","Pretendard","Noto Sans KR",sans-serif`,
+        face,
+        fileName: file.name || "",
+        mime,
+        dataUrl
+      });
+      state.phrase.fontKey = key;
+      renderPhraseFontOptions();
+      syncControls();
+      requestRender();
+      commitMainChange(historyBefore);
+      setStatus(`${cleanName} 적용 완료 · 프로젝트 저장 시 함께 보관돼.`);
+    } catch (error) {
+      setStatus(`글꼴 불러오기 실패 · ${error?.message || error}`, true);
+    } finally {
+      input.value = "";
+    }
+  }
+
+  async function waitForTextFont(layer, numberStyle) {
+    if (!document.fonts) return;
+    const family = numberStyle ? '"SigJua","Arial Rounded MT Bold",sans-serif' : phraseFontFamily(layer);
+    const sample = String(layer.text || "가Aa0").replace(/\s+/g, "").slice(0, 32) || "가Aa0";
+    try {
+      if (typeof document.fonts.load === "function") await document.fonts.load(`${layer.size}px ${family}`, sample);
+      if (document.fonts.ready) await document.fonts.ready;
+    } catch (_) {
+      // 시스템 폰트의 load 확인을 지원하지 않아도 캔버스 fallback으로 계속 만든다.
+    }
+  }
+
+  async function rasterizeTextLayer(layer, numberStyle = false) {
+    await waitForTextFont(layer, numberStyle);
+    const bounds = textLocalBounds(layer, numberStyle);
+    const padding = 3;
+    const logicalWidth = Math.max(1, bounds.right - bounds.left + padding * 2);
+    const logicalHeight = Math.max(1, bounds.bottom - bounds.top + padding * 2);
+    const renderScale = Math.max(1, Math.min(
+      TEXT_PROP_RENDER_SCALE,
+      TEXT_PROP_MAX_RASTER_SIZE / logicalWidth,
+      TEXT_PROP_MAX_RASTER_SIZE / logicalHeight
+    ));
+    const raster = document.createElement("canvas");
+    raster.width = Math.max(1, Math.ceil(logicalWidth * renderScale));
+    raster.height = Math.max(1, Math.ceil(logicalHeight * renderScale));
+    const rasterCtx = raster.getContext("2d", { alpha: true });
+    rasterCtx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+    const drawLayer = Object.assign({}, layer, {
+      x: padding - bounds.left,
+      y: padding - bounds.top,
+      rot: 0,
+      enabled: true
+    });
+    drawOutlinedText(rasterCtx, drawLayer.text, drawLayer, numberStyle);
+    const image = await imageFromDataUrl(raster.toDataURL("image/png"));
+    return { image, bounds, logicalWidth, logicalHeight, renderScale };
+  }
+
+  async function cloneTextLayerToProp(kind, button) {
+    const source = kind === "phrase" ? state.phrase : state[kind];
+    const numberStyle = kind === "num1" || kind === "num2";
+    const status = document.getElementById("sigTextPropStatus");
+    const setStatus = (message, warn = false) => {
+      if (!status) return;
+      status.textContent = message;
+      status.classList.toggle("warn", warn);
+    };
+    if (!source || !String(source.text || "").trim() || numberStyle && !source.enabled) {
+      setStatus(numberStyle ? "사용 중인 숫자를 먼저 입력해줘." : "복제할 문구를 먼저 입력해줘.", true);
+      return false;
+    }
+    if (button) button.disabled = true;
+    setStatus("고해상도 투명 PNG 소품을 만드는 중…");
+    try {
+      const rendered = await rasterizeTextLayer(Object.assign({}, source), numberStyle);
+      const historyBefore = beginMainChange();
+      customPropSequence += 1;
+      const type = `generated-text-${Date.now()}-${customPropSequence}`;
+      const compactText = String(source.text).replace(/\\n|\n/g, " / ").replace(/\s+/g, " ").trim().slice(0, 22);
+      const sourceLabel = kind === "phrase" ? "문구 PNG" : kind === "num1" ? "숫자 1 PNG" : "숫자 2 PNG";
+      propImages[type] = rendered.image;
+      propLabels[type] = `${sourceLabel} · ${compactText || "복제본"}`;
+      const rotation = numberStyle ? 0 : Number(source.rot || 0);
+      const angle = rotation * Math.PI / 180;
+      const localCenterX = (rendered.bounds.left + rendered.bounds.right) / 2;
+      const localCenterY = (rendered.bounds.top + rendered.bounds.bottom) / 2;
+      const prop = Object.assign(propDefaults(type, state.props.length), {
+        x: source.x + localCenterX * Math.cos(angle) - localCenterY * Math.sin(angle) + 10,
+        y: source.y + localCenterX * Math.sin(angle) + localCenterY * Math.cos(angle) + 10,
+        scale: clamp(Math.max(rendered.logicalWidth, rendered.logicalHeight) / 140, .2, 2.5),
+        rot: rotation,
+        opacity: 1,
+        hue: 0,
+        saturation: 100,
+        brightness: 100,
+        front: true,
+        customImage: true,
+        generatedText: true,
+        textSourceKind: kind,
+        textRenderScale: Math.round(rendered.renderScale * 100) / 100
+      });
+      state.props.push(prop);
+      selectLayer("prop", state.props.length - 1);
+      syncControls();
+      requestRender();
+      commitMainChange(historyBefore);
+      setStatus(`${sourceLabel} 추가 완료 · 원본과 독립적으로 편집할 수 있어.`);
+      return true;
+    } catch (error) {
+      setStatus(`PNG 소품 만들기 실패 · ${error?.message || error}`, true);
+      return false;
+    } finally {
+      if (button) button.disabled = false;
+    }
   }
 
   function isSupportedImageFile(file) {
@@ -4537,7 +5806,7 @@
       const historyBefore = beginMainChange();
       state.background.customImg = img;
       state.background.customSourceCanvas = fitImageToCanvas(img);
-      state.background.maskCanvas = alphaMaskFromCanvas(state.background.customSourceCanvas);
+      state.background.maskCanvas = fitImageToMaskCanvas(img);
       state.background.mask = "alpha-custom";
       state.background.customName = file.name;
       activateCustomBackground();
@@ -4635,50 +5904,73 @@
     }
   }
 
-  function loadCharacter(event) {
-    const file = event.target.files && event.target.files[0];
+  async function loadCharacter(event) {
+    const input = event.currentTarget;
+    const file = input.files && input.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        blurActiveSigEditorField();
-        const historyBefore = beginMainChange();
-        state.character.img = img;
-        state.character.name = file.name;
-        state.character.scale = .96;
-        selectLayer("character");
-        syncControls();
-        autoFitBackground(false);
-        commitMainChange(historyBefore);
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
+    const status = document.getElementById("sigCharStatus");
+    status.textContent = `${file.name} 읽는 중…`;
+    try {
+      const img = await imageFromFile(file);
+      blurActiveSigEditorField();
+      const historyBefore = beginMainChange();
+      state.character.img = img;
+      state.character.name = file.name;
+      state.character.scale = .96;
+      selectLayer("character");
+      syncControls();
+      autoFitBackground(false);
+      commitMainChange(historyBefore);
+      status.textContent = `${file.name} 불러오기 완료`;
+      status.classList.remove("warn");
+    } catch (error) {
+      status.textContent = `불러오기 실패 · ${error.message || error}`;
+      status.classList.add("warn");
+    } finally {
+      input.value = "";
+    }
   }
 
   function toggleDark() {
+    const historyBefore = beginMainChange();
     state.previewDark = !state.previewDark;
     stage.classList.toggle("dark", state.previewDark);
     document.getElementById("sigDark").textContent = state.previewDark ? "밝은 화면" : "어두운 화면";
+    commitMainChange(historyBefore);
   }
 
   function toggleGuides() {
+    const historyBefore = beginMainChange();
     state.showGuides = !state.showGuides;
     document.getElementById("sigGuides").textContent = state.showGuides ? "가이드 숨김" : "가이드 표시";
     requestRender();
+    commitMainChange(historyBefore);
   }
 
   function autoFitBackground(recordHistory = true) {
+    if (isAlphaMask()) {
+      showExportStatus("직접 그린 배경판은 ‘배경판 직접 그리기’에서 모양을 수정해.");
+      return false;
+    }
     const historyBefore = recordHistory ? beginMainChange() : null;
-    const b = characterBounds();
-    const phraseTop = state.phrase.y - state.phrase.size * .75;
-    const charTop = b.y + Math.min(20, b.h * .1);
-    state.background.top = Math.round(clamp(Math.min(charTop, phraseTop) - 8, 36, 112));
+    const b = state.character.img ? characterBounds() : null;
+    const phraseFrame = String(state.phrase.text || "").trim() ? selectionFrame({ kind: "phrase", index: -1 }) : null;
+    const phraseAngle = Math.abs((phraseFrame?.rotation || 0) * Math.PI / 180);
+    const phraseTop = phraseFrame
+      ? phraseFrame.cy - Math.abs(Math.sin(phraseAngle)) * phraseFrame.width / 2 - Math.abs(Math.cos(phraseAngle)) * phraseFrame.height / 2
+      : Infinity;
+    const charTop = b ? b.y + Math.min(20, b.h * .1) : Infinity;
+    const contentTop = Math.min(charTop, phraseTop);
+    if (!Number.isFinite(contentTop)) {
+      showExportStatus("맞춰 자를 캐릭터나 문구가 없어.");
+      return false;
+    }
+    state.background.top = Math.round(clamp(contentTop - 8, 84, 112));
     if (state.background.mask === "full") state.background.mask = "wave";
     syncControls();
     requestRender();
     if (recordHistory) commitMainChange(historyBefore);
+    return true;
   }
 
   function canvasPoint(event) {
@@ -4712,7 +6004,9 @@
           startSize: target.size
         };
       } else {
-        const picked = pickLayerAt(point);
+        // 현재 선택한 레이어에 한해 투명 여백도 손잡이처럼 쓸 수 있다.
+        // 잠그면 이 우선권이 사라져 투명/불투명 영역 모두 뒤 레이어로 통과한다.
+        const picked = selectionFrameContains(selectedRef, point) ? selectedRef : pickLayerAt(point);
         if (!picked) {
           dragging = null;
           selectLayer("none", -1);
@@ -4728,7 +6022,7 @@
     canvas.addEventListener("pointermove", event => {
       const point = canvasPoint(event);
       if (!dragging) {
-        canvas.style.cursor = resizeHandleHit(state.selected, point) ? "nwse-resize" : "grab";
+        canvas.style.cursor = resizeHandleHit(state.selected, point) ? "nwse-resize" : selectionFrameContains(state.selected, point) ? "move" : "grab";
         return;
       }
       if (event.pointerId !== dragging.pointerId || dragging.target.locked) return;
@@ -4743,6 +6037,7 @@
       } else {
         target.x = Math.round((dragging.startX + point.x - dragging.point.x) * 10) / 10;
         target.y = Math.round((dragging.startY + point.y - dragging.point.y) * 10) / 10;
+        snapMovedLayer(dragging.ref, event.altKey);
         syncMovedTarget(dragging.ref);
       }
       requestRender();
@@ -4752,7 +6047,9 @@
       const completed = dragging;
       try { if (canvas.hasPointerCapture?.(completed.pointerId)) canvas.releasePointerCapture(completed.pointerId); } catch (_) { /* already released */ }
       dragging = null;
+      activeSnapGuides = null;
       canvas.style.cursor = "grab";
+      requestRender();
       commitMainChange(completed.historyBefore);
     };
     canvas.addEventListener("pointerup", stop);
@@ -4789,6 +6086,19 @@
       const activeTag = document.activeElement?.tagName || "";
       const textEditing = /INPUT|SELECT|TEXTAREA/.test(activeTag) || document.activeElement?.isContentEditable;
       const key = String(event.key || "").toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && (key === "s" || key === "o")) {
+        event.preventDefault();
+        if (projectIoBusy) return;
+        if (key === "s") saveSigProject();
+        else openSigProject();
+        return;
+      }
+      if (projectIoBusy) {
+        if (event.ctrlKey || event.metaKey || ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
+        }
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && !event.altKey && (key === "z" || key === "y")) {
         if (textEditing || document.body.classList.contains("sig-mask-editing")) return;
         event.preventDefault();
@@ -4835,7 +6145,54 @@
     else if (sel.kind === "prop") syncPropControls();
   }
 
+  function drawContentWithoutNumbers(c, preview = false) {
+    state.props.filter(prop => !prop.front).forEach(prop => drawProp(c, prop));
+    drawCharacter(c, preview);
+    drawOutlinedText(c, state.phrase.text, Object.assign({ enabled: true }, state.phrase), false);
+    state.props.filter(prop => prop.front).forEach(prop => drawProp(c, prop));
+  }
+
+  function applyContentProfileTransform(c, profile, pivotX, pivotY, translateScale = 1) {
+    c.translate(profile.x * translateScale, profile.y * translateScale);
+    c.translate(pivotX, pivotY);
+    c.scale(profile.scale, profile.scale);
+    c.translate(-pivotX, -pivotY);
+  }
+
+  function profiledPoint(x, y, profile, pivotX, pivotY, translateScale = 1) {
+    return {
+      x: pivotX + (x - pivotX) * profile.scale + profile.x * translateScale,
+      y: pivotY + (y - pivotY) * profile.scale + profile.y * translateScale
+    };
+  }
+
+  function drawProfiledNumber(c, source, profile, pivotX, pivotY, size, mapPoint = point => point) {
+    if (!source.enabled || !String(source.text || "").trim()) return;
+    const base = mapPoint({ x: source.x, y: source.y });
+    const point = profiledPoint(base.x, base.y, profile, pivotX, pivotY);
+    drawOutlinedText(c, source.text, Object.assign({}, source, { x: point.x, y: point.y, size }), true);
+  }
+
+  function makeProfiledMobileCanvas(profile) {
+    const out = document.createElement("canvas");
+    out.width = W;
+    out.height = H;
+    const outCtx = out.getContext("2d", { alpha: true });
+    outCtx.clearRect(0, 0, W, H);
+    drawBackground(outCtx, state.background, true);
+    outCtx.save();
+    applyContentProfileTransform(outCtx, profile, W / 2, H);
+    drawContentWithoutNumbers(outCtx, false);
+    outCtx.restore();
+    drawProfiledNumber(outCtx, state.num1, profile, W / 2, H, MOBILE_NUMBER_SIZE);
+    drawProfiledNumber(outCtx, state.num2, profile, W / 2, H, MOBILE_NUMBER_SIZE);
+    outCtx.clearRect(0, 0, W, H - CONTENT_H);
+    return out;
+  }
+
   function makeMasterCanvas() {
+    const profile = outputProfile("mobile");
+    if (!outputProfileIsIdentity(profile)) return makeProfiledMobileCanvas(profile);
     const out = document.createElement("canvas");
     out.width = W;
     out.height = H;
@@ -4847,6 +6204,37 @@
   }
 
   function makePcCanvas(master) {
+    const profile = outputProfile("pc");
+    if (!outputProfileIsIdentity(profile)) {
+      const out = document.createElement("canvas");
+      out.width = 195;
+      out.height = 145;
+      const outCtx = out.getContext("2d", { alpha: true });
+      const baseScale = out.width / W;
+      const drawHeight = H * baseScale;
+      const offsetY = out.height - drawHeight;
+      outCtx.clearRect(0, 0, out.width, out.height);
+      outCtx.imageSmoothingEnabled = true;
+      outCtx.imageSmoothingQuality = "high";
+
+      // Identity 출력처럼 배경도 먼저 293×248 논리 작업면에 렌더한 뒤 같은 비율로
+      // 축소한다. 출력별 내용 보정은 별도 투명 레이어에만 적용해 배경 픽셀을 고정한다.
+      const backgroundOnly = createLogicalCanvas();
+      drawBackground(backgroundOnly.getContext("2d", { alpha: true }), state.background, true);
+      outCtx.drawImage(backgroundOnly, 0, offsetY, out.width, drawHeight);
+
+      const contentOnly = createLogicalCanvas();
+      const contentCtx = contentOnly.getContext("2d", { alpha: true });
+      contentCtx.save();
+      applyContentProfileTransform(contentCtx, profile, W / 2, H, 1 / baseScale);
+      drawContentWithoutNumbers(contentCtx, false);
+      contentCtx.restore();
+      outCtx.drawImage(contentOnly, 0, offsetY, out.width, drawHeight);
+      const mapPcPoint = point => ({ x: point.x * baseScale, y: point.y * baseScale + offsetY });
+      drawProfiledNumber(outCtx, state.num1, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint);
+      drawProfiledNumber(outCtx, state.num2, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint);
+      return out;
+    }
     const out = document.createElement("canvas");
     out.width = 195;
     out.height = 145;
@@ -4884,6 +6272,40 @@
   }
 
   function makeWeflabCanvas() {
+    const profile = outputProfile("weflab");
+    if (!outputProfileIsIdentity(profile)) {
+      const work = document.createElement("canvas");
+      work.width = WEFLAB_WIDTH * WEFLAB_RENDER_SCALE;
+      work.height = WEFLAB_HEIGHT * WEFLAB_RENDER_SCALE;
+      const workCtx = work.getContext("2d", { alpha: true });
+      const baseScale = Math.min(work.width / W, work.height / CONTENT_H);
+      const tx = (work.width - W * baseScale) / 2;
+      const ty = (work.height - CONTENT_H * baseScale) / 2 - (H - CONTENT_H) * baseScale;
+      const pivotLogicalX = (work.width / 2 - tx) / baseScale;
+      const pivotLogicalY = (work.height - ty) / baseScale;
+      workCtx.setTransform(baseScale, 0, 0, baseScale, tx, ty);
+      drawBackground(workCtx, state.background, true);
+      workCtx.save();
+      applyContentProfileTransform(workCtx, profile, pivotLogicalX, pivotLogicalY, WEFLAB_RENDER_SCALE / baseScale);
+      drawContentWithoutNumbers(workCtx, false);
+      workCtx.restore();
+      const adjustedNumber = source => {
+        const baseX = tx + source.x * baseScale;
+        const baseY = ty + source.y * baseScale;
+        const point = profiledPoint(baseX, baseY, profile, work.width / 2, work.height, WEFLAB_RENDER_SCALE);
+        return Object.assign({}, source, { x: (point.x - tx) / baseScale, y: (point.y - ty) / baseScale, size: MOBILE_NUMBER_SIZE });
+      };
+      drawOutlinedText(workCtx, state.num1.text, adjustedNumber(state.num1), true);
+      drawOutlinedText(workCtx, state.num2.text, adjustedNumber(state.num2), true);
+      const out = document.createElement("canvas");
+      out.width = WEFLAB_WIDTH;
+      out.height = WEFLAB_HEIGHT;
+      const outCtx = out.getContext("2d", { alpha: true });
+      outCtx.imageSmoothingEnabled = true;
+      outCtx.imageSmoothingQuality = "high";
+      outCtx.drawImage(work, 0, 0, out.width, out.height);
+      return out;
+    }
     // SOOP 결과 비트맵을 확대하지 않고 state와 원본 레이어를 2배 작업면에 다시 렌더한다.
     const work = document.createElement("canvas");
     work.width = WEFLAB_WIDTH * WEFLAB_RENDER_SCALE;
@@ -4921,6 +6343,23 @@
       if (safeTopRows && Math.floor(pixel / target.width) < safeTopRows) safeTopNonTransparentPixels++;
     }
     return { alphaMin, alphaMax, nonTransparentPixels, safeTopNonTransparentPixels };
+  }
+
+  function inspectCanvasPixels(target) {
+    const data = target.getContext("2d", { alpha: true, willReadFrequently: true })
+      .getImageData(0, 0, target.width, target.height).data;
+    let checksum = 2166136261;
+    let alphaChecksum = 2166136261;
+    for (let index = 0; index < data.length; index++) {
+      checksum = Math.imul(checksum ^ data[index], 16777619) >>> 0;
+      if ((index & 3) === 3) alphaChecksum = Math.imul(alphaChecksum ^ data[index], 16777619) >>> 0;
+    }
+    return {
+      width: target.width,
+      height: target.height,
+      checksum: checksum.toString(16).padStart(8, "0"),
+      alphaChecksum: alphaChecksum.toString(16).padStart(8, "0")
+    };
   }
 
   function validateOutputCanvas(type, target) {
@@ -5089,63 +6528,650 @@
     }
   }
 
+  function normalizeExportBaseName(value) {
+    let name = String(value || "").trim().replace(/\.(?:png|pbsig(?:\.json)?)$/i, "");
+    name = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/g, "").trim();
+    return (name || SIG_DEFAULT_EXPORT_BASE).slice(0, 80);
+  }
+
+  function cloneFiniteJson(value, path = "project", depth = 0) {
+    if (depth > 80) throw new Error(`${path} 구조가 너무 깊어.`);
+    if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+    if (typeof value === "number") {
+      if (!Number.isFinite(value)) throw new Error(`${path}에 저장할 수 없는 숫자가 있어.`);
+      return value;
+    }
+    if (Array.isArray(value)) return value.map((item, index) => cloneFiniteJson(item, `${path}[${index}]`, depth + 1));
+    if (!value || typeof value !== "object" || Object.prototype.toString.call(value) !== "[object Object]") {
+      throw new Error(`${path}에 저장할 수 없는 값이 있어.`);
+    }
+    const out = {};
+    Object.keys(value).forEach(key => {
+      if (["__proto__", "prototype", "constructor"].includes(key)) throw new Error(`${path}에 안전하지 않은 키가 있어.`);
+      const item = value[key];
+      if (item !== undefined) out[key] = cloneFiniteJson(item, `${path}.${key}`, depth + 1);
+    });
+    return out;
+  }
+
+  function imageDataUrl(image, label = "이미지") {
+    if (!image) throw new Error(`${label} 자산이 없어.`);
+    const source = String(image.currentSrc || image.src || "");
+    if (/^data:image\/(?:png|jpeg|webp|gif|bmp);base64,[A-Za-z0-9+/]+=*$/i.test(source)) return source;
+    const width = Number(image.naturalWidth || image.width);
+    const height = Number(image.naturalHeight || image.height);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width * height > 50_000_000) {
+      throw new Error(`${label} 크기가 올바르지 않아.`);
+    }
+    const raster = document.createElement("canvas");
+    raster.width = width;
+    raster.height = height;
+    raster.getContext("2d", { alpha: true }).drawImage(image, 0, 0, width, height);
+    return raster.toDataURL("image/png");
+  }
+
+  function canvasProjectRef(canvasSource, addAsset, label, metadata = null) {
+    if (!canvasSource) return null;
+    const width = Number(canvasSource.width);
+    const height = Number(canvasSource.height);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width * height > 50_000_000) {
+      throw new Error(`${label} 캔버스 크기가 올바르지 않아.`);
+    }
+    return Object.assign({ assetId: addAsset(canvasSource.toDataURL("image/png")), width, height }, metadata || {});
+  }
+
+  async function serializeSigProject() {
+    commitOutputProfileEdit();
+    flushMainHistoryBurst();
+    blurActiveSigEditorField();
+    const assets = {};
+    const assetByDataUrl = new Map();
+    let assetSequence = 0;
+    const addAsset = dataUrl => {
+      const value = String(dataUrl || "");
+      if (!/^data:(?:image\/(?:png|jpeg|webp|gif|bmp)|font\/(?:ttf|otf|woff|woff2));base64,/i.test(value)) {
+        throw new Error("프로젝트에 지원하지 않는 자산 형식이 있어.");
+      }
+      if (assetByDataUrl.has(value)) return assetByDataUrl.get(value);
+      const id = `asset-${String(++assetSequence).padStart(4, "0")}`;
+      assets[id] = value;
+      assetByDataUrl.set(value, id);
+      return id;
+    };
+
+    const { customImg, customSourceCanvas, maskCanvas, ...backgroundPlain } = state.background;
+    const { img: characterImage, ...characterPlain } = state.character;
+    const projectState = cloneFiniteJson({
+      presetIndex: state.presetIndex,
+      placementIndex: state.placementIndex,
+      background: backgroundPlain,
+      character: characterPlain,
+      phrase: state.phrase,
+      num1: state.num1,
+      num2: state.num2,
+      props: state.props,
+      outputProfiles: state.outputProfiles,
+      selected: state.selected,
+      snapEnabled: state.snapEnabled !== false,
+      showGuides: state.showGuides !== false,
+      previewDark: !!state.previewDark,
+      exportBaseName: String(state.exportBaseName || SIG_DEFAULT_EXPORT_BASE)
+    }, "project.state");
+
+    const refs = {
+      character: characterImage ? { assetId: addAsset(imageDataUrl(characterImage, "캐릭터")) } : null,
+      background: {
+        original: customImg ? { assetId: addAsset(imageDataUrl(customImg, "커스텀 배경 원본")) } : null,
+        source: canvasProjectRef(customSourceCanvas, addAsset, "커스텀 배경"),
+        mask: canvasProjectRef(maskCanvas, addAsset, "배경 마스크", maskCanvas ? { maskScale: MASK_SCALE } : null)
+      },
+      props: [],
+      fonts: []
+    };
+
+    const customTypes = new Set();
+    state.props.forEach(prop => {
+      if (!prop.customImage || customTypes.has(prop.type)) return;
+      const image = propImages[prop.type];
+      if (!image) throw new Error(`${propLabels[prop.type] || prop.type} 소품 원본을 찾지 못했어.`);
+      customTypes.add(prop.type);
+      refs.props.push({
+        type: String(prop.type),
+        assetId: addAsset(imageDataUrl(image, propLabels[prop.type] || "소품")),
+        label: String(propLabels[prop.type] || prop.type),
+        kind: prop.generatedText ? "baked-text" : "custom-image"
+      });
+    });
+
+    customPhraseFonts.forEach(record => {
+      if (!record.dataUrl || !record.mime) throw new Error(`${record.label || "사용자 글꼴"} 원본 데이터가 없어 프로젝트로 저장할 수 없어.`);
+      refs.fonts.push({
+        key: String(record.key),
+        assetId: addAsset(record.dataUrl),
+        label: String(record.label || "내 글꼴"),
+        fileName: String(record.fileName || ""),
+        mime: String(record.mime)
+      });
+    });
+
+    return {
+      schemaVersion: SIG_PROJECT_SCHEMA_VERSION,
+      name: `${normalizeExportBaseName(state.exportBaseName)}.pbsig`,
+      project: {
+        projectVersion: SIG_PROJECT_VERSION,
+        savedAt: new Date().toISOString(),
+        canvas: { width: W, height: H, dpr: DPR, maskScale: MASK_SCALE, maskWidth: MASK_W, maskHeight: MASK_H },
+        state: projectState,
+        refs
+      },
+      assets
+    };
+  }
+
+  function assertPlainProjectObject(value, label) {
+    if (!value || typeof value !== "object" || Array.isArray(value) || Object.prototype.toString.call(value) !== "[object Object]") {
+      throw new Error(`${label} 형식이 올바르지 않아.`);
+    }
+    return value;
+  }
+
+  function projectAssetData(assets, ref, label, kind = "image") {
+    assertPlainProjectObject(ref, `${label} 참조`);
+    const assetId = ref.assetId;
+    if (typeof assetId !== "string" || !assetId || !Object.prototype.hasOwnProperty.call(assets, assetId)) {
+      throw new Error(`${label} 자산을 찾지 못했어.`);
+    }
+    const dataUrl = assets[assetId];
+    const prefix = kind === "font" ? /^data:font\/(?:ttf|otf|woff|woff2);base64,/ : /^data:image\/(?:png|jpeg|webp|gif|bmp);base64,/;
+    if (typeof dataUrl !== "string" || dataUrl.length > 48 * 1024 * 1024 || !prefix.test(dataUrl)) {
+      throw new Error(`${label} 자산 형식이 올바르지 않아.`);
+    }
+    return dataUrl;
+  }
+
+  function dataUrlArrayBuffer(dataUrl) {
+    const comma = dataUrl.indexOf(",");
+    if (comma < 0) throw new Error("자산 data URL이 올바르지 않아.");
+    let binary;
+    try {
+      binary = atob(dataUrl.slice(comma + 1));
+    } catch {
+      throw new Error("자산 base64를 읽지 못했어.");
+    }
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+    return bytes.buffer;
+  }
+
+  async function projectCanvasFromRef(assets, ref, label) {
+    if (!ref) return null;
+    const width = Number(ref.width);
+    const height = Number(ref.height);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width * height > 50_000_000) {
+      throw new Error(`${label} 크기가 올바르지 않아.`);
+    }
+    const image = await imageFromDataUrl(projectAssetData(assets, ref, label), `${label} 이미지를 읽지 못했어.`);
+    if ((image.naturalWidth || image.width) !== width || (image.naturalHeight || image.height) !== height) {
+      throw new Error(`${label} 크기 정보와 실제 이미지가 달라.`);
+    }
+    const restored = document.createElement("canvas");
+    restored.width = width;
+    restored.height = height;
+    restored.getContext("2d", { alpha: true }).drawImage(image, 0, 0, width, height);
+    return restored;
+  }
+
+  function normalizeLoadedProjectState(source) {
+    const raw = cloneFiniteJson(assertPlainProjectObject(source, "프로젝트 상태"), "project.state");
+    ["background", "character", "phrase", "num1", "num2", "selected"].forEach(key => assertPlainProjectObject(raw[key], `state.${key}`));
+    if (!Array.isArray(raw.props) || raw.props.length > 256) throw new Error("소품 목록이 올바르지 않거나 너무 많아.");
+    raw.props.forEach((prop, index) => {
+      assertPlainProjectObject(prop, `소품 ${index + 1}`);
+      if (typeof prop.type !== "string" || !prop.type || prop.type.length > 256) throw new Error(`소품 ${index + 1} 종류가 올바르지 않아.`);
+    });
+    if (!Number.isInteger(raw.presetIndex) || !Number.isInteger(raw.placementIndex)) throw new Error("프리셋 위치 정보가 올바르지 않아.");
+    raw.presetIndex = Math.round(clamp(raw.presetIndex, 0, Math.max(0, presets.length - 1)));
+    raw.placementIndex = Math.round(clamp(raw.placementIndex, 0, Math.max(0, placementLayouts.length - 1)));
+    raw.num1.size = MOBILE_NUMBER_SIZE;
+    raw.num1.rot = 0;
+    raw.num2.size = MOBILE_NUMBER_SIZE;
+    raw.num2.rot = 0;
+    raw.outputProfiles = cloneOutputProfiles(assertPlainProjectObject(raw.outputProfiles || {}, "출력별 위치"));
+    raw.snapEnabled = raw.snapEnabled !== false;
+    raw.showGuides = raw.showGuides !== false;
+    raw.previewDark = !!raw.previewDark;
+    raw.exportBaseName = String(raw.exportBaseName || SIG_DEFAULT_EXPORT_BASE).slice(0, 80);
+    const allowedKinds = new Set(["none", "character", "phrase", "num1", "num2", "prop"]);
+    if (!allowedKinds.has(raw.selected.kind) || raw.selected.kind === "prop" && !raw.props[Number(raw.selected.index)]) {
+      raw.selected = { kind: "character", index: -1 };
+    } else {
+      raw.selected.index = raw.selected.kind === "prop" ? Number(raw.selected.index) : -1;
+    }
+    return raw;
+  }
+
+  async function stageSigProjectEnvelope(envelope) {
+    const root = assertPlainProjectObject(envelope, "프로젝트");
+    if (root.schemaVersion !== SIG_PROJECT_SCHEMA_VERSION) throw new Error("지원하지 않는 시그풍 프로젝트 버전이야.");
+    const project = assertPlainProjectObject(root.project, "project");
+    const projectVersion = Number(project.projectVersion);
+    if (projectVersion !== 1 && projectVersion !== SIG_PROJECT_VERSION) throw new Error("지원하지 않는 프로젝트 데이터 버전이야.");
+    const assets = assertPlainProjectObject(root.assets || {}, "assets");
+    if (Object.keys(assets).length > 256) throw new Error("프로젝트 자산이 너무 많아.");
+    const refs = cloneFiniteJson(assertPlainProjectObject(project.refs, "project.refs"), "project.refs");
+    const nextState = normalizeLoadedProjectState(project.state);
+    const backgroundRefs = assertPlainProjectObject(refs.background || {}, "배경 자산");
+    if (projectVersion === SIG_PROJECT_VERSION) {
+      const canvasInfo = assertPlainProjectObject(project.canvas, "project.canvas");
+      if (Number(canvasInfo.width) !== W || Number(canvasInfo.height) !== H
+        || Number(canvasInfo.maskScale) !== MASK_SCALE
+        || Number(canvasInfo.maskWidth) !== MASK_W || Number(canvasInfo.maskHeight) !== MASK_H) {
+        throw new Error("프로젝트의 배경 마스크 해상도 정보가 올바르지 않아.");
+      }
+      if (backgroundRefs.mask && (Number(backgroundRefs.mask.width) !== MASK_W
+        || Number(backgroundRefs.mask.height) !== MASK_H
+        || Number(backgroundRefs.mask.maskScale) !== MASK_SCALE)) {
+        throw new Error("프로젝트의 배경 마스크 자산 해상도가 올바르지 않아.");
+      }
+    }
+    if (!Array.isArray(refs.props) || !Array.isArray(refs.fonts)) throw new Error("프로젝트 자산 참조가 올바르지 않아.");
+
+    const customPropRefs = new Map();
+    refs.props.forEach((ref, index) => {
+      assertPlainProjectObject(ref, `소품 자산 ${index + 1}`);
+      if (typeof ref.type !== "string" || !ref.type || customPropRefs.has(ref.type)) throw new Error("소품 자산 참조가 중복되거나 올바르지 않아.");
+      customPropRefs.set(ref.type, ref);
+    });
+    const usedCustomTypes = new Set(nextState.props.filter(prop => prop.customImage).map(prop => prop.type));
+    usedCustomTypes.forEach(type => {
+      if (!customPropRefs.has(type)) throw new Error(`${type} 소품 이미지가 프로젝트에서 빠졌어.`);
+    });
+    customPropRefs.forEach((_ref, type) => {
+      if (!usedCustomTypes.has(type)) throw new Error(`${type} 소품 자산이 레이어 목록과 맞지 않아.`);
+    });
+
+    const fontKeys = new Set();
+    const stagedFontPromises = refs.fonts.map(async (ref, index) => {
+      assertPlainProjectObject(ref, `글꼴 자산 ${index + 1}`);
+      const key = String(ref.key || "");
+      if (!key || fontKeys.has(key) || PHRASE_FONT_OPTIONS.some(font => font.key === key)) throw new Error("사용자 글꼴 키가 중복되거나 올바르지 않아.");
+      fontKeys.add(key);
+      const dataUrl = projectAssetData(assets, ref, ref.label || `글꼴 ${index + 1}`, "font");
+      const mime = String(ref.mime || "");
+      if (!dataUrl.startsWith(`data:${mime};base64,`)) throw new Error(`${ref.label || "사용자 글꼴"} MIME 정보가 실제 데이터와 달라.`);
+      const buffer = dataUrlArrayBuffer(dataUrl);
+      if (canonicalFontMime(buffer) !== mime) throw new Error(`${ref.label || "사용자 글꼴"} 파일 형식이 MIME과 달라.`);
+      if (typeof FontFace !== "function" || !document.fonts?.add) throw new Error("이 브라우저에서는 프로젝트의 사용자 글꼴을 복원할 수 없어.");
+      const familyName = `SigProjectFont_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
+      const face = new FontFace(familyName, buffer);
+      await face.load();
+      return {
+        key,
+        label: String(ref.label || "내 글꼴"),
+        family: `"${familyName}","Pretendard","Noto Sans KR",sans-serif`,
+        face,
+        fileName: String(ref.fileName || ""),
+        mime,
+        dataUrl
+      };
+    });
+
+    const characterPromise = refs.character
+      ? imageFromDataUrl(projectAssetData(assets, refs.character, "캐릭터"), "캐릭터 이미지를 읽지 못했어.")
+      : Promise.resolve(null);
+    const backgroundOriginalPromise = backgroundRefs.original
+      ? imageFromDataUrl(projectAssetData(assets, backgroundRefs.original, "커스텀 배경 원본"), "커스텀 배경 원본을 읽지 못했어.")
+      : Promise.resolve(null);
+    const backgroundSourcePromise = projectCanvasFromRef(assets, backgroundRefs.source, "커스텀 배경 캔버스");
+    const maskPromise = projectCanvasFromRef(assets, backgroundRefs.mask, "배경 마스크")
+      .then(mask => mask ? normalizeStoredMaskCanvas(mask) : null);
+    const propPromises = Array.from(customPropRefs.entries()).map(async ([type, ref]) => [
+      type,
+      {
+        image: await imageFromDataUrl(projectAssetData(assets, ref, ref.label || type), `${ref.label || type} 소품을 읽지 못했어.`),
+        label: String(ref.label || type)
+      }
+    ]);
+
+    const [character, backgroundOriginal, backgroundSource, maskCanvas, fonts, propEntries] = await Promise.all([
+      characterPromise,
+      backgroundOriginalPromise,
+      backgroundSourcePromise,
+      maskPromise,
+      Promise.all(stagedFontPromises),
+      Promise.all(propPromises)
+    ]);
+    if (nextState.background.mask === "alpha-custom" && !maskCanvas) throw new Error("적용 중인 배경 마스크 자산이 빠졌어.");
+    if (nextState.background.texture === "custom" && (!backgroundOriginal || !backgroundSource)) throw new Error("적용 중인 커스텀 배경 자산이 빠졌어.");
+    const availableFont = PHRASE_FONT_OPTIONS.some(font => font.key === nextState.phrase.fontKey) || fontKeys.has(nextState.phrase.fontKey);
+    if (!availableFont) throw new Error("문구에 적용된 사용자 글꼴이 프로젝트에서 빠졌어.");
+    return {
+      state: nextState,
+      character,
+      backgroundOriginal,
+      backgroundSource,
+      maskCanvas,
+      fonts,
+      props: new Map(propEntries)
+    };
+  }
+
+  function replaceProjectObject(target, source) {
+    Object.keys(target).forEach(key => { delete target[key]; });
+    Object.assign(target, source);
+  }
+
+  function commitStagedSigProject(staged, path = "") {
+    const addedFaces = [];
+    try {
+      staged.fonts.forEach(record => {
+        document.fonts.add(record.face);
+        addedFaces.push(record.face);
+      });
+    } catch (error) {
+      addedFaces.forEach(face => { try { document.fonts.delete?.(face); } catch (_) {} });
+      throw error;
+    }
+    customPhraseFonts.forEach(record => { try { document.fonts.delete?.(record.face); } catch (_) {} });
+    customPhraseFonts.clear();
+    staged.fonts.forEach(record => customPhraseFonts.set(record.key, record));
+    customPhraseFontSequence += staged.fonts.length;
+
+    closeMaskStudio(true);
+    const oldCustomTypes = new Set(state.props.filter(prop => prop.customImage).map(prop => prop.type));
+    oldCustomTypes.forEach(type => {
+      delete propImages[type];
+      delete propLabels[type];
+    });
+    staged.props.forEach((asset, type) => {
+      propImages[type] = asset.image;
+      propLabels[type] = asset.label;
+    });
+
+    state.presetIndex = staged.state.presetIndex;
+    state.placementIndex = staged.state.placementIndex;
+    replaceProjectObject(state.background, Object.assign({}, staged.state.background, {
+      customImg: staged.backgroundOriginal,
+      customSourceCanvas: staged.backgroundSource,
+      maskCanvas: staged.maskCanvas
+    }));
+    replaceProjectObject(state.character, Object.assign({}, staged.state.character, { img: staged.character }));
+    replaceProjectObject(state.phrase, staged.state.phrase);
+    replaceProjectObject(state.num1, staged.state.num1);
+    replaceProjectObject(state.num2, staged.state.num2);
+    state.props = staged.state.props.map(prop => Object.assign({}, prop));
+    state.outputProfiles = cloneOutputProfiles(staged.state.outputProfiles);
+    state.selected = Object.assign({}, staged.state.selected);
+    state.snapEnabled = staged.state.snapEnabled;
+    state.showGuides = staged.state.showGuides;
+    state.previewDark = staged.state.previewDark;
+    state.exportBaseName = staged.state.exportBaseName;
+    activeSnapGuides = null;
+    outputProfileHistoryBefore = null;
+    resetMainHistory();
+    mainHistoryReady = true;
+    currentProjectPath = String(path || "");
+    setProjectDirty(false);
+    syncControls();
+    renderLayerList();
+    highlightPreset();
+    requestRender();
+  }
+
+  async function confirmProjectReplacement() {
+    if (!projectDirty && !maskStudioDirty()) return true;
+    return askSigConfirm("저장하지 않은 시그풍 변경이 있어. 현재 작업을 버리고 다른 프로젝트를 열까?", {
+      title: "다른 프로젝트 열기",
+      confirmLabel: "버리고 열기"
+    });
+  }
+
+  async function loadSigProjectEnvelope(envelope, options = {}) {
+    if (!options.skipConfirm && !(await confirmProjectReplacement())) return { cancel: true };
+    const manageBusy = options.manageBusy !== false;
+    const token = ++projectIoGeneration;
+    if (manageBusy) setProjectIoBusy(true, "프로젝트 여는 중…");
+    try {
+      const staged = await stageSigProjectEnvelope(envelope);
+      if (token !== projectIoGeneration) throw new Error("더 최근 프로젝트 열기 요청이 있어 이전 요청을 취소했어.");
+      commitStagedSigProject(staged, options.path || "");
+      showExportStatus(`프로젝트 열기 완료 · ${projectDisplayName(options.path || "")}`);
+      return { ok: true, assetCount: Object.keys(envelope.assets || {}).length };
+    } catch (error) {
+      console.error("[시그풍] 프로젝트 열기 실패", error);
+      showExportStatus(`프로젝트 열기 실패: ${error.message || error}`, true);
+      return { ok: false, err: error.message || String(error) };
+    } finally {
+      if (manageBusy) setProjectIoBusy(false);
+    }
+  }
+
+  async function saveSigProject() {
+    if (projectIoBusy) return { ok: false, busy: true };
+    if (maskStudioDirty()) {
+      if (!(await askSigConfirm("마스크 편집 내용이 아직 적용되지 않았어. 현재 마스크를 적용하고 프로젝트에 저장할까?", {
+        title: "마스크도 함께 저장",
+        confirmLabel: "적용 후 저장"
+      }))) return { cancel: true };
+      if (!applyMaskStudio()) return { ok: false, err: "마스크를 적용하지 못했어." };
+    }
+    setProjectIoBusy(true, "프로젝트 준비 중…");
+    try {
+      const envelope = await serializeSigProject();
+      const api = window.pywebview && window.pywebview.api;
+      if (api && typeof api.save_sig_project === "function") {
+        setProjectIoBusy(true, "저장 위치 선택 중…");
+        showExportStatus("프로젝트 저장 위치를 선택해 줘.");
+        await nextPaint();
+        const result = parseApiResult(await api.save_sig_project(JSON.stringify(envelope)));
+        if (result.cancel) {
+          showExportStatus("프로젝트 저장을 취소했어.");
+          return result;
+        }
+        if (!result.ok) throw new Error(result.err || "프로젝트를 저장하지 못했어.");
+        currentProjectPath = String(result.path || envelope.name);
+        setProjectDirty(false);
+        showExportStatus(`프로젝트 저장 완료 · ${projectDisplayName()}`);
+        return result;
+      }
+      const fallbackName = `${normalizeExportBaseName(state.exportBaseName)}${SIG_PROJECT_BROWSER_SUFFIX}`;
+      const fallbackJson = JSON.stringify(envelope);
+      /* 옛 본체(save_sig_project 없음)에서도 save_png(임의 바이트 + 저장창)는 있다.
+         이 WebView2 설정에선 blob 다운로드가 조용히 사라져 "완료"만 뜨는 사고가 나므로
+         (2026-08-18 실측), 본체 저장창 경로를 우선 쓴다. */
+      if (api && typeof api.save_png === "function" && typeof api.pick_dir === "function") {
+        /* 저장창(파일 대화상자) 모드는 PNG 필터가 이름 끝에 .png 를 강제로 붙인다 —
+           폴더만 고르게 하고 dir 모드로 정확한 이름을 쓴다(6칸 GIF 폴백과 같은 패턴). */
+        setProjectIoBusy(true, "저장 폴더 선택 중…");
+        showExportStatus("프로젝트를 저장할 폴더를 선택해 줘.");
+        await nextPaint();
+        const picked = parseApiResult(await api.pick_dir());
+        if (!picked || !picked.dir) {
+          showExportStatus("프로젝트 저장을 취소했어.");
+          return { ok: false, cancel: true };
+        }
+        const bytes = new TextEncoder().encode(fallbackJson);
+        let bin = "";
+        for (let i = 0; i < bytes.length; i += 32768) {
+          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
+        }
+        const result = parseApiResult(await api.save_png(JSON.stringify({
+          dir: picked.dir, name: fallbackName, b64: btoa(bin)
+        })));
+        if (result.err) throw new Error(result.err);
+        if (!result.ok) {
+          showExportStatus("프로젝트 저장을 취소했어.");
+          return { ok: false, cancel: true };
+        }
+        currentProjectPath = result.path || fallbackName;
+        setProjectDirty(false);
+        showExportStatus(`프로젝트 JSON 저장 완료 · ${currentProjectPath}`);
+        return { ok: true, legacyBridge: true, path: currentProjectPath };
+      }
+      downloadBlob(new Blob([fallbackJson], { type: "application/json" }), fallbackName);
+      currentProjectPath = fallbackName;
+      setProjectDirty(false);
+      showExportStatus(`프로젝트 JSON 저장 완료 · ${fallbackName}`);
+      return { ok: true, browser: true, path: fallbackName };
+    } catch (error) {
+      console.error("[시그풍] 프로젝트 저장 실패", error);
+      showExportStatus(`프로젝트 저장 실패: ${error.message || error}`, true);
+      return { ok: false, err: error.message || String(error) };
+    } finally {
+      setProjectIoBusy(false);
+    }
+  }
+
+  async function openSigProject() {
+    if (projectIoBusy) return;
+    const api = window.pywebview && window.pywebview.api;
+    if (!api || typeof api.load_sig_project !== "function") {
+      const input = document.getElementById("sigProjectFile");
+      input.value = "";
+      input.click();
+      return;
+    }
+    if (!(await confirmProjectReplacement())) return;
+    setProjectIoBusy(true, "프로젝트 선택 중…");
+    try {
+      showExportStatus("열 프로젝트를 선택해 줘.");
+      await nextPaint();
+      const result = parseApiResult(await api.load_sig_project());
+      if (result.cancel) {
+        showExportStatus("프로젝트 열기를 취소했어.");
+        return;
+      }
+      if (!result.ok) throw new Error(result.err || "프로젝트 파일을 열지 못했어.");
+      await loadSigProjectEnvelope({ schemaVersion: result.schemaVersion, project: result.project, assets: result.assets }, {
+        skipConfirm: true,
+        manageBusy: false,
+        path: result.path || ""
+      });
+    } catch (error) {
+      console.error("[시그풍] 프로젝트 열기 실패", error);
+      showExportStatus(`프로젝트 열기 실패: ${error.message || error}`, true);
+    } finally {
+      setProjectIoBusy(false);
+    }
+  }
+
+  async function loadBrowserSigProjectFile(event) {
+    const input = event.currentTarget;
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (!file || !(await confirmProjectReplacement())) return;
+    if (file.size > SIG_PROJECT_MAX_BROWSER_BYTES) {
+      showExportStatus("프로젝트 JSON이 허용 크기를 넘었어.", true);
+      return;
+    }
+    setProjectIoBusy(true, "프로젝트 JSON 읽는 중…");
+    try {
+      const envelope = JSON.parse(await file.text());
+      await loadSigProjectEnvelope(envelope, { skipConfirm: true, manageBusy: false, path: file.name });
+    } catch (error) {
+      console.error("[시그풍] 프로젝트 JSON 열기 실패", error);
+      showExportStatus(`프로젝트 JSON 열기 실패: ${error.message || error}`, true);
+    } finally {
+      setProjectIoBusy(false);
+    }
+  }
+
   async function exportFiles(types, activeButton = null) {
+    if (projectIoBusy) return { ok: false, busy: true };
     const buttons = Array.from(document.querySelectorAll("#sigExportMobile,#sigExportPc,#sigExportBoth,#sigExportWeflab,#sigExportAll"));
     const labels = new Map(buttons.map(button => [button, button.textContent]));
     buttons.forEach(button => { button.disabled = true; });
     const button = activeButton || document.getElementById("sigExportAll") || document.getElementById("sigExportBoth");
     if (button) button.textContent = "PNG 준비 중…";
+    const savedResults = [];
+    setProjectIoBusy(true, "PNG 준비 중…");
+    showExportStatus("PNG를 준비하고 있어…");
     try {
+      blurActiveSigEditorField();
+      commitOutputProfileEdit();
+      flushMainHistoryBurst();
+      const requestedTypes = Array.from(new Set(types)).filter(type => OUTPUT_PROFILE_TYPES.includes(type));
+      const baseName = normalizeExportBaseName(state.exportBaseName);
       const master = makeMasterCanvas();
       const files = [];
-      if (types.includes("mobile")) {
+      if (requestedTypes.includes("mobile")) {
         const prepared = await prepareSoopCanvas(master, "mobile");
-        files.push({ type: "mobile", name: "sigballoon-mobile-293x248.png", blob: prepared.blob, width: 293, height: 248, method: prepared.method });
+        files.push({ type: "mobile", name: `${baseName}-mobile-293x248.png`, blob: prepared.blob, width: 293, height: 248, method: prepared.method });
       }
-      if (types.includes("pc")) {
+      if (requestedTypes.includes("pc")) {
         const pc = makePcCanvas(master);
         const prepared = await prepareSoopCanvas(pc, "pc");
-        files.push({ type: "pc", name: "sigballoon-pc-195x145.png", blob: prepared.blob, width: 195, height: 145, method: prepared.method });
+        files.push({ type: "pc", name: `${baseName}-pc-195x145.png`, blob: prepared.blob, width: 195, height: 145, method: prepared.method });
       }
-      if (types.includes("weflab")) {
+      if (requestedTypes.includes("weflab")) {
         const weflab = makeWeflabCanvas();
         const prepared = await prepareWeflabCanvas(weflab);
-        files.push({ type: "weflab", name: "sigballoon-weflab-668x374.png", blob: prepared.blob, width: WEFLAB_WIDTH, height: WEFLAB_HEIGHT, method: prepared.method });
+        files.push({ type: "weflab", name: `${baseName}-weflab-668x374.png`, blob: prepared.blob, width: WEFLAB_WIDTH, height: WEFLAB_HEIGHT, method: prepared.method });
       }
+      if (!files.length) throw new Error("저장할 PNG 종류가 없어.");
 
       const api = window.pywebview && window.pywebview.api;
       if (api && typeof api.save_png === "function") {
         let dir = null;
-        if (typeof api.pick_dir === "function") {
+        if (files.length > 1) {
+          if (typeof api.pick_dir !== "function") throw new Error("여러 PNG를 저장할 폴더 선택 기능을 사용할 수 없어.");
+          setProjectIoBusy(true, "저장 폴더 선택 중…");
+          showExportStatus(`${files.length}종을 저장할 폴더를 선택해 줘.`);
+          await nextPaint();
           const picked = parseApiResult(await api.pick_dir());
           if (picked.err) throw new Error(`폴더 선택 실패: ${picked.err}`);
           if (picked.cancel) {
-            showExportStatus("저장할 폴더 선택이 취소됐어.", true);
-            return;
+            showExportStatus("저장할 폴더 선택을 취소했어.");
+            return { cancel: true, saved: [] };
           }
           dir = picked.dir || picked.path || picked.folder || picked.value || null;
           if (!dir) throw new Error("선택한 폴더 경로를 읽지 못했어.");
         }
-        for (const file of files) {
+        for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+          const file = files[fileIndex];
           const b64 = await blobToBase64(file.blob);
           const payload = { name: file.name, b64 };
-          if (dir) payload.dir = dir;
+          if (dir) Object.assign(payload, { dir, collision: "unique" });
+          setProjectIoBusy(true, files.length > 1 ? `PNG 저장 중 · ${fileIndex + 1}/${files.length}` : "PNG 저장 위치 선택 중…");
+          showExportStatus(files.length > 1 ? `${fileIndex + 1}/${files.length} · ${file.name} 저장 중…` : `${file.name} 저장 위치를 선택해 줘.`);
+          await nextPaint();
           const saved = parseApiResult(await api.save_png(JSON.stringify(payload)));
           if (saved.err) throw new Error(saved.err);
-          if (saved.cancel) throw new Error(`${file.name} 저장이 취소됐어.`);
+          if (saved.cancel) {
+            if (!savedResults.length) {
+              showExportStatus("PNG 저장을 취소했어.");
+              return { cancel: true, saved: [] };
+            }
+            throw new Error(`${file.name} 저장을 취소했어.`);
+          }
           if (saved.ok === false) throw new Error(saved.message || `${file.name} 저장에 실패했어.`);
+          savedResults.push({
+            type: file.type,
+            requestedName: file.name,
+            actualName: String(saved.actualName || file.name),
+            renamed: !!saved.renamed,
+            path: saved.path || ""
+          });
         }
       } else {
-        files.forEach(file => downloadBlob(file.blob, file.name));
+        files.forEach(file => {
+          downloadBlob(file.blob, file.name);
+          savedResults.push({ type: file.type, requestedName: file.name, actualName: file.name, renamed: false, browser: true });
+        });
       }
       const details = files.map(file => `${file.width}×${file.height} ${(file.blob.size / 1000).toFixed(1)}KB`).join(" · ");
-      showExportStatus(`저장 완료 · ${details}`, false);
+      const actualNames = savedResults.map(saved => `${saved.actualName}${files.length > 1 && saved.renamed ? " (중복 이름 자동 변경)" : ""}`).join(" · ");
+      showExportStatus(`저장 완료 · ${actualNames} · ${details}`, false);
+      return { ok: true, saved: savedResults, files: files.map(({ type, name, width, height }) => ({ type, name, width, height })) };
     } catch (error) {
       console.error("[시그풍] PNG 저장 실패", error);
-      showExportStatus(`저장 실패: ${error.message || error}`, true);
+      const partial = savedResults.length ? `저장됨 ${savedResults.map(item => item.actualName).join(", ")} · 이어서 ` : "";
+      showExportStatus(`${partial}저장 실패: ${error.message || error}`, true);
+      return { ok: false, err: error.message || String(error), saved: savedResults };
     } finally {
+      setProjectIoBusy(false);
       buttons.forEach(item => {
-        item.disabled = false;
+        item.disabled = projectIoBusy;
         item.textContent = labels.get(item);
       });
     }
@@ -5164,8 +7190,23 @@
       prepareSoopCanvas,
       prepareWeflabCanvas,
       inspectCanvasAlpha,
+      inspectCanvasPixels,
       validateOutputCanvas,
       exportFiles,
+      serializeProject: serializeSigProject,
+      loadProjectEnvelope: loadSigProjectEnvelope,
+      saveProject: saveSigProject,
+      openProject: openSigProject,
+      getProjectState() {
+        return {
+          dirty: projectDirty,
+          busy: projectIoBusy,
+          path: currentProjectPath,
+          displayName: projectDisplayName(),
+          exportBaseName: normalizeExportBaseName(state.exportBaseName)
+        };
+      },
+      setProjectDirty,
       openMaskStudio,
       applyMaskStudio,
       maskUndo,
@@ -5180,6 +7221,24 @@
           limit: MAIN_HISTORY_LIMIT
         };
       },
+      getPhraseFonts() {
+        return [
+          ...PHRASE_FONT_OPTIONS.map(({ key, label, family }) => ({ key, label, family, custom: false })),
+          ...Array.from(customPhraseFonts.values()).map(({ key, label, family, fileName, mime, dataUrl }) => ({ key, label, family, fileName, mime, hasSource: !!dataUrl, custom: true }))
+        ];
+      },
+      getPhraseTextMetrics() {
+        const bounds = textLocalBounds(state.phrase, false);
+        return {
+          lines: String(state.phrase.text || "").split(/\\n|\n/).length,
+          fontKey: state.phrase.fontKey,
+          lineHeight: phraseLineHeight(state.phrase),
+          bounds: Object.assign({}, bounds)
+        };
+      },
+      cloneTextToProp(kind = "phrase") {
+        return cloneTextLayerToProp(kind, null);
+      },
       setStraightMask(top = 84) {
         state.background.top = clamp(top, 84, H);
         state.background.maskCanvas = createStraightMask(state.background.top);
@@ -5188,7 +7247,7 @@
         requestRender();
       },
       setTopLineMask(points) {
-        const target = createLogicalCanvas();
+        const target = createMaskCanvas();
         if (!applyTopLine(points, target)) return false;
         state.background.maskCanvas = target;
         state.background.mask = "alpha-custom";
@@ -5200,58 +7259,89 @@
         const mask = source === "working" && maskWorkingCanvas
           ? maskWorkingCanvas
           : isAlphaMask() ? state.background.maskCanvas : rasterizeBackgroundMask(state.background);
-        const data = mask.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(0, 0, W, H).data;
-        let opaquePixels = 0;
-        let topProtectedPixels = 0;
+        const data = mask.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(0, 0, MASK_W, MASK_H).data;
+        let rawOpaquePixels = 0;
+        let rawTopProtectedPixels = 0;
+        let logicalOpaquePixels = 0;
+        let logicalTopProtectedPixels = 0;
         let checksum = 2166136261;
-        let minX = W;
-        let minY = H;
+        let minX = MASK_W;
+        let minY = MASK_H;
         let maxX = -1;
         let maxY = -1;
-        for (let y = 0; y < H; y++) {
-          for (let x = 0; x < W; x++) {
-            const alpha = data[(y * W + x) * 4 + 3];
+        for (let y = 0; y < MASK_H; y++) {
+          for (let x = 0; x < MASK_W; x++) {
+            const alpha = data[(y * MASK_W + x) * 4 + 3];
             checksum = Math.imul(checksum ^ alpha, 16777619) >>> 0;
             if (!alpha) continue;
-            opaquePixels++;
-            if (y < 84) topProtectedPixels++;
+            rawOpaquePixels++;
+            if (y < MASK_SAFE_TOP) rawTopProtectedPixels++;
             minX = Math.min(minX, x);
             minY = Math.min(minY, y);
             maxX = Math.max(maxX, x);
             maxY = Math.max(maxY, y);
           }
         }
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            let maxAlpha = 0;
+            for (let yy = 0; yy < MASK_SCALE; yy++) {
+              for (let xx = 0; xx < MASK_SCALE; xx++) {
+                maxAlpha = Math.max(maxAlpha, data[(((y * MASK_SCALE + yy) * MASK_W) + x * MASK_SCALE + xx) * 4 + 3]);
+              }
+            }
+            if (maxAlpha) {
+              logicalOpaquePixels++;
+              if (y < SAFE_TOP) logicalTopProtectedPixels++;
+            }
+          }
+        }
+        const bounds = rawOpaquePixels ? {
+          minX: minX / MASK_SCALE,
+          minY: minY / MASK_SCALE,
+          maxX: maxX / MASK_SCALE,
+          maxY: maxY / MASK_SCALE
+        } : null;
         return {
           active: isAlphaMask(),
           source: source === "working" && maskWorkingCanvas ? "working" : "applied",
           paintMode: state.background.maskPaintMode,
-          opaquePixels,
-          topProtectedPixels,
+          opaquePixels: logicalOpaquePixels,
+          logicalOpaquePixels,
+          rawOpaquePixels,
+          topProtectedPixels: logicalTopProtectedPixels,
+          logicalTopProtectedPixels,
+          rawTopProtectedPixels,
           checksum: checksum.toString(16).padStart(8, "0"),
-          bounds: opaquePixels ? { minX, minY, maxX, maxY } : null,
+          bounds,
+          rawBounds: rawOpaquePixels ? { minX, minY, maxX, maxY } : null,
+          width: MASK_W,
+          height: MASK_H,
+          scale: MASK_SCALE,
           historyLength: maskHistory.length,
-          historyIndex: maskHistoryIndex
+          historyIndex: maskHistoryIndex,
+          historyBytes: maskHistory.reduce((total, alpha) => total + (alpha?.byteLength || 0), 0)
         };
       },
       maskAlphaAt(x, y, source = "working") {
         const mask = source === "working" && maskWorkingCanvas
           ? maskWorkingCanvas
           : isAlphaMask() ? state.background.maskCanvas : rasterizeBackgroundMask(state.background);
-        const px = Math.round(clamp(x, 0, W - 1));
-        const py = Math.round(clamp(y, 0, H - 1));
+        const px = Math.round(clamp(x * MASK_SCALE, 0, MASK_W - 1));
+        const py = Math.round(clamp(y * MASK_SCALE, 0, MASK_H - 1));
         return mask.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(px, py, 1, 1).data[3];
       },
       getMaskSymmetry(source = "working") {
         const mask = source === "working" && maskWorkingCanvas
           ? maskWorkingCanvas
           : isAlphaMask() ? state.background.maskCanvas : rasterizeBackgroundMask(state.background);
-        const data = mask.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(0, 0, W, H).data;
+        const data = mask.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(0, 0, MASK_W, MASK_H).data;
         let mismatchedPixels = 0;
         let maxDelta = 0;
-        for (let y = 84; y < H; y++) {
-          for (let x = 0; x < Math.floor(W / 2); x++) {
-            const left = data[(y * W + x) * 4 + 3];
-            const right = data[(y * W + (W - 1 - x)) * 4 + 3];
+        for (let y = MASK_SAFE_TOP; y < MASK_H; y++) {
+          for (let x = 0; x < Math.floor(MASK_W / 2); x++) {
+            const left = data[(y * MASK_W + x) * 4 + 3];
+            const right = data[(y * MASK_W + (MASK_W - 1 - x)) * 4 + 3];
             const delta = Math.abs(left - right);
             if (delta) mismatchedPixels++;
             maxDelta = Math.max(maxDelta, delta);
@@ -5271,20 +7361,44 @@
           cursorVisible: !document.getElementById("sigMaskCursor")?.hidden
         };
       },
+      getMaskResolution() {
+        return {
+          logicalWidth: W,
+          logicalHeight: H,
+          width: MASK_W,
+          height: MASK_H,
+          scale: MASK_SCALE,
+          safeTop: SAFE_TOP,
+          rawSafeTop: MASK_SAFE_TOP,
+          historyLimit: MASK_HISTORY_LIMIT,
+          historyBytes: maskHistory.reduce((total, alpha) => total + (alpha?.byteLength || 0), 0)
+        };
+      },
       setMaskSeed: applyMaskSeed,
-      getMaskSeedProfile(kind) {
-        const seed = createMaskSeed(kind);
-        const data = seed.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(0, 0, W, H).data;
+      getMaskSeedProfile(kind, values = null) {
+        const seed = createMaskSeed(kind, values);
+        const data = seed.getContext("2d", { alpha: true, willReadFrequently: true }).getImageData(0, 0, MASK_W, MASK_H).data;
         const top = [];
         for (let x = 0; x < W; x++) {
           let first = null;
-          for (let y = 0; y < H; y++) {
-            if (data[(y * W + x) * 4 + 3] >= 128) { first = y; break; }
+          for (let y = 0; y < MASK_H; y++) {
+            const left = data[(y * MASK_W + x * MASK_SCALE) * 4 + 3];
+            const right = data[(y * MASK_W + Math.min(MASK_W - 1, x * MASK_SCALE + 1)) * 4 + 3];
+            if (Math.max(left, right) >= 128) { first = (y + 1) / MASK_SCALE; break; }
           }
           top.push(first);
         }
-        return { kind, top, center: top[Math.floor(W / 2)], left: top[0], right: top[W - 1], min: Math.min(...top.filter(Number.isFinite)) };
+        return Object.assign({ kind, top, center: top[Math.floor(W / 2)], left: top[0], right: top[W - 1], min: Math.min(...top.filter(Number.isFinite)), rawWidth: MASK_W, rawHeight: MASK_H, scale: MASK_SCALE }, inspectCanvasPixels(seed));
       },
+      getMaskShapeState() {
+        return maskShapeSession ? { kind: maskShapeSession.kind, values: Object.assign({}, maskShapeSession.values), dirty: maskShapeSession.dirty } : null;
+      },
+      setMaskShapeValue(key, value) {
+        previewMaskShapeParameter(key, value);
+        return this.getMaskShapeState();
+      },
+      confirmMaskShapeParameters,
+      alignWorkingMask,
       pickLayerAt(x, y) {
         const ref = pickLayerAt({ x, y });
         return ref ? { kind: ref.kind, index: ref.index } : null;
@@ -5301,6 +7415,33 @@
           frame: frame ? { cx: frame.cx, cy: frame.cy, width: frame.width, height: frame.height, rotation: frame.rotation, resizable: canResizeLayer(frame.ref) } : null,
           dragging: dragging ? { mode: dragging.mode, kind: dragging.ref.kind, index: dragging.ref.index } : null
         };
+      },
+      getSnapState() {
+        return { enabled: state.snapEnabled !== false, distance: SNAP_DISTANCE, active: activeSnapGuides ? { x: activeSnapGuides.x?.label || null, y: activeSnapGuides.y?.label || null } : null };
+      },
+      getOutputProfiles() {
+        return cloneOutputProfiles();
+      },
+      setOutputProfile(type, values, recordHistory = true) {
+        if (!OUTPUT_PROFILE_TYPES.includes(type)) throw new Error("지원하지 않는 출력 종류야.");
+        const before = recordHistory ? beginMainChange() : null;
+        state.outputProfiles[type] = normalizeOutputProfile(type, Object.assign({}, outputProfile(type), values || {}));
+        syncOutputProfileControls();
+        requestRender();
+        if (recordHistory) commitMainChange(before);
+        return Object.assign({}, state.outputProfiles[type]);
+      },
+      resetOutputProfiles(recordHistory = true) {
+        const before = recordHistory ? beginMainChange() : null;
+        state.outputProfiles = cloneOutputProfiles(null);
+        syncOutputProfileControls();
+        requestRender();
+        if (recordHistory) commitMainChange(before);
+        return cloneOutputProfiles();
+      },
+      getOutputPixelStats(type) {
+        const target = type === "pc" ? makePcCanvas() : type === "weflab" ? makeWeflabCanvas() : makeMasterCanvas();
+        return Object.assign(inspectCanvasPixels(target), validateOutputCanvas(type, target));
       },
       getBottomAlpha() {
         const c = makeMasterCanvas();
@@ -5348,15 +7489,24 @@
     applyPreset(0, false);
     syncControls();
     renderLayerList();
+    // 마스크/출력 QA는 무거운 이미지 에셋 로드가 끝나기 전에도 사용할 수 있게 먼저 노출한다.
+    exposeQa();
     await loadImages();
     renderPresetGrid();
     requestRender();
     resetMainHistory();
     mainHistoryReady = true;
+    setProjectDirty(false);
+    syncProjectStatus();
     exposeQa();
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(requestRender).catch(() => {});
     }
+    window.addEventListener("beforeunload", event => {
+      if (!projectDirty && !maskStudioDirty()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
   }
 
   init().catch(error => {
