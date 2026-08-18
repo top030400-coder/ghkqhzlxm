@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-18 v2</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-18 v3</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -24078,183 +24078,6 @@ window.gifenc=exports;})();
 })();
 </script>
 <script src="signature_balloon.js?v=20260818-v18-freedom-rc2"></script>
-<script src="signature_balloon.js?v=20260818-v18-freedom-rc2"></script>
-  /* 읽기 전용 QA 표면. 제품 UI/저장 데이터에는 노출하지 않으며 브라우저 계약 테스트에서만 쓴다. */
-  Object.assign(window.__pbkQA || (window.__pbkQA = {}), {
-    bottomSpec: GIF_BOTTOM_SPEC,
-    bottom6Spec: GIF_BOTTOM6_SPEC,
-    bottomQualityFloor: GIF_BOTTOM_QUALITY_FLOOR,
-    bottom6Ladder: GIF_BOTTOM6_LADDER,
-    bottomResultQuality: gifBottomResultQuality,
-    bottomBetterQuality: gifBottomBetterQuality,
-    bottomRenderProfiles: GIF_BOTTOM_RENDER_PROFILES,
-    bottomProfileSubjectScalePct: gifBottomProfileSubjectScalePct,
-    bottomMotionFloor: GIF_BOTTOM_MOTION_FLOOR,
-    bottomHairFloor: GIF_BOTTOM_HAIR_FLOOR,
-    bottomMotionTrace: gifBottomMotionTrace,
-    bottomHairProductionQuality: gifBottomHairProductionQuality,
-    bottomPortraitMotionQuality: gifBottomPortraitMotionQuality,
-    bottomDelays: gifBottomDelays,
-    bottom6SampleDelays: gifBottom6SampleDelays,
-    bottom6SliceOne: gifBottom6SliceOne,
-    bottom6SampleIndices: gifBottom6SampleIndices,
-    bottom6Name: gifBottom6Name,
-    bottom6EncodeTile: gifBottom6EncodeTile,
-    bottom6EncodeAll: gifBottom6EncodeAll,
-    portraitMotion: gifPortraitMotion,
-    portraitEdgeProfile: gifPortraitEdgeProfile,
-    portraitEdgeFeather: gifPortraitEdgeFeather,
-    portraitAllowedCenter: gifPortraitAllowedCenter,
-    portraitBottomPlacement: gifPortraitBottomPlacement,
-    portraitPlacedBounds: gifPortraitPlacedBounds,
-    drawPortraitFrame: gifDrawPortraitFrame,
-    portraitChosen: gifPortraitChosen,
-    photoEntrySync: gifPhotoEntrySync,
-    photoAccept: GIF_PICK_ACCEPT_PHOTO,
-    getPhotoState: function () {
-      return {
-        hasImage: !!PHOTO.img,
-        ready: !!PHOTO.rig,
-        busy: !!PHOTO.rigPromise,
-        error: PHOTO.rigError || '',
-        bbox: PHOTO.rig && PHOTO.rig.bbox ? Object.assign({}, PHOTO.rig.bbox) : null,
-        edgeProfile: PHOTO.rig && PHOTO.rig.edgeProfile ? PHOTO.rig.edgeProfile : null,
-        placement: PHOTO.rig && PHOTO.rig.lastPlacement ? PHOTO.rig.lastPlacement : null,
-        contract: PHOTO.rig && PHOTO.rig.contract || ''
-      };
-    },
-    getPortraitControls: function () {
-      return { x: Number(gifEl('giRigX').value), y: Number(gifEl('giRigY').value),
-        scale: Number(gifEl('giRigScale').value), safe: Number(gifEl('giRigSafe').value), fitMode: GIF.fitMode };
-    },
-    setPortraitFitMode: function (mode) { GIF.fitMode = mode || 'play'; gifFitSync(); return GIF.fitMode; },
-    portraitDragControls: gifPortraitDragControls,
-    portraitNudge: gifPortraitNudge,
-    portraitWheelScale: gifPortraitWheelScale,
-    hairRootWeight: gifHairRootWeight,
-    hairMotion: gifHairMotion,
-    hairCanSway: gifHairCanSway,
-    hairNormalizeMask: gifHairNormalizeMask,
-    hairApplyMask: gifHairApplyMask,
-    hairAutoResponseAccepted: gifHairAutoResponseAccepted,
-    hairChooseAutoStrength: gifHairChooseAutoStrength,
-    hairPrepareAutoStrengthForMake: function () { return gifHairPrepareAutoStrengthForMake(PHOTO.rig); },
-    ensureAutoHair: gifEnsureAutoHair,
-    setHairMask: function (mask, provenance) {
-      if (!PHOTO.rig || !gifHairApplyMask(PHOTO.rig, mask, { trustedAuto: provenance === 'auto' })) return false;
-      PHOTO.rig.hairProvenance = provenance === 'auto' ? 'auto' : 'manual';
-      PHOTO.rig.hairStrengthManual = provenance !== 'auto';
-      gifEl('giHairOn').checked = true; gifHairUiSync(); return true;
-    },
-    getHairState: function () {
-      var r = PHOTO.rig;
-      return { busy: !!PHOTO.hairPromise, token: PHOTO.hairToken,
-        provenance: r && r.hairProvenance || '', hasMask: !!(r && r.hairMask),
-        pixels: Number(r && r.hairPixels) || 0, on: !!(gifEl('giHairOn') && gifEl('giHairOn').checked),
-        strength: Number(gifEl('giHairStrength') && gifEl('giHairStrength').value) || 0,
-        strengthManual: !!(r && r.hairStrengthManual), makeIntent: PHOTO.makeIntent,
-        status: (gifEl('giHairStatus') && gifEl('giHairStatus').textContent) || '' };
-    },
-    getMakeWaitState: function () {
-      return { intent: PHOTO.makeIntent, afterHair: PHOTO.makeAfterHair, afterRig: PHOTO.makeAfterRig,
-        waitHair: !!PHOTO.makeWaitHair, waitRig: !!PHOTO.makeWaitRig, busy: !!GIF.busy };
-    },
-    getGifOutput: function () {
-      var b64 = null;
-      if (GIF.out) {
-        var chunks = [];
-        for (var i = 0; i < GIF.out.length; i += 32768) {
-          chunks.push(String.fromCharCode.apply(null, GIF.out.subarray(i, i + 32768)));
-        }
-        b64 = btoa(chunks.join(''));
-      }
-      return { busy: !!GIF.busy, mode: GIF.mode, size: GIF.out ? GIF.out.length : 0,
-        hasOutput: !!GIF.out, b64: b64,
-        meta: (gifEl('gifMeta') && gifEl('gifMeta').textContent) || '' };
-    },
-    resetPhotoRig: gifPhotoRigReset,
-    prepareSyntheticMake: function (mode) {
-      gifBannerSetKind(mode === 'side' || mode === 'side6' ? 'side' : 'bottom');
-      GIF.mode = (mode === 'bottom6' || mode === 'side6') ? 'bottom6' : 'bottom';
-      GIF.url = 'qa:synthetic'; GIF.dur = 3;
-      gifEl('giPhMove').value = 'portrait2d'; gifEl('gifGo').disabled = false;
-      return GIF.mode;
-    },
-    setSyntheticPhotoWithoutRig: function (source, mode) {
-      if (!source) throw new Error('source required');
-      gifPhotoRigReset();
-      PHOTO.img = source; PHOTO.w = source.width; PHOTO.h = source.height;
-      GIF.kind = 'photo'; GIF.mode = mode === 'bottom6' ? 'bottom6' : 'bottom';
-      GIF.url = 'qa:synthetic'; GIF.dur = 3; GIF.vw = source.width; GIF.vh = source.height;
-      gifPhotoShim.videoWidth = source.width; gifPhotoShim.videoHeight = source.height;
-      gifPhotoShim.readyState = 4; gifEl('giPhMove').value = 'portrait2d'; gifEl('gifGo').disabled = false;
-      return this.getPhotoState();
-    },
-    drawHairAwareSubject: gifDrawHairAwareSubject,
-    setPortraitControls: function (o) {
-      o = o || {};
-      if (o.x != null) gifEl('giRigX').value = String(o.x);
-      if (o.y != null) gifEl('giRigY').value = String(o.y);
-      if (o.scale != null) gifEl('giRigScale').value = String(o.scale);
-      if (o.safe != null) gifEl('giRigSafe').value = String(o.safe);
-      gifBfxSyncUi();
-      return this.getPortraitControls();
-    },
-    resetPortraitLayout: function () { gifPortraitResetLayout(); return this.getPortraitControls(); },
-    setSyntheticMaskRig: function (source, mask) {
-      if (!source || !mask) throw new Error('source/mask required');
-      PHOTO.rev++; PHOTO.hairToken++; PHOTO.makeIntent++; PHOTO.hairPromise = null; PHOTO.rigPromise = null;
-      PHOTO.makeAfterHair = false; PHOTO.makeWaitHair = null; PHOTO.makeAfterRig = false; PHOTO.makeWaitRig = null;
-      var next = gifPortraitDerived(source, mask);
-      PHOTO.img = source; PHOTO.w = source.width; PHOTO.h = source.height;
-      PHOTO.rig = { source: source, mask: mask, baseMask: gifMaskClone(mask), renderMask: next.renderMask,
-        subject: next.subject, bbox: next.bbox, edgeProfile: next.edgeProfile, bgCrop: next.bgCrop,
-        backgrounds: {}, hairMask: null, hairBase: null, hairLayer: null, hairBBox: null, hairPixels: 0,
-        hairProvenance: '', hairStrengthManual: false, hairAutoStrength: null,
-        contract: 'single-rigid-subject:face+jaw+neck+heart-hands+sleeves+torso' };
-      PHOTO.rigError = ''; GIF.kind = 'photo'; GIF.mode = 'bottom'; GIF.vw = source.width; GIF.vh = source.height;
-      gifPhotoShim.videoWidth = source.width; gifPhotoShim.videoHeight = source.height;
-      gifPhotoShim.readyState = 4; gifEl('giPhMove').value = 'portrait2d';
-      gifPortraitEdgeStatus(next.edgeProfile, null);
-      return this.getPhotoState();
-    },
-    setSyntheticRig: function (subject, bbox, edgeProfile) {
-      if (!subject || !bbox) throw new Error('subject/bbox required');
-      PHOTO.rev++; PHOTO.hairToken++; PHOTO.makeIntent++; PHOTO.hairPromise = null; PHOTO.rigPromise = null;
-      PHOTO.makeAfterHair = false; PHOTO.makeWaitHair = null; PHOTO.makeAfterRig = false; PHOTO.makeWaitRig = null;
-      PHOTO.img = subject;
-      PHOTO.w = subject.width;
-      PHOTO.h = subject.height;
-      PHOTO.rig = { source: subject, mask: null, subject: subject, bbox: Object.assign({}, bbox), edgeProfile: edgeProfile || null,
-        bgCrop: null, backgrounds: {}, contract: 'single-rigid-subject:face+jaw+neck+heart-hands+sleeves+torso' };
-      PHOTO.rigError = '';
-      GIF.kind = 'photo';
-      GIF.mode = 'bottom';
-      GIF.vw = subject.width;
-      GIF.vh = subject.height;
-      GIF.zoom = 1;
-      GIF.ox = 0;
-      GIF.oy = 0;
-      gifEl('giPhMove').value = 'portrait2d';
-      return this.getPhotoState();
-    }
-  });
-  /* 이 HTML은 원본 화보키트와 분리된 사진 움직임 전용 샌드박스다.
-     시작 화면도 움짤 탭으로 고정해 기능을 찾아 헤매지 않게 한다. */
-  if (document.getElementById('sandboxBadge')) {
-    setTimeout(function () {
-      var tab = document.getElementById('tabGifBn') || document.getElementById('tabGif');
-      if (tab && typeof tab.onclick === 'function') tab.onclick();
-    }, 120);
-  }
-  if (/^(localhost|127\.0\.0\.1)$/i.test(location.hostname) && /[?&]pbkqa=1(?:&|$)/.test(location.search + '&')) {
-    var qaScript = document.createElement('script');
-    qaScript.src = '../tests/browser_portrait2d_contract.js';
-    document.head.appendChild(qaScript);
-  }
-})();
-</script>
-<script src="signature_balloon.js?v=20260817-v17-5-main-undo"></script>
 
 <!-- ================= [Lic] 라이선스 인증 게이트 ================= -->
 <script>
@@ -24480,5 +24303,7 @@ window.gifenc=exports;})();
   if (window.pywebview && window.pywebview.api) boot();
   else window.addEventListener('pywebviewready', boot);
   setTimeout(boot, 300); /* 이벤트를 놓쳐도 부팅되게 */
+})();
+</script>
 </body>
 </html>
