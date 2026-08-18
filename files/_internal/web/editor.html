@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-18 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-18 v2</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -11599,6 +11599,21 @@ window.gifenc=exports;})();
   function gifTabApplyKind(kind) {
     GIF_TAB_KIND = kind;
     var isBn = kind === 'banner';
+    /* 움짤 탭에선 정지사진·AI 누끼 흐름을 통째로 숨긴다 — 그 기능의 집은 움짤배너 탭이다.
+       사진을 고르면 스크립트가 박스를 다시 펴므로 JS 토글 대신 CSS 로 못박는다. */
+    if (!document.getElementById('gifTabKindCss')) {
+      var st = document.createElement('style');
+      st.id = 'gifTabKindCss';
+      st.textContent = 'body.gifPlain #gifPhotoEntry,body.gifPlain #giRigBox{display:none !important}' +
+        'body.gifPlain #giPhMove option[value=portrait2d]{display:none}';
+      document.head.appendChild(st);
+    }
+    document.body.classList.toggle('gifPlain', !isBn);
+    var mv = document.getElementById('giPhMove');
+    if (!isBn && mv && mv.value === 'portrait2d') {
+      mv.value = 'zoomin';
+      mv.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     document.querySelectorAll('#gifModeRow button').forEach(function (bt) {
       var m = bt.getAttribute('data-m');
       var bnBtn = m === 'bottom' || m === 'bottom6' || m === 'side';
@@ -24062,6 +24077,7 @@ window.gifenc=exports;})();
   }
 })();
 </script>
+<script src="signature_balloon.js?v=20260818-v18-freedom-rc2"></script>
 <script src="signature_balloon.js?v=20260818-v18-freedom-rc2"></script>
   /* 읽기 전용 QA 표면. 제품 UI/저장 데이터에는 노출하지 않으며 브라우저 계약 테스트에서만 쓴다. */
   Object.assign(window.__pbkQA || (window.__pbkQA = {}), {
