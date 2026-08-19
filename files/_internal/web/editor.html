@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-19_v5 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-18_v5 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-19 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-18 v4</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -1099,11 +1099,6 @@
               <option value="1.5" selected>1.5초 — 화질·움직임 최상 (권장)</option>
               <option value="2">2초 — 중간</option>
               <option value="3">3초 — 길게 (용량 빠듯, 자동 완화 잦음)</option>
-            </select></div>
-            <div class="ckRow">출력 크기 <select id="giBfxScale" style="flex:1" title="작게 만들어도 방송 화면에선 꽉 차게 늘어나요. 픽셀을 아낀 만큼 색·움직임이 좋아집니다">
-              <option value="0.85" selected>85% — 부드러운 움직임 (권장)</option>
-              <option value="1">100% — 최대 또렷함</option>
-              <option value="0.5">50% — 색감 최대 (원본급 색)</option>
             </select></div>
             <label class="ckRow wide">잘림 보호 여백 <input type="range" id="giRigSafe" min="0" max="24" step="1" value="12"><span class="fxVal" id="giRigSafeV">12px</span></label>
             <label class="ckRow wide">인물 크기 <input type="range" id="giRigScale" min="50" max="300" step="1" value="100"><span class="fxVal" id="giRigScaleV">100%</span></label>
@@ -14694,7 +14689,7 @@ window.gifenc=exports;})();
     'giTxtAnim', 'giParti', 'giTxtDelay', 'giTxtSpd', 'giOn', 'giOverlay',
     /* 사진 2D 하단 배너 설정은 프사 인트로와 별도 키로 보존한다. */
     'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxNameCol',
-    'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
+    'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen',
     'giRigSafe', 'giRigScale', 'giRigX', 'giRigY',
     'giHairOn', 'giHairStrength',
     'giBfxParticles', 'giBfxParticleCol', 'giBfxParticleAmt', 'giBfxGlow', 'giBfxOrb', 'giBfxSparkle'];
@@ -15011,7 +15006,7 @@ window.gifenc=exports;})();
   gifEl('giRigRight').onclick = function () { gifPortraitNudge(3, 0); };
   [
     'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxNameCol',
-    'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
+    'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen',
     'giRigSafe', 'giRigScale', 'giRigX', 'giRigY',
     'giBfxParticles', 'giBfxParticleCol', 'giBfxParticleAmt', 'giBfxGlow', 'giBfxOrb', 'giBfxSparkle'
   ].forEach(function (id) {
@@ -19816,21 +19811,15 @@ window.gifenc=exports;})();
   function gifBannerRebuildLadder() {
     GIF_BOTTOM6_LADDER = [
     [1,256,0,.20],[1,128,1,.15],
-    /* 256색·FS 디더 없음 — 출력 크기를 줄이면(색감 모드) 픽셀이 적어져 원본급
-       색으로도 200KB 에 들어온다. FS 칸은 델타를 망가뜨려 사실상 못 들어가므로
-       무디더 칸이 실질적인 '최대 색' 경로다. */
-    [1,256,2,0],[1,256,4,0],
     /* 128색·FS 디더 없음 — 밝은 블러 배경의 띠(포스터리제이션)를 절반으로.
        배경은 정지(델타 0)라 색이 늘어도 반복 비용이 없고, 첫 장·인물 갱신만 ~15% 커진다.
        fuzz 로 그 차액을 회수해 본다 — 안 되면 아래 64색 칸으로 자연 강등. */
     [1,128,3,0],[1,128,4,0],[1,128,5,0],[1,128,6,0],
     [1,64,3,0],[1,64,4,0],[1,64,5,0],
     [1.5,256,0,.20],[1.5,128,2,.15],
-    [1.5,256,3,0],
     [1.5,128,4,0],[1.5,128,6,0],
     [1.5,64,3,0],[1.5,64,5,0],
     [2,256,0,.20],[2,128,2,.15],
-    [2,256,3,0],
     [2,128,4,0],[2,128,6,0],
     [2,64,3,0],[2,64,5,0]
   ].map(function (v) {
@@ -19852,31 +19841,6 @@ window.gifenc=exports;})();
     GIF_BOTTOM6_SPEC.durationMs = GIF_BOTTOM_SPEC.durationMs;
     gifBannerRebuildLadder();
     if (GIF.kind === 'photo' && (GIF.mode === 'bottom' || GIF.mode === 'bottom6')) GIF.dur = sec;
-  }
-  /* ★ 출력 크기 — 작게 구워도 방송 화면(SOOP 슬롯)이 꽉 차게 늘려 보여준다(실측 확인).
-     픽셀 수를 아낀 만큼 같은 200KB 에서 등급이 올라간다: 85% = 인물 24fps 부드럽게,
-     50% = 원본급 색(256/128색). 기준 좌표계(GIF_BANNER_GEOMS)에서 매번 새로 계산해
-     중복 적용이 없고, 사이드(80px)는 이미 최소 크기라 배율을 받지 않는다.
-     6칸 마스터는 '타일×2×3'으로 계산해 슬라이스 격자가 정확히 맞는다. */
-  function gifBannerApplyScale() {
-    var sc = 1;
-    var el = gifEl('giBfxScale');
-    /* 하단 '단일'만 배율 적용. 사이드(80px)는 이미 최소 크기, 6칸은 타일이 장면의
-       확대 크롭이라 줄여도 델타 비용이 안 줄어 오히려 등급이 떨어졌다(실측). */
-    if (el && GIF.bannerKind !== 'side' && GIF.mode !== 'bottom6') {
-      sc = Math.max(.5, Math.min(1, Number(el.value) || 1));
-    }
-    var geo = GIF_BANNER_GEOMS[GIF.bannerKind] || GIF_BANNER_GEOMS.bottom;
-    GIF_BOTTOM_SPEC.w = Math.round(geo.single.w * sc);
-    GIF_BOTTOM_SPEC.h = Math.round(geo.single.h * sc);
-    var tw = Math.round(geo.six.tileW * sc), th = Math.round(geo.six.tileH * sc);
-    GIF_BOTTOM6_SPEC.tileW = tw; GIF_BOTTOM6_SPEC.tileH = th;
-    GIF_BOTTOM6_SPEC.w = tw * 2; GIF_BOTTOM6_SPEC.h = th * 3;
-    GIF_BOTTOM6_SPEC.order = [
-      { index: 1, x: 0, y: 0 }, { index: 2, x: tw, y: 0 },
-      { index: 3, x: 0, y: th }, { index: 4, x: tw, y: th },
-      { index: 5, x: 0, y: th * 2 }, { index: 6, x: tw, y: th * 2 }
-    ];
   }
   /* Static full-strength background FX leave the selected composition visible while
      only its temporal phase is frozen. Profile-specific pairs are measured bounds:
@@ -20479,7 +20443,6 @@ window.gifenc=exports;})();
     /* 프리셋 복원 등으로 select 값과 스펙이 어긋났을 수 있다 — 시작 전에 맞춘다(멱등) */
     if (GIF.mode === 'bottom' || GIF.mode === 'bottom6') {
       gifBannerSetLen(gifEl('giBfxLen') ? gifEl('giBfxLen').value : 3);
-      gifBannerApplyScale();
     }
     /* 고른 글꼴이 아직 로드 중이면 폴백 글씨로 박제된다 — 한 번 기다렸다 다시 시작 */
     if ((GIF.mode === 'bottom' || GIF.mode === 'bottom6') && !GIF.__fontWaited) {
