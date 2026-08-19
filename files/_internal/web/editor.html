@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-19 v2</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-19 v3</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -15033,7 +15033,9 @@ window.gifenc=exports;})();
     var el = gifEl(id);
     if (!el) return;
     el.oninput = el.onchange = function () {
-      if (id === 'giBfxLen') gifBannerSetLen(el.value);
+      /* 인코드 도중엔 스펙·사다리를 건드리지 않는다 — 진행 중인 72장 파이프라인과
+         프레임 수가 어긋나 통째로 실패하던 창을 닫음. 새 값은 다음 만들기에서 적용. */
+      if (id === 'giBfxLen' && !GIF.busy) gifBannerSetLen(el.value);
       if (id === 'giRigScale' || id === 'giRigX' || id === 'giRigY') GIF.subjectManual = true;
       gifBfxSyncUi();
       if (id === 'giRigSafe' || id === 'giRigScale' || id === 'giRigX' || id === 'giRigY') {
@@ -18923,6 +18925,10 @@ window.gifenc=exports;})();
   }
   document.querySelectorAll('#gifModeRow button').forEach(function (bt) {
     bt.onclick = function () {
+      /* 인코드 도중 모드 전환 금지 — gifBannerSetKind가 스펙을 원본 크기로 리셋해
+         배율로 캡처 중인 마스터와 어긋나며 6칸 인코드가 통째로 실패한다.
+         (⚠ gifGo.disabled는 '소스 없음'에도 켜져 있어 여기 조건으로 쓰면 안 된다) */
+      if (GIF.busy) return;
       gifStale(); /* 결과 화면이었다면 접고 미리보기로 */
       document.querySelectorAll('#gifModeRow button').forEach(function (x) { x.classList.remove('on'); });
       bt.classList.add('on');
@@ -19898,6 +19904,9 @@ window.gifenc=exports;})();
     var geo = GIF_BANNER_GEOMS[GIF.bannerKind] || GIF_BANNER_GEOMS.bottom;
     GIF_BOTTOM_SPEC.w = Math.round(geo.single.w * sc);
     GIF_BOTTOM_SPEC.h = Math.round(geo.single.h * sc);
+    /* ⚠ 단일 모드도 인코더는 GIF_BOTTOM6_SPEC.tileW/tileH 를 읽는다(gifBottom6EncodeTile
+       공용) — 두 스펙은 반드시 같은 배율로 움직여야 한다. 6칸 모드의 85% 차단은
+       위 sc 클램프(모드 조건)가 담당하므로 여기서 또 거르면 안 된다. */
     var tw = Math.round(geo.six.tileW * sc), th = Math.round(geo.six.tileH * sc);
     GIF_BOTTOM6_SPEC.tileW = tw; GIF_BOTTOM6_SPEC.tileH = th;
     GIF_BOTTOM6_SPEC.w = tw * 2; GIF_BOTTOM6_SPEC.h = th * 3;
@@ -20285,6 +20294,13 @@ window.gifenc=exports;})();
     return out;
   }
   function gifBottom6EncodeCandidate(frames, tileIndex, baseName, ld, rank, attempts) {
+    /* 캡처 당시 배율과 지금 스펙이 어긋난 버퍼(예: 인코드 중 외부에서 스펙 변경)를
+       그대로 인코드하면 범위 밖 읽기나 깨진 GIF가 된다 — 크기부터 확인(fail-closed). */
+    var wantLen = GIF_BOTTOM6_SPEC.tileW * GIF_BOTTOM6_SPEC.tileH * 4;
+    if (frames[0] && frames[0].length !== wantLen) {
+      throw new Error('프레임 버퍼(' + frames[0].length + ')와 저장 크기(' +
+        GIF_BOTTOM6_SPEC.tileW + '×' + GIF_BOTTOM6_SPEC.tileH + ')가 어긋나 저장을 중단했어요. 다시 만들어 주세요.');
+    }
     var sampleIndices = gifBottom6SampleIndices(ld.frames);
     var sampledFrames = sampleIndices.map(function (fi) { return frames[fi]; });
     var sampledDelays = gifBottom6SampleDelays(sampleIndices), keepFs = GIF_FS, bytes;
@@ -20343,9 +20359,11 @@ window.gifenc=exports;})();
     var profile = gifBottomRenderProfile(), ladder = gifBottomProfileLadder(profile);
     for (var i = 0; i < ladder.length; i++) {
       var ld = ladder[i];
-      if (!gifBottomQualityFloorPassed(ld, profile)) {
-        throw new Error('내부 품질 사다리가 최소 품질선보다 낮습니다.');
-      }
+      /* ⚠ 사다리엔 '관대한 프로필 전용' 칸(fuzz 6 등)이 섞여 있다 — 기준이 엄격한
+         프로필(원래 효과 등)에선 그 칸을 건너뛰고 다음 칸으로 가야 한다.
+         예전엔 여기서 throw 해서, 무거운 영상이 위 칸들을 전부 초과해 fuzz 6 칸에
+         닿는 순간 '내부 품질 사다리가...' 오류로 통째로 중단됐다(실고객 재현). */
+      if (!gifBottomQualityFloorPassed(ld, profile)) continue;
       var candidate = gifBottom6EncodeCandidate(frames, tileIndex, baseName, ld, i, attempts);
       if (candidate.sizeBytes <= GIF_BOTTOM6_SPEC.limitBytes) return candidate;
     }
@@ -20494,6 +20512,10 @@ window.gifenc=exports;})();
   }
   gifEl('gifGo').onclick = function () {
     if (GIF.busy || !GIF.url) return;
+    /* 출력 크기 자동 구제 플래그 — 자동 재시도로 되돌아온 호출이면 유지하고,
+       사용자가 새로 누른 호출이면 초기화한다(재시도는 회차당 한 번만). */
+    if (GIF.__scaleRetryPending) { GIF.__scaleRetryPending = false; }
+    else { GIF.__scaleAutoRetried = false; GIF.__scaleRetryNote = ''; }
     GIF.out6 = null;
     gifEl('gifSave').textContent = '💾 GIF 저장';
     if (!window.gifenc) return alert('GIF 인코더(gifenc.js)를 못 읽었어요.');
@@ -20739,6 +20761,28 @@ window.gifenc=exports;})();
         var tried = [];
         function publishBest() {
           if (!best) {
+            /* ★ 출력 크기 자동 구제 — 지금 배율(100%/85%)로 용량이 안 맞아 전부
+               실패했다면, 오류창을 띄우기 전에 출력 크기 50%로 한 번 자동 재시도한다.
+               픽셀이 1/4이라 대부분 통과하고, 방송 화면(SOOP 슬롯)은 꽉 차게 늘려
+               보여줘 등록에 문제가 없다(실측). 재시도까지 실패하면 원래 오류창. */
+            var scaleSel = gifEl('giBfxScale');
+            var curSc = scaleSel ? Math.max(.5, Math.min(1, Number(scaleSel.value) || 1)) : 1;
+            if (scaleSel && curSc > .5 && !GIF.__scaleAutoRetried &&
+                (GIF.mode === 'bottom' || GIF.mode === 'bottom6')) {
+              GIF.__scaleAutoRetried = true;
+              GIF.__scaleRetryPending = true;
+              GIF.__scaleRetryNote = '⚠ 출력 크기 ' + Math.round(curSc * 100) + '%로는 용량(칸당 200KB)을 넘어 ' +
+                '<b>50%로 자동 저장</b>했어요 — 방송국에 올리면 <b>꽉 차게 늘어나 그대로 정상 등록</b>됩니다.';
+              scaleSel.value = '0.5';
+              delete scaleSel.dataset.was85;
+              try { gifBfxScaleHintSync(); } catch (e2) {}
+              GIF.out = null; GIF.out6 = null; gifBottomSetRenderProfile(0);
+              GIF.busy = false;
+              gifEl('gifGo').disabled = false;
+              gifSetProg('용량이 넘쳐 출력 크기 50%로 자동 재시도 중…');
+              setTimeout(function () { gifEl('gifGo').onclick(); }, 30);
+              return;
+            }
             GIF.out = null; GIF.out6 = null; gifBottomSetRenderProfile(0);
             return encFail((lastError && lastError.message ? lastError.message : lastError) +
               '\n현재 이미지에서는 인물 전체를 부드럽게 움직이면서 200KiB·최소 64색을 동시에 지킬 수 없습니다. ' +
@@ -20747,7 +20791,15 @@ window.gifenc=exports;})();
               (tried.length ? ('\n\n[등급별 결과 — 문의할 때 이 부분을 그대로 보내주세요]\n' +
                 tried.join('\n')) : ''));
           }
-          try { onSuccess(best.result, best.profileIndex, best.profile); }
+          try {
+            onSuccess(best.result, best.profileIndex, best.profile);
+            /* 자동 구제로 저장된 회차엔 결과 카드 맨 위에 그 사실을 알린다 */
+            if (GIF.__scaleRetryNote) {
+              var noteEl = gifEl('gifMeta');
+              if (noteEl) noteEl.innerHTML = GIF.__scaleRetryNote + '<br>' + noteEl.innerHTML;
+              GIF.__scaleRetryNote = '';
+            }
+          }
           catch (e) {
             GIF.out = null; GIF.out6 = null; gifBottomSetRenderProfile(0);
             encFail(e && e.message ? e.message : e);
