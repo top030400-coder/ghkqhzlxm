@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-18_v5 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-19_v5 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-18 v4</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-19 v2</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -1100,6 +1100,12 @@
               <option value="2">2초 — 중간</option>
               <option value="3">3초 — 길게 (용량 빠듯, 자동 완화 잦음)</option>
             </select></div>
+            <div class="ckRow">출력 크기 <select id="giBfxScale" style="flex:1" title="작게 만들어도 방송 화면에선 꽉 차게 늘어나요. 픽셀을 아낀 만큼 색·움직임이 좋아집니다">
+              <option value="0.85" selected>85% — 부드러운 움직임 (권장)</option>
+              <option value="1">100% — 최대 또렷함</option>
+              <option value="0.5">50% — 색감·효과 최대</option>
+            </select></div>
+            <div class="bnRec" id="giBfxScaleHint" style="font-size:11px;line-height:1.55"></div>
             <label class="ckRow wide">잘림 보호 여백 <input type="range" id="giRigSafe" min="0" max="24" step="1" value="12"><span class="fxVal" id="giRigSafeV">12px</span></label>
             <label class="ckRow wide">인물 크기 <input type="range" id="giRigScale" min="50" max="300" step="1" value="100"><span class="fxVal" id="giRigScaleV">100%</span></label>
             <label class="ckRow wide">인물 X <input type="range" id="giRigX" min="0" max="100" step="0.1" value="74"><span class="fxVal" id="giRigXV">74%</span></label>
@@ -12326,6 +12332,17 @@ window.gifenc=exports;})();
   /* 하단 배너는 서비스 규격을 하나의 계약으로 고정한다. GIF 지연은 10ms 단위라
      72장을 40/50ms로 고르게 섞어야 합계가 정확히 3000ms가 된다. */
   var GIF_BOTTOM_SPEC = { w: 720, h: 150, fps: 24, len: 3, frames: 72, durationMs: 3000 };
+  /* ★ 구도 기준폭 — 출력 크기(배율)를 줄여도 글자·이펙트·여백·이동량은 '원본 기준
+     비율'로 계산해야 미리보기와 완성본 구도가 같다. 배율이 스펙(w/h)을 줄이므로,
+     비율 계산은 스펙이 아니라 이 기준값(GIF_BANNER_GEOMS 원본)을 쓴다. */
+  function gifBannerBaseW() {
+    var g = GIF_BANNER_GEOMS[GIF.bannerKind] || GIF_BANNER_GEOMS.bottom;
+    return g.single.w;
+  }
+  function gifBannerBaseH() {
+    var g = GIF_BANNER_GEOMS[GIF.bannerKind] || GIF_BANNER_GEOMS.bottom;
+    return g.single.h;
+  }
   var GIF_BOTTOM6_SPEC = {
     w: 1440, h: 450, fps: 24, len: 3, frames: 72, durationMs: 3000,
     tileW: 720, tileH: 150, tiles: 6, limitBytes: 200 * 1024,
@@ -13385,7 +13402,7 @@ window.gifenc=exports;})();
      원형 그라데이션이 동심원 띠("빛번짐이 심해 보임")로 깨지던 원인 제거. */
   function gifDrawBfxSlowGlow(g, W, H, uSlow) {
     var C = gifBfxCfg(), tau = Math.PI * 2, i;
-    var sc = W / GIF_BOTTOM_SPEC.w * (GIF.bannerKind === 'side' ? .42 : 1);
+    var sc = W / gifBannerBaseW() * (GIF.bannerKind === 'side' ? .42 : 1);
     if (C.glow > 0) {
       var sweepX = W * (.06 + .42 * (.5 + .5 * Math.sin(tau * uSlow)));
       var glow = g.createRadialGradient(sweepX, H * .54, 0, sweepX, H * .54, W * .23);
@@ -13671,7 +13688,7 @@ window.gifenc=exports;})();
     var uSlow = gifBfxPhaseSlow(ph);   /* 넓은 면 전용 — 파티클·별·이름은 u 그대로 */
     /* 사이드(80x209)는 판 넓이가 하단의 1/6.5 — 절대 px 로 그리는 파티클·글자를
        그대로 두면 판을 다 덮는다. 면적비의 제곱근(≈0.42)으로 줄인다. */
-    var sc = W / GIF_BOTTOM_SPEC.w * (GIF.bannerKind === 'side' ? .42 : 1);
+    var sc = W / gifBannerBaseW() * (GIF.bannerKind === 'side' ? .42 : 1);
     /* 빛번짐·빛망울: 고정 등급(fxSlowSteps:1)에선 이미 배경 캔버스에 지터와 함께
        구워져 있으므로 여기선 건너뛴다. 살아 움직이는 등급/미리보기에서만 그린다. */
     if (Number(gifBottomRenderProfile().fxSlowSteps) !== 1) {
@@ -13697,7 +13714,7 @@ window.gifenc=exports;})();
   }
   function gifDrawBfxNameSub(g, W, H, u) {
     var C = gifBfxCfg();
-    var sc = W / GIF_BOTTOM_SPEC.w * (GIF.bannerKind === 'side' ? .42 : 1);
+    var sc = W / gifBannerBaseW() * (GIF.bannerKind === 'side' ? .42 : 1);
     if (!C.on || !C.name) return;
     var name = C.name, reveal = 1, fadeOut = 1;
     if (C.reveal !== 'always') fadeOut = 1 - gifBfxEase(.86, .995, u);
@@ -13751,7 +13768,7 @@ window.gifenc=exports;})();
   function gifDrawPortraitFxFront(g, W, H, ph) {
     if (GIF.mode !== 'bottom') return;
     var C = gifBfxCfg();
-    var u = gifBfxPhase(ph), tau = Math.PI * 2, sc = W / GIF_BOTTOM_SPEC.w * (GIF.bannerKind === 'side' ? .42 : 1);
+    var u = gifBfxPhase(ph), tau = Math.PI * 2, sc = W / gifBannerBaseW() * (GIF.bannerKind === 'side' ? .42 : 1);
     if (C.sparkle > 0) {
       var n = Math.round(C.sparkle / 10);
       for (var i = 0; i < n; i++) {
@@ -13810,7 +13827,7 @@ window.gifenc=exports;})();
       var c = Math.abs(cc), s = Math.abs(ss);
       var hw = b.w * scale / 2, hh = b.h * scale / 2;
       var ex = m.sc * (c * hw + s * hh), ey = m.sc * (s * hw + c * hh);
-      var dx = m.dx * W / GIF_BOTTOM_SPEC.w, dy = m.dy * H / GIF_BOTTOM_SPEC.h;
+      var dx = m.dx * W / gifBannerBaseW(), dy = m.dy * H / gifBannerBaseH();
       /* ★ 사이드(80px 폭)는 인물이 판보다 넓은 게 정상이다 — 실제 사이드 배너는 전부
          가슴 위 크롭이다. 가로축 제약을 전부 풀어 좌우 드래그를 자유롭게 한다:
          자연 윤곽 규칙뿐 아니라 '원본에서 잘린 단면 숨기기'도 가로는 해제 — 이게 남아
@@ -13892,8 +13909,8 @@ window.gifenc=exports;})();
   function gifPortraitBottomPlacement(W, H, b, amount, edge, controls) {
     edge = edge || (PHOTO.rig && PHOTO.rig.edgeProfile) || null;
     controls = controls || null;
-    var safe = gifBfxVal('giRigSafe', 12, 0, 24) * W / GIF_BOTTOM_SPEC.w;
-    var bleed = Math.max(3 * W / GIF_BOTTOM_SPEC.w, safe * .5);
+    var safe = gifBfxVal('giRigSafe', 12, 0, 24) * W / gifBannerBaseW();
+    var bleed = Math.max(3 * W / gifBannerBaseW(), safe * .5);
     var requestedScalePct = controls && isFinite(Number(controls.scale)) ?
       Math.max(GIF_RIG_SMIN, Math.min(GIF_RIG_SMAX, Number(controls.scale))) : gifBfxVal('giRigScale', 100, GIF_RIG_SMIN, GIF_RIG_SMAX);
     /* Automatic smooth profiles may reduce only their temporary render scale.
@@ -13987,8 +14004,8 @@ window.gifenc=exports;})();
     var a = Math.abs(m.rot * Math.PI / 180), c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
     var hw = b.w * placement.scale / 2, hh = b.h * placement.scale / 2;
     var ex = m.sc * (c * hw + s * hh), ey = m.sc * (s * hw + c * hh);
-    var cx = placement.cx + m.dx * W / GIF_BOTTOM_SPEC.w;
-    var cy = placement.cy + m.dy * H / GIF_BOTTOM_SPEC.h;
+    var cx = placement.cx + m.dx * W / gifBannerBaseW();
+    var cy = placement.cy + m.dy * H / gifBannerBaseH();
     return { left: cx - ex, top: cy - ey, right: cx + ex, bottom: cy + ey };
   }
   function gifDrawPortraitFrame(g, W, H, ph) {
@@ -14054,8 +14071,8 @@ window.gifenc=exports;})();
     var x = cx - (b.x + b.w / 2) * scale;
     var y = cy - (b.y + b.h / 2) * scale;
     var m = gifPortraitMotion(gifBottomCharTime(ph), gifEl('giPhAmt') && gifEl('giPhAmt').value);
-    var dx = m.dx * W / GIF_BOTTOM_SPEC.w;
-    var dy = m.dy * H / GIF_BOTTOM_SPEC.h;
+    var dx = m.dx * W / gifBannerBaseW();
+    var dy = m.dy * H / gifBannerBaseH();
     /* 인물 애니식(charSteps)은 이동도 정수 픽셀로 스냅 — 소수점 이동은 매 스텝 인물
        전체를 리샘플해 선이 뭉개지고 델타도 비싸진다. 6fps 스텝에 1~2px 단위라 계단으로
        안 보이고, 스프라이트가 그리드에 그대로 얹혀 모든 프레임이 첫 장처럼 또렷하다. */
@@ -14689,7 +14706,7 @@ window.gifenc=exports;})();
     'giTxtAnim', 'giParti', 'giTxtDelay', 'giTxtSpd', 'giOn', 'giOverlay',
     /* 사진 2D 하단 배너 설정은 프사 인트로와 별도 키로 보존한다. */
     'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxNameCol',
-    'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen',
+    'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
     'giRigSafe', 'giRigScale', 'giRigX', 'giRigY',
     'giHairOn', 'giHairStrength',
     'giBfxParticles', 'giBfxParticleCol', 'giBfxParticleAmt', 'giBfxGlow', 'giBfxOrb', 'giBfxSparkle'];
@@ -14699,7 +14716,10 @@ window.gifenc=exports;})();
     GIF_PREF_IDS.forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
-      o[id] = (el.type === 'checkbox') ? !!el.checked : String(el.value);
+      var v = (el.type === 'checkbox') ? !!el.checked : String(el.value);
+      /* 6칸 진입으로 표시만 100%가 된 85% 선택은 저장도 85%로 — 강제 표시가 저장을 오염시키지 않게 */
+      if (id === 'giBfxScale' && el.dataset && el.dataset.was85 === '1' && v === '1') v = '0.85';
+      o[id] = v;
     });
     if (GIF && GIF.ring) o.ring = GIF.ring;
     PREFS.gif = o;
@@ -15006,7 +15026,7 @@ window.gifenc=exports;})();
   gifEl('giRigRight').onclick = function () { gifPortraitNudge(3, 0); };
   [
     'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxNameCol',
-    'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen',
+    'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
     'giRigSafe', 'giRigScale', 'giRigX', 'giRigY',
     'giBfxParticles', 'giBfxParticleCol', 'giBfxParticleAmt', 'giBfxGlow', 'giBfxOrb', 'giBfxSparkle'
   ].forEach(function (id) {
@@ -18950,8 +18970,18 @@ window.gifenc=exports;})();
       gifFitSync();
       gifPhotoSync();
       gifSyncPreview(); /* 프사 모드면 즉시 원형 미리보기로 전환 */
+      gifBfxScaleHintSync(); /* 출력 크기 안내 — 모드·판에 맞춰 갱신 */
     };
   });
+  (function () {
+    var sel = gifEl('giBfxScale');
+    if (sel) sel.addEventListener('change', function () {
+      /* 직접 고른 값이 항상 이긴다 — 6칸 진입 때 맡겨둔 85% 복원 예약을 푼다 */
+      delete sel.dataset.was85;
+      gifBfxScaleHintSync();
+    });
+    gifBfxScaleHintSync();
+  })();
   document.querySelectorAll('#gifRingRow button').forEach(function (bt) {
     bt.onclick = function () {
       gifStale(); /* 결과 화면이었다면 접고 미리보기로 */
@@ -19811,15 +19841,21 @@ window.gifenc=exports;})();
   function gifBannerRebuildLadder() {
     GIF_BOTTOM6_LADDER = [
     [1,256,0,.20],[1,128,1,.15],
+    /* 256색·FS 디더 없음 — 출력 크기를 줄이면(색감 모드) 픽셀이 적어져 원본급
+       색으로도 200KB 에 들어온다. FS 칸은 델타를 망가뜨려 사실상 못 들어가므로
+       무디더 칸이 실질적인 '최대 색' 경로다. */
+    [1,256,2,0],[1,256,4,0],
     /* 128색·FS 디더 없음 — 밝은 블러 배경의 띠(포스터리제이션)를 절반으로.
        배경은 정지(델타 0)라 색이 늘어도 반복 비용이 없고, 첫 장·인물 갱신만 ~15% 커진다.
        fuzz 로 그 차액을 회수해 본다 — 안 되면 아래 64색 칸으로 자연 강등. */
     [1,128,3,0],[1,128,4,0],[1,128,5,0],[1,128,6,0],
     [1,64,3,0],[1,64,4,0],[1,64,5,0],
     [1.5,256,0,.20],[1.5,128,2,.15],
+    [1.5,256,3,0],
     [1.5,128,4,0],[1.5,128,6,0],
     [1.5,64,3,0],[1.5,64,5,0],
     [2,256,0,.20],[2,128,2,.15],
+    [2,256,3,0],
     [2,128,4,0],[2,128,6,0],
     [2,64,3,0],[2,64,5,0]
   ].map(function (v) {
@@ -19841,6 +19877,82 @@ window.gifenc=exports;})();
     GIF_BOTTOM6_SPEC.durationMs = GIF_BOTTOM_SPEC.durationMs;
     gifBannerRebuildLadder();
     if (GIF.kind === 'photo' && (GIF.mode === 'bottom' || GIF.mode === 'bottom6')) GIF.dur = sec;
+  }
+  /* ★ 출력 크기 — 작게 구워도 방송 화면(SOOP 슬롯)이 꽉 차게 늘려 보여준다(실측 확인).
+     픽셀 수를 아낀 만큼 같은 200KB 에서 등급이 올라간다: 85% = 인물 24fps 부드럽게,
+     50% = 원본급 색(256/128색). 기준 좌표계(GIF_BANNER_GEOMS)에서 매번 새로 계산해
+     중복 적용이 없고, 사이드(80px)는 이미 최소 크기라 배율을 받지 않는다.
+     6칸 마스터는 '타일×2×3'으로 계산해 슬라이스 격자가 정확히 맞는다. */
+  function gifBannerApplyScale() {
+    var sc = 1;
+    var el = gifEl('giBfxScale');
+    /* 사이드(80×209)도 200KB 한도에 걸려 등급이 떨어진다(실측: 100%=128색·빛번짐 고정,
+       85%·50%=256색·원래 효과) — 하단과 같은 방식으로 배율을 받는다.
+       6칸은 100%와 50%만 의미가 있어서(하단 85%는 전체 12fps로 떨어짐 — 실측)
+       UI가 두 값만 노출한다. 실측: 하단 100%=256색·인물 고정 / 50%=인물 24fps·64색,
+       사이드 100%=128색·fuzz4 / 50%=256색·무압축. */
+    if (el) {
+      sc = Math.max(.5, Math.min(1, Number(el.value) || 1));
+      if (GIF.mode === 'bottom6' && sc !== 1 && sc !== .5) sc = 1;
+    }
+    var geo = GIF_BANNER_GEOMS[GIF.bannerKind] || GIF_BANNER_GEOMS.bottom;
+    GIF_BOTTOM_SPEC.w = Math.round(geo.single.w * sc);
+    GIF_BOTTOM_SPEC.h = Math.round(geo.single.h * sc);
+    var tw = Math.round(geo.six.tileW * sc), th = Math.round(geo.six.tileH * sc);
+    GIF_BOTTOM6_SPEC.tileW = tw; GIF_BOTTOM6_SPEC.tileH = th;
+    GIF_BOTTOM6_SPEC.w = tw * 2; GIF_BOTTOM6_SPEC.h = th * 3;
+    GIF_BOTTOM6_SPEC.order = [
+      { index: 1, x: 0, y: 0 }, { index: 2, x: tw, y: 0 },
+      { index: 3, x: 0, y: th }, { index: 4, x: tw, y: th },
+      { index: 5, x: 0, y: th * 2 }, { index: 6, x: tw, y: th * 2 }
+    ];
+  }
+  /* 출력 크기 안내 — 고객이 저장 전에 뭐가 좋아지고 뭐가 약해지는지 알고 고르게.
+     "작게 저장해도 방송 화면엔 꽉 차게 늘어나 정상 등록된다"는 안심 문구가 핵심. */
+  function gifBfxScaleHintSync() {
+    var box = gifEl('giBfxScaleHint'), sel = gifEl('giBfxScale');
+    if (!box || !sel) return;
+    var six = GIF.mode === 'bottom6';
+    var side = GIF.bannerKind === 'side';
+    sel.disabled = false;
+    /* 6칸은 100%/50% 두 값만 의미가 있다 — 85% 옵션을 숨기고, 걸려 있으면 100%로.
+       단 사용자의 85% '선택' 자체를 지우면 안 된다: 모드 버튼 클릭이 걸어둔 디바운스
+       저장이 강제된 값을 그대로 prefs에 덮어써 85%가 영구 소실됐다. 원래 선택은
+       stash(data-was85)에 두고 단일로 돌아오면 되살린다. 저장도 stash를 우선한다. */
+    var opt85 = sel.querySelector('option[value="0.85"]');
+    if (opt85) opt85.hidden = six;
+    if (six && sel.value === '0.85') { sel.dataset.was85 = '1'; sel.value = '1'; }
+    if (!six && sel.dataset.was85 === '1') {
+      delete sel.dataset.was85;
+      if (sel.value === '1') sel.value = '0.85';
+    }
+    var geo = GIF_BANNER_GEOMS[GIF.bannerKind] || GIF_BANNER_GEOMS.bottom;
+    var sc = Math.max(.5, Math.min(1, Number(sel.value) || 1));
+    var w = Math.round(geo.single.w * sc), h = Math.round(geo.single.h * sc);
+    var line;
+    if (six) {
+      line = side ? { /* 사이드 6칸 실측: 100% = 128색·fuzz4 / 50% = 256색·무압축 (인물은 양쪽 24fps) */
+        '1':   '🔍 글자·윤곽이 <b>가장 또렷</b>해요. 대신 색이 128색으로 줄고 미세압축이 생겨요.',
+        '0.5': '🌈 <b>색·빛이 원본급(최대 256색)·무압축</b>으로 살아나요. 윤곽은 조금 부드러워져요.'
+      }[String(sel.value)] || '' : { /* 하단 6칸 실측: 100% = 256색·인물 고정 / 50% = 인물 24fps·64색 */
+        '1':   '🎨 색이 <b>원본급(최대 256색)</b>으로 풍부해요. 대신 인물은 <b>고정</b>(움직임 없음)이에요.',
+        '0.5': '🏃 <b>인물이 부드럽게 움직여요</b>(전체 24fps). 색은 64색으로 줄어요.'
+      }[String(sel.value)] || '';
+      box.innerHTML = line +
+        '<br>✅ 각 칸이 <b>' + w + '×' + h + '</b>로 저장돼요 — 방송국에 올리면 <b>꽉 차게 늘어나 그대로 정상 등록</b>됩니다.';
+      return;
+    }
+    line = side ? { /* 사이드 단일 실측: 100% = 128색·빛번짐 고정 / 85%·50% = 256색·원래 효과 */
+      '1':   '🔍 글자·윤곽이 <b>가장 또렷</b>해요. 대신 색이 128색으로 줄고 넓은 빛번짐이 고정돼요.',
+      '0.85': '👍 <b>색·빛 효과가 원본급(최대 256색)</b>으로 살아나요. 또렷함 차이는 거의 없어요 — <b>권장</b>.',
+      '0.5': '👍 원본급 색에 용량도 가장 가벼워요. 글자·윤곽은 조금 부드러워져요.'
+    }[String(sel.value)] || '' : { /* 하단 단일 모드별 특징 */
+      '1':   '👍 글자·윤곽이 <b>가장 또렷</b>해요. 대신 인물 움직임은 단계식(툭툭)이에요.',
+      '0.85': '👍 인물 움직임이 <b>아주 부드러워</b>져요(24fps). 또렷함 차이는 거의 없어요 — <b>권장</b>.',
+      '0.5': '👍 <b>색·빛 효과가 원본처럼 풍부</b>해져요(효과 완화 없음). 글자·윤곽은 조금 부드러워져요.'
+    }[String(sel.value)] || '';
+    box.innerHTML = line +
+      '<br>✅ <b>' + w + '×' + h + '</b>로 저장돼요 — 방송국 배너에 올리면 <b>꽉 차게 늘어나 그대로 정상 등록</b>됩니다.';
   }
   /* Static full-strength background FX leave the selected composition visible while
      only its temporal phase is frozen. Profile-specific pairs are measured bounds:
@@ -20443,6 +20555,7 @@ window.gifenc=exports;})();
     /* 프리셋 복원 등으로 select 값과 스펙이 어긋났을 수 있다 — 시작 전에 맞춘다(멱등) */
     if (GIF.mode === 'bottom' || GIF.mode === 'bottom6') {
       gifBannerSetLen(gifEl('giBfxLen') ? gifEl('giBfxLen').value : 3);
+      gifBannerApplyScale();
     }
     /* 고른 글꼴이 아직 로드 중이면 폴백 글씨로 박제된다 — 한 번 기다렸다 다시 시작 */
     if ((GIF.mode === 'bottom' || GIF.mode === 'bottom6') && !GIF.__fontWaited) {
