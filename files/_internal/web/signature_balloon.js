@@ -6203,6 +6203,30 @@
     return out;
   }
 
+  /* ── PC(195×145) 공식 구성 — SOOP 공식 PSD 템플릿 실측 ─────────────────
+     아트 허용 영역은 위 0~109px 전폭, 하단은 채팅 글자가 앉는 "빈 흰 말풍선"
+     (x5,y109~x190,y144 · #F0F0F0 위로 살짝 밝은 그라데이션 · 라운드 3px · 불투명).
+     이 말풍선이 없으면 심사에서 반려된다(실반려: "PC이미지 하단에는 하얀색
+     말풍선이 필요합니다"). 말풍선 안은 SOOP이 채우므로 우리 내용이 침범하면 안 됨. */
+  const PC_ART_H = 109;
+  const PC_BUBBLE = { x: 5, y: 109, w: 185, h: 35, r: 3 };
+  function drawPcBubble(ctx) {
+    const { x, y, w, h, r } = PC_BUBBLE;
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, "#f3f3f3");
+    g.addColorStop(1, "#f0f0f0");
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.restore();
+  }
   function makePcCanvas(master) {
     const profile = outputProfile("pc");
     if (!outputProfileIsIdentity(profile)) {
@@ -6210,18 +6234,22 @@
       out.width = 195;
       out.height = 145;
       const outCtx = out.getContext("2d", { alpha: true });
-      const baseScale = out.width / W;
-      const drawHeight = H * baseScale;
-      const offsetY = out.height - drawHeight;
+      const baseScale = Math.min(out.width / W, PC_ART_H / CONTENT_H);
+      const drawW = W * baseScale;
+      const drawH = CONTENT_H * baseScale;
+      const offsetX = (out.width - drawW) / 2;
+      const offsetY = PC_ART_H - drawH;
       outCtx.clearRect(0, 0, out.width, out.height);
       outCtx.imageSmoothingEnabled = true;
       outCtx.imageSmoothingQuality = "high";
+      drawPcBubble(outCtx);
 
       // Identity 출력처럼 배경도 먼저 293×248 논리 작업면에 렌더한 뒤 같은 비율로
-      // 축소한다. 출력별 내용 보정은 별도 투명 레이어에만 적용해 배경 픽셀을 고정한다.
+      // 축소한다(내용부만 잘라 아트 영역 0~109px 에). 출력별 내용 보정은 별도
+      // 투명 레이어에만 적용해 배경 픽셀을 고정한다.
       const backgroundOnly = createLogicalCanvas();
       drawBackground(backgroundOnly.getContext("2d", { alpha: true }), state.background, true);
-      outCtx.drawImage(backgroundOnly, 0, offsetY, out.width, drawHeight);
+      outCtx.drawImage(backgroundOnly, 0, H - CONTENT_H, W, CONTENT_H, offsetX, offsetY, drawW, drawH);
 
       const contentOnly = createLogicalCanvas();
       const contentCtx = contentOnly.getContext("2d", { alpha: true });
@@ -6229,8 +6257,12 @@
       applyContentProfileTransform(contentCtx, profile, W / 2, H, 1 / baseScale);
       drawContentWithoutNumbers(contentCtx, false);
       contentCtx.restore();
-      outCtx.drawImage(contentOnly, 0, offsetY, out.width, drawHeight);
-      const mapPcPoint = point => ({ x: point.x * baseScale, y: point.y * baseScale + offsetY });
+      outCtx.drawImage(contentOnly, 0, H - CONTENT_H, W, CONTENT_H, offsetX, offsetY, drawW, drawH);
+      const mapPcPoint = point => ({
+        x: offsetX + point.x * baseScale,
+        /* 숫자(중앙 앵커)는 아트 영역 안으로 — 말풍선 칸은 항상 비워 둔다(심사 기준) */
+        y: Math.min(offsetY + (point.y - (H - CONTENT_H)) * baseScale, PC_ART_H - PC_NUMBER_SIZE * 0.65)
+      });
       drawProfiledNumber(outCtx, state.num1, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint);
       drawProfiledNumber(outCtx, state.num2, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint);
       return out;
@@ -6251,18 +6283,22 @@
       showSelection: false,
       skipNumbers: true
     });
-    // 가로 폭을 기준으로 등비율 축소하고 아래에 맞춘다. 예전의 195×145 강제 늘이기는
-    // 사용자가 그린 돔·하트·유기형을 세로로 찌그러뜨렸다.
-    const scale = out.width / W;
-    const drawHeight = H * scale;
-    const offsetY = out.height - drawHeight;
+    // 마스터의 내용부(상단 84px 여백 아래 CONTENT_H)를 아트 영역(0~109px)에
+    // contain으로 넣고 밑변을 말풍선 위에 붙인다. 말풍선을 먼저 깔아 아트가 위에 온다.
+    const scale = Math.min(out.width / W, PC_ART_H / CONTENT_H);
+    const drawW = W * scale;
+    const drawH = CONTENT_H * scale;
+    const offsetX = (out.width - drawW) / 2;
+    const offsetY = PC_ART_H - drawH;
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
-    outCtx.drawImage(withoutNumbers, 0, offsetY, out.width, drawHeight);
+    drawPcBubble(outCtx);
+    outCtx.drawImage(withoutNumbers, 0, H - CONTENT_H, W, CONTENT_H, offsetX, offsetY, drawW, drawH);
 
     const pcLayer = layer => Object.assign({}, layer, {
-      x: layer.x * scale,
-      y: layer.y * scale + offsetY,
+      x: offsetX + layer.x * scale,
+      /* 숫자(중앙 앵커)는 아트 영역 안으로 — 말풍선 칸은 항상 비워 둔다(심사 기준) */
+      y: Math.min(offsetY + (layer.y - (H - CONTENT_H)) * scale, PC_ART_H - PC_NUMBER_SIZE * 0.65),
       size: PC_NUMBER_SIZE,
       rot: 0
     });
@@ -6424,10 +6460,195 @@
     return temp;
   }
 
+  /* ── 50KB 팔레트 PNG ─────────────────────────────────────────────
+     canvas.toBlob 의 트루컬러 PNG는 그라데이션 아트에서 50KB를 훌쩍 넘고,
+     예전 step 양자화는 디더링이 없어 띠·블록 깨짐이 그대로 보였다(실고객 리포트 —
+     모바일 버전 깨짐). 미디언컷 256색 + 가벼운 Floyd–Steinberg 디더로 진짜
+     8비트 팔레트 PNG를 만든다. 압축은 브라우저 내장 CompressionStream('deflate')
+     — 고객 exe(WebView2)와 크롬 계열엔 항상 있고, 없으면 예전 방식으로 폴백.
+     공식 숫자 색(빨강·흰·#111 테두리)은 팔레트에 고정하고 디더 오차도 안 섞는다. */
+  const PNG_CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function pngCrc(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = PNG_CRC_TABLE[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function pngChunk(type, data) {
+    const out = new Uint8Array(12 + data.length);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, data.length);
+    for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+    out.set(data, 8);
+    dv.setUint32(8 + data.length, pngCrc(out.subarray(4, 8 + data.length)));
+    return out;
+  }
+  async function deflateZlib(bytes) {
+    const cs = new CompressionStream("deflate");
+    const stream = new Blob([bytes]).stream().pipeThrough(cs);
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  function isOfficialColor(r, g, b) {
+    return (r === 255 && g === 0 && b === 0) ||
+      (r === 255 && g === 255 && b === 255) ||
+      (r <= 17 && g <= 17 && b <= 17);
+  }
+  function buildPalette(data, maxColors) {
+    /* 알파 포함 4차원 미디언컷. 0번은 완전투명 예약석, 공식 숫자 3색도 예약석. */
+    const px = [];
+    for (let i = 0; i < data.length; i += 4) {
+      const a = data[i + 3];
+      if (a < 10) continue;
+      if (a > 245 && isOfficialColor(data[i], data[i + 1], data[i + 2])) continue;
+      px.push([data[i], data[i + 1], data[i + 2], a]);
+    }
+    const reserved = [[0, 0, 0, 0], [255, 0, 0, 255], [255, 255, 255, 255], [17, 17, 17, 255]];
+    const budget = Math.max(8, maxColors - reserved.length);
+    let boxes = px.length ? [px] : [];
+    while (boxes.length < budget) {
+      let bi = -1, bw = 0;
+      for (let i = 0; i < boxes.length; i++) {
+        if (boxes[i].length < 2) continue;
+        const mn = [255, 255, 255, 255], mx = [0, 0, 0, 0];
+        for (const p of boxes[i]) for (let c = 0; c < 4; c++) {
+          if (p[c] < mn[c]) mn[c] = p[c];
+          if (p[c] > mx[c]) mx[c] = p[c];
+        }
+        const spread = Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2], (mx[3] - mn[3]) * .5) *
+          Math.log2(boxes[i].length + 1);
+        if (spread > bw) { bw = spread; bi = i; }
+      }
+      if (bi < 0) break;
+      const box = boxes[bi];
+      const mn = [255, 255, 255, 255], mx = [0, 0, 0, 0];
+      for (const p of box) for (let c = 0; c < 4; c++) {
+        if (p[c] < mn[c]) mn[c] = p[c];
+        if (p[c] > mx[c]) mx[c] = p[c];
+      }
+      let axis = 0, best = -1;
+      for (let c = 0; c < 4; c++) {
+        const s = (mx[c] - mn[c]) * (c === 3 ? .5 : 1);
+        if (s > best) { best = s; axis = c; }
+      }
+      box.sort((a, b) => a[axis] - b[axis]);
+      const mid = box.length >> 1;
+      boxes.splice(bi, 1, box.slice(0, mid), box.slice(mid));
+    }
+    const pal = reserved.slice();
+    for (const box of boxes) {
+      if (!box.length) continue;
+      let r = 0, g = 0, b = 0, a = 0;
+      for (const p of box) { r += p[0]; g += p[1]; b += p[2]; a += p[3]; }
+      const n = box.length;
+      pal.push([Math.round(r / n), Math.round(g / n), Math.round(b / n), Math.round(a / n)]);
+    }
+    return pal.slice(0, maxColors);
+  }
+  async function paletteQuantizedPng(source, maxColors, ditherStrength) {
+    if (typeof CompressionStream !== "function") return null;
+    const w = source.width, h = source.height;
+    const work = document.createElement("canvas");
+    work.width = w; work.height = h;
+    const wc = work.getContext("2d", { alpha: true, willReadFrequently: true });
+    wc.drawImage(source, 0, 0);
+    const img = wc.getImageData(0, 0, w, h);
+    const data = img.data;
+    const pal = buildPalette(data, maxColors);
+    const palLen = pal.length;
+    const cache = new Map();
+    const nearest = (r, g, b, a) => {
+      const key = ((r >> 2) << 18) | ((g >> 2) << 12) | ((b >> 2) << 6) | (a >> 2);
+      let idx = cache.get(key);
+      if (idx !== undefined) return idx;
+      let bd = Infinity; idx = 0;
+      for (let i = 0; i < palLen; i++) {
+        const p = pal[i];
+        const dr = r - p[0], dg = g - p[1], db = b - p[2], da = (a - p[3]) * 2;
+        const d = dr * dr + dg * dg + db * db + da * da;
+        if (d < bd) { bd = d; idx = i; }
+      }
+      cache.set(key, idx);
+      return idx;
+    };
+    const idxBuf = new Uint8Array(w * h);
+    let curR = new Float32Array(w + 2), curG = new Float32Array(w + 2), curB = new Float32Array(w + 2);
+    let nxtR = new Float32Array(w + 2), nxtG = new Float32Array(w + 2), nxtB = new Float32Array(w + 2);
+    const cl = v => v < 0 ? 0 : v > 255 ? 255 : v;
+    for (let y = 0; y < h; y++) {
+      nxtR.fill(0); nxtG.fill(0); nxtB.fill(0);
+      for (let x = 0; x < w; x++) {
+        const o = (y * w + x) * 4;
+        const a0 = data[o + 3];
+        if (a0 < 10) { idxBuf[y * w + x] = 0; continue; }
+        const r0 = data[o], g0 = data[o + 1], b0 = data[o + 2];
+        if (a0 > 245 && isOfficialColor(r0, g0, b0)) {
+          idxBuf[y * w + x] = nearest(r0, g0, b0, 255);
+          continue;
+        }
+        const r = cl(r0 + curR[x + 1]), g = cl(g0 + curG[x + 1]), b = cl(b0 + curB[x + 1]);
+        const pi = nearest(r, g, b, a0);
+        idxBuf[y * w + x] = pi;
+        const p = pal[pi];
+        const er = (r - p[0]) * ditherStrength, eg = (g - p[1]) * ditherStrength, eb = (b - p[2]) * ditherStrength;
+        curR[x + 2] += er * 7 / 16; curG[x + 2] += eg * 7 / 16; curB[x + 2] += eb * 7 / 16;
+        nxtR[x] += er * 3 / 16; nxtG[x] += eg * 3 / 16; nxtB[x] += eb * 3 / 16;
+        nxtR[x + 1] += er * 5 / 16; nxtG[x + 1] += eg * 5 / 16; nxtB[x + 1] += eb * 5 / 16;
+        nxtR[x + 2] += er * 1 / 16; nxtG[x + 2] += eg * 1 / 16; nxtB[x + 2] += eb * 1 / 16;
+      }
+      const tr = curR; curR = nxtR; nxtR = tr;
+      const tg = curG; curG = nxtG; nxtG = tg;
+      const tb = curB; curB = nxtB; nxtB = tb;
+    }
+    const raw = new Uint8Array(h * (w + 1));
+    for (let y = 0; y < h; y++) {
+      raw[y * (w + 1)] = 0;
+      raw.set(idxBuf.subarray(y * w, y * w + w), y * (w + 1) + 1);
+    }
+    const idat = await deflateZlib(raw);
+    const ihdr = new Uint8Array(13);
+    const dv = new DataView(ihdr.buffer);
+    dv.setUint32(0, w); dv.setUint32(4, h);
+    ihdr[8] = 8; ihdr[9] = 3;   /* 8비트 · 팔레트 */
+    const plte = new Uint8Array(palLen * 3);
+    const trns = new Uint8Array(palLen);
+    pal.forEach((p, i) => { plte[i * 3] = p[0]; plte[i * 3 + 1] = p[1]; plte[i * 3 + 2] = p[2]; trns[i] = p[3]; });
+    const sig = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const blob = new Blob([sig, pngChunk("IHDR", ihdr), pngChunk("PLTE", plte),
+      pngChunk("tRNS", trns), pngChunk("IDAT", idat), pngChunk("IEND", new Uint8Array(0))], { type: "image/png" });
+    /* 미리보기·후속 검증용 캔버스도 실제 양자화 픽셀로 복원해 파일과 화면을 일치시킨다 */
+    const outImg = wc.createImageData(w, h);
+    for (let i = 0; i < idxBuf.length; i++) {
+      const p = pal[idxBuf[i]];
+      outImg.data[i * 4] = p[0]; outImg.data[i * 4 + 1] = p[1];
+      outImg.data[i * 4 + 2] = p[2]; outImg.data[i * 4 + 3] = p[3];
+    }
+    const outCv = document.createElement("canvas");
+    outCv.width = w; outCv.height = h;
+    outCv.getContext("2d", { alpha: true }).putImageData(outImg, 0, 0);
+    return { blob, canvas: outCv };
+  }
+
   async function optimizedPng(source) {
     let bestBlob = await canvasBlob(source);
     let bestCanvas = source;
     if (bestBlob.size <= KB_LIMIT) return { blob: bestBlob, canvas: bestCanvas };
+    /* 1순위: 팔레트 PNG — 디더를 줄이고 색을 줄여가며 50KB 안에 넣는다 */
+    const palettePlans = [[256, .72], [256, .5], [192, .5], [128, .45], [96, .4], [64, .35]];
+    for (const [colors, dither] of palettePlans) {
+      let candidate = null;
+      try { candidate = await paletteQuantizedPng(source, colors, dither); } catch (e) { candidate = null; }
+      if (!candidate) break;   /* CompressionStream 없음 등 — 예전 방식으로 */
+      if (candidate.blob.size < bestBlob.size) { bestBlob = candidate.blob; bestCanvas = candidate.canvas; }
+      if (candidate.blob.size <= KB_LIMIT) return { blob: bestBlob, canvas: bestCanvas };
+    }
+    /* 마지막 안전판: 예전 step 양자화(팔레트 경로가 안 되는 환경 전용) */
     const attempts = [
       [12, 1], [20, 1], [28, 1], [36, 1],
       [44, .92], [56, .86], [72, .78], [96, .7]
