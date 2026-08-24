@@ -2764,12 +2764,14 @@
   }
 
   function applyMaskStudio() {
+    /* 스튜디오가 닫혀 작업 캔버스가 없으면 no-op — 예전 guard가 겸하던 null 방어 유지
+       (없으면 cloneMaskCanvas(null)이 빈 캔버스를 만들어 빈 마스크가 조용히 적용됨) */
+    if (!maskWorkingCanvas) return false;
     confirmMaskShapeParameters();
-    if (!captureMaskAlpha(maskWorkingCanvas).some(alpha => alpha > 0)) {
-      const tip = document.getElementById("sigMaskTip");
-      if (tip) tip.textContent = "빈 판은 적용할 수 없어. ‘더하기’, ‘윗모양 자동채움’, ‘윤곽 자동채움’으로 모양을 먼저 만들어줘.";
-      return false;
-    }
+    /* 빈 판도 그대로 적용한다 — 배경판 없이 불러온 이미지·소품으로만 꾸미는 구성 허용
+       (예전엔 여기서 막아서 '빈판' 시작 모양이 저장이 안 됐다). 빈 마스크는 배경을
+       아예 안 그릴 뿐, 테두리·저장·프로젝트 경로 전부 무해함을 확인했다. 출력에
+       정말 아무것도 없으면 저장 단계의 "보이는 내용이 없어" 검증이 그때 잡아준다. */
     const historyBefore = beginMainChange();
     state.background.maskCanvas = cloneMaskCanvas(maskWorkingCanvas);
     state.background.mask = "alpha-custom";
@@ -6411,6 +6413,16 @@
     if (!alpha.nonTransparentPixels) throw new Error(`${type} 출력에 보이는 내용이 없어.`);
     if (expected.transparentRequired && alpha.alphaMin !== 0) throw new Error(`${type} 출력에 투명 배경이 없어.`);
     if (alpha.safeTopNonTransparentPixels) throw new Error("모바일 상단 84px 안전영역에 내용이 남아 있어.");
+    if (type === "pc") {
+      /* PC는 하단 흰 말풍선이 항상 그려져 전체 픽셀 검사가 무의미하다 —
+         아트 영역(위 0~109px)에 내용이 있는지 따로 확인해, 빈판+콘텐츠 전무 상태의
+         '말풍선만 있는 PNG'(심사 반려각)가 무경고로 저장되지 않게 한다 */
+      const artCtx = target.getContext("2d", { willReadFrequently: true });
+      const art = artCtx.getImageData(0, 0, target.width, PC_ART_H).data;
+      let artPixels = 0;
+      for (let i = 3; i < art.length; i += 4) if (art[i] > 0) artPixels++;
+      if (!artPixels) throw new Error("pc 출력의 아트 영역이 비어 있어. 캐릭터나 문구·소품을 하나는 넣어줘.");
+    }
     return alpha;
   }
 
@@ -6698,7 +6710,9 @@
     }
     const fallback = await optimizedPng(source);
     if (fallback.blob.size > KB_LIMIT) {
-      throw new Error("50,000바이트 이하 저장에는 화보키트 실행본의 고품질 최적화가 필요해.");
+      /* v16 exe에선 이 폴백이 기본 경로라 '실행본이 필요하다'는 안내는 자기모순 —
+         고객이 실제로 할 수 있는 해결책을 알려준다 */
+      throw new Error("이미지가 너무 복잡해 50,000바이트 안에 못 들어갔어. 배경 패턴이나 소품 수를 조금 줄이고 다시 저장해줘.");
     }
     return { blob: fallback.blob, method: "browser-fallback", meta: null };
   }

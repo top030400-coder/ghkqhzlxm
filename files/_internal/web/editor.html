@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-20_v5 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-24_v5 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -716,13 +716,13 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-20 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-24 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
     <button id="tabEdit">🖌 편집</button>
     <button id="tabGif">🎞 움짤</button>
-    <button id="tabGifBn">🎬 움짤배너(실험)</button>
+    <button id="tabGifBn">🎬 움짤배너</button>
   </div>
   <div class="tsep"></div>
   <div class="tgroup">
@@ -20515,7 +20515,7 @@ window.gifenc=exports;})();
     /* 출력 크기 자동 구제 플래그 — 자동 재시도로 되돌아온 호출이면 유지하고,
        사용자가 새로 누른 호출이면 초기화한다(재시도는 회차당 한 번만). */
     if (GIF.__scaleRetryPending) { GIF.__scaleRetryPending = false; }
-    else { GIF.__scaleAutoRetried = false; GIF.__scaleRetryNote = ''; }
+    else { GIF.__scaleAutoRetried = false; GIF.__scaleRetryNote = ''; GIF.__scaleRetryPrev = null; }
     GIF.out6 = null;
     gifEl('gifSave').textContent = '💾 GIF 저장';
     if (!window.gifenc) return alert('GIF 인코더(gifenc.js)를 못 읽었어요.');
@@ -20773,6 +20773,9 @@ window.gifenc=exports;})();
               GIF.__scaleRetryPending = true;
               GIF.__scaleRetryNote = '⚠ 출력 크기 ' + Math.round(curSc * 100) + '%로는 용량(칸당 200KB)을 넘어 ' +
                 '<b>50%로 자동 저장</b>했어요 — 방송국에 올리면 <b>꽉 차게 늘어나 그대로 정상 등록</b>됩니다.';
+              /* 사용자의 선택은 보존한다 — 재시도가 끝나면 원래 값으로 되돌려,
+                 자동구제가 prefs의 85%/100% 선택을 조용히 0.5로 덮어쓰지 않게 */
+              GIF.__scaleRetryPrev = { value: scaleSel.value, was85: scaleSel.dataset.was85 || '' };
               scaleSel.value = '0.5';
               delete scaleSel.dataset.was85;
               try { gifBfxScaleHintSync(); } catch (e2) {}
@@ -20782,6 +20785,16 @@ window.gifenc=exports;})();
               gifSetProg('용량이 넘쳐 출력 크기 50%로 자동 재시도 중…');
               setTimeout(function () { gifEl('gifGo').onclick(); }, 30);
               return;
+            }
+            /* 재시도까지 실패 — 오류창을 띄우기 전에 출력 크기 선택값을 원복 */
+            if (GIF.__scaleRetryPrev) {
+              var prevSel = gifEl('giBfxScale');
+              if (prevSel) {
+                prevSel.value = GIF.__scaleRetryPrev.value;
+                if (GIF.__scaleRetryPrev.was85) prevSel.dataset.was85 = GIF.__scaleRetryPrev.was85;
+                try { gifBfxScaleHintSync(); } catch (e3) {}
+              }
+              GIF.__scaleRetryPrev = null;
             }
             GIF.out = null; GIF.out6 = null; gifBottomSetRenderProfile(0);
             return encFail((lastError && lastError.message ? lastError.message : lastError) +
@@ -20798,6 +20811,16 @@ window.gifenc=exports;})();
               var noteEl = gifEl('gifMeta');
               if (noteEl) noteEl.innerHTML = GIF.__scaleRetryNote + '<br>' + noteEl.innerHTML;
               GIF.__scaleRetryNote = '';
+              /* 파일은 50%로 저장됐지만 '출력 크기' 선택은 사용자 원래 값으로 되돌린다 */
+              if (GIF.__scaleRetryPrev) {
+                var backSel = gifEl('giBfxScale');
+                if (backSel) {
+                  backSel.value = GIF.__scaleRetryPrev.value;
+                  if (GIF.__scaleRetryPrev.was85) backSel.dataset.was85 = GIF.__scaleRetryPrev.was85;
+                  try { gifBfxScaleHintSync(); } catch (e2) {}
+                }
+                GIF.__scaleRetryPrev = null;
+              }
             }
           }
           catch (e) {
@@ -23931,15 +23954,13 @@ window.gifenc=exports;})();
       { func: 'pick_photos',  params: [] },
       { func: 'pick_dir',     params: [] },
       { func: 'save_png',     params: ['payload_json'] },
-      /* 시그풍 PNG 규격·최적화와 재편집 프로젝트(.pbsig). */
-      { func: 'signature_png_contract', params: [] },
-      { func: 'optimize_soop_png',      params: ['payload_json'] },
-      { func: 'prepare_weflab_png',     params: ['payload_json'] },
-      { func: 'save_sig_project',       params: ['payload_json'] },
-      { func: 'load_sig_project',       params: [] },
-      { func: 'save_gif_set_atomic', params: ['payload_json'] },
-      { func: 'pick_banner_sources', params: ['payload_json'] },
-      { func: 'save_banner_slices',  params: ['payload_json'] },
+      /* ⚠ 신기능 API(signature_png_contract·optimize_soop_png·prepare_weflab_png·
+         save_sig_project·load_sig_project·save_gif_set_atomic·pick_banner_sources·
+         save_banner_slices·ai_hair)는 여기 넣지 않는다 — 현장 본체는 전부 v16이라
+         파이썬에 없는 함수인데, 자가복구가 흉내 함수를 만들면 typeof 가드가 전부
+         참이 되어 호출이 영영 안 풀리고(스피너 고정) 정성껏 깔아둔 JS 폴백을
+         우회한다. 빼두면 가드가 자연스럽게 실패해 일반 v16 세션과 똑같이 폴백을
+         탄다. 새 본체를 배포하는 날 그 판의 editor.html에서 다시 추가할 것. */
       { func: 'save_project', params: ['book_json'] },
       { func: 'load_project', params: [] },
       { func: 'export_exe',   params: ['payload_json'] },
@@ -23949,10 +23970,10 @@ window.gifenc=exports;})();
       { func: 'put_photo',    params: ['payload_json'] },
       { func: 'get_photos_hi', params: ['ids_json'] },
       /* 이 둘이 빠지면 AI 개체선택이 파이썬 경로를 못 찾아 예전(브라우저) 방식으로 떨어진다.
-         브리지가 늦게 붙는 PC 에서만 나타나서 눈치채기 어렵다. */
+         브리지가 늦게 붙는 PC 에서만 나타나서 눈치채기 어렵다.
+         (ai_hair는 v16에 없어서 위 주석과 같은 이유로 뺐다 — 없으면 수동 칠하기로 폴백) */
       { func: 'ai_ready',     params: [] },
       { func: 'ai_cutout',    params: ['payload_json'] },
-      { func: 'ai_hair',      params: ['payload_json'] },
       /* 자동 업데이트 */
       { func: 'upd_check',    params: [] },
       { func: 'upd_apply',    params: ['payload_json'] },
