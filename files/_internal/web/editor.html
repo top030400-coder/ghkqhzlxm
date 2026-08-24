@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-24 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-24 v2</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -787,6 +787,7 @@
     <div class="insRow"><button id="btnPageToEdit" title="이 페이지 전체를 편집탭 캔버스의 배경 레이어로 가져가요">🖌 이 페이지를 편집탭으로</button></div>
     <div class="insRow" style="margin-top:-4px"><label class="edChk" style="font-size:11.5px" title="켜면 페이지 바탕색을 그림으로 굽지 않아요 — 편집탭에서 색을 자유롭게 바꿀 수 있어요"><input type="checkbox" id="pgToEditNoBg" checked> 바탕색 빼고 가져오기</label></div>
     <label id="mirWrap"><input type="checkbox" id="mirChk"> 좌우 반전</label>
+    <label id="pnumWrap" title="끄면 모든 페이지·저장본에서 구석의 페이지 번호(01, 02…)가 빠져요"><input type="checkbox" id="pnumChk" checked> 페이지 번호(책 전체)</label>
     <div class="insRow"><button id="btnParts">✂ 부분 편집 — 지우기·옮기기</button></div>
     <div id="partsBox" style="display:none">
       <div class="insSec">부분 편집</div>
@@ -2855,9 +2856,12 @@ window.gifenc=exports;})();
     };
   }
 
+  /* 페이지 번호 — 책 전체 스위치(book.pnumOff)가 켜져 있으면 어디서든 안 그린다.
+     저장본에만 빼고 편집 화면에 남기면 "화면과 저장이 다르다"는 문의가 생겨서 둘 다 뺀다. */
+  function bookPnum(i) { return book && book.pnumOff ? null : i + 1; }
   function renderSheet(i, mode) {
     var pg = book.pages[i];
-    return PBK.render(pg, { mode: mode || 'edit', src: srcOf, pnum: i + 1, tstyle: tstyleOf(pg), tfx: tfxOf(pg) });
+    return PBK.render(pg, { mode: mode || 'edit', src: srcOf, pnum: bookPnum(i), tstyle: tstyleOf(pg), tfx: tfxOf(pg) });
   }
 
   /* ================= 팔레트·폰트 적용 ================= */
@@ -3113,7 +3117,7 @@ window.gifenc=exports;})();
       'opacity:0;pointer-events:none';
     var n = 0;
     try {
-      host.innerHTML = PBK.render(pg, { mode: 'export', src: function () { return null; }, pnum: i + 1 });
+      host.innerHTML = PBK.render(pg, { mode: 'export', src: function () { return null; }, pnum: bookPnum(i) });
       document.body.appendChild(host);
       var root = host.querySelector('.pg');
       if (root) n = root.querySelectorAll('*').length;
@@ -3408,6 +3412,7 @@ window.gifenc=exports;})();
     $('#insLayoutName').textContent = def.n;
     $('#mirWrap').style.display = def.mir ? 'flex' : 'none';
     $('#mirChk').checked = !!pg.mir;
+    $('#pnumChk').checked = !book.pnumOff;
 
     buildPageBg($('#pageBgBox'), pg);
     var ps = $('#photoSlots');
@@ -3699,6 +3704,8 @@ window.gifenc=exports;})();
     buildStickers(tf, pg);    /* 소품 — 배너 소품을 페이지에 얹기 */
 
     $('#mirChk').onchange = function () { pg.mir = $('#mirChk').checked; touch(cur); };
+    /* 페이지 번호 — 책 전체 스위치. 편집 화면·저장본 양쪽에서 함께 빠진다 */
+    $('#pnumChk').onchange = function () { book.pnumOff = !$('#pnumChk').checked; touch(cur); };
     annotateSlots();
   }
 
@@ -5122,7 +5129,7 @@ window.gifenc=exports;})();
         src: mode === 'export'
           ? function (p) { return p && p.id ? 'pbk://' + p.id : null; }
           : srcOf,
-        pnum: i + 1,
+        pnum: bookPnum(i),
         tstyle: tstyle,
         tfx: tfxOf(pg)
       });
@@ -5186,7 +5193,7 @@ window.gifenc=exports;})();
       if (!ASSETS) return fail('아직 준비 중이에요');
       var pg = book.pages[i];
       var sheetHtml = PBK.render(pg, {
-        mode: 'export', pnum: i + 1, tstyle: tstyleOf(pg), tfx: tfxOf(pg),
+        mode: 'export', pnum: bookPnum(i), tstyle: tstyleOf(pg), tfx: tfxOf(pg),
         feBake: !!feMap,
         src: feMap ? function (p) { return (p && p.id && feMap[p.id]) || srcOf(p); } : srcOf
       });
@@ -12012,7 +12019,7 @@ window.gifenc=exports;})();
     var host = document.createElement('div');
     host.style.cssText = 'position:fixed;left:-99999px;top:0;width:1200px;height:1600px;' +
       'pointer-events:none;opacity:0';
-    host.innerHTML = PBK.render(pg, { mode: 'edit', src: srcOf, pnum: pageIdx + 1,
+    host.innerHTML = PBK.render(pg, { mode: 'edit', src: srcOf, pnum: bookPnum(pageIdx),
       tstyle: tstyleOf(pg), tfx: tfxOf(pg) });
     document.body.appendChild(host);
     var out = [];
