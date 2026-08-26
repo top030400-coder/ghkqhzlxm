@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-24_v5 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-26_v5 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-24 v2</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-26 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -7464,8 +7464,15 @@ window.gifenc=exports;})();
 
   /* ── 어두운 판(scrim) 색/제거 + 단색 배경 오버라이드 ── */
   BANNER_CSS +=
-    '.bnr.scrim-off .scrim{background:none !important}' +
+    /* ⚠ '어두운 판'은 .scrim 만이 아니다 — 테두리(리본·별비·레이스…) 계열 52개
+       레이아웃은 .vig(가장자리 그늘)/.vig.mid(가운데 띠)로 어둡게 깐다.
+       없애기·색 바꾸기가 이들을 빼먹어 "없애기 눌러도 안 없어져요" 문의가 왔다(실고객). */
+    '.bnr.scrim-off .scrim,.bnr.scrim-off .vig{background:none !important}' +
     '.bnr.scrim-tint .scrim{background:var(--scrimbg) !important}' +
+    /* vig 색 바꾸기: 그늘 모양(비네트/가운데 띠)은 유지하고 색만 고른 색으로 */
+    '.bnr.scrim-tint .vig{background:radial-gradient(ellipse 78% 86% at 50% 50%,rgba(0,0,0,0) 42%,var(--scrimc,rgba(0,0,0,.5)) 100%) !important}' +
+    '.bnr.scrim-tint .vig.mid{background:radial-gradient(ellipse 78% 86% at 50% 50%,rgba(0,0,0,0) 42%,var(--scrimc,rgba(0,0,0,.5)) 100%),' +
+      'linear-gradient(180deg,rgba(0,0,0,0) 26%,var(--scrimc2,rgba(0,0,0,.42)) 50%,rgba(0,0,0,0) 74%) !important}' +
     /* 단색 배경: 배경칸(종이색)·빈칸을 투명으로 뚫어 .bnr 단색이 보이게 */
     '.bnr.bg-solid .phX{background:transparent}' +
     '.bnr.bg-solid .bph.bg{background:transparent !important}' +
@@ -9412,6 +9419,9 @@ window.gifenc=exports;})();
       cls += ' scrim-tint';
       var sa = clampN(sc2.a, 55, 0, 100) / 100;
       dst += ';--scrimbg:linear-gradient(180deg,transparent 22%,' + hexA(sc2.c, Math.round(sa * 100) / 100) + ')';
+      /* vig(테두리 레이아웃의 그늘)용 색 — 원래 진하기 비율(.5:.42)을 유지한 채 색만 교체 */
+      dst += ';--scrimc:' + hexA(sc2.c, Math.round(sa * 100) / 100) +
+        ';--scrimc2:' + hexA(sc2.c, Math.round(sa * 84) / 100);
     }
     if (FX_HEX6.test(dc.bg || '')) { cls += ' bg-solid'; dst += ';background:' + dc.bg; }
     var html = '<div class="' + cls + '" style="width:' + def.w + 'px;height:' + def.h + 'px' +
