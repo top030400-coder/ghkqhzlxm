@@ -1,7 +1,7 @@
 {
- "version": "2026-08-26_v1",
- "date": "2026-08-26",
- "notes": "■ 2026-08-24 (36차) — 📖 화보집 페이지 번호 끄기\n\n【 📖 화보집 】\n- 페이지 구석의 페이지 번호(01, 02…)를 끌 수 있습니다.\n  오른쪽 <페이지 편집> 패널의 \"페이지 번호(책 전체)\" 체크를 끄면\n  편집 화면·PNG 저장·내보내기(EXE/HTML) 전부에서 번호가 빠집니다.\n- 설정은 프로젝트(.pbk)에 함께 저장되며, 기존 작업물은 이전과 똑같이 표시됩니다.",
+ "version": "2026-08-27_v1",
+ "date": "2026-08-27",
+ "notes": "■ 2026-08-26 (37차) — 🎏 배너 \"어두운 판\" 수정\n\n【 🎏 배너 】\n- 테두리 계열 레이아웃(리본·하트, 별비·달, 레이스 등 52종)에서\n  <어두운 판 없애기>를 눌러도 가운데 띠·가장자리 그늘이 남던 문제를 고쳤습니다.\n  이제 없애기 = 전부 제거, 색 바꾸기 = 그늘 모양 그대로 고른 색으로 바뀝니다.\n- 상단·하단·6칸·사이드·썸네일 전 배너 공통이며, 기본값은 이전과 동일합니다.",
  "page": "https://github.com/top030400-coder/ghkqhzlxm",
  "files": [
   {
@@ -41,8 +41,8 @@
   },
   {
    "p": "_internal/web/editor.html",
-   "h": "19c85c89d8cee44eb7a271d739d67eb759d23ee97fbfc1d46bc1e75c0a6310c9",
-   "s": 1343581
+   "h": "5d8f524c7bb6c3407c5a0aa9420a5372688e5f5b7f75af5a347899c64a84b7b8",
+   "s": 1348481
   },
   {
    "p": "_internal/web/engine.css",
@@ -51,8 +51,8 @@
   },
   {
    "p": "_internal/web/engine.js",
-   "h": "70555c1c2eeb0d7d3e8b49fcb893836dafcf31c7bc360e075f956efae169bf9c",
-   "s": 158973
+   "h": "00b3b78c201ea771c0d03092413a88ab28f622d9dddf5f798e9b33e76a877532",
+   "s": 159374
   },
   {
    "p": "_internal/web/fonts_embed.css",
@@ -111,8 +111,8 @@
   },
   {
    "p": "_internal/web/signature_balloon.js",
-   "h": "096924ebf1346465e483deee94d27d0e529283d7b1166c92f0fbd9c484859d49",
-   "s": 368817
+   "h": "b40b5cd019ede0e7114580f448a32fe44f1a3f171adc12fae271f4aa1ea532df",
+   "s": 369438
   },
   {
    "p": "_internal/web/art/airmail.png",
@@ -3966,7 +3966,7 @@
   },
   {
    "p": "_internal/web/version.json",
-   "h": "174d18a41d14a375b2321f089fda59eaf8a8ef921a20f3a5cd1c35e9f2225e60",
+   "h": "ab65a5c8bd0f81bac935847ecf6d60aa52b0e4ed5733b170e751e9c0dcdd36f2",
    "s": 178
   }
  ],

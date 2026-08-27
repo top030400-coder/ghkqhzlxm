@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-26_v5 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-27_v5 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-26 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -13532,6 +13532,10 @@ window.gifenc=exports;})();
       }
       g.putImageData(jd, 0, 0);
     }
+    /* 캐시 상한 — 설정을 바꿔가며 여러 번 만들면 1440×450급 캔버스가 rig에 무한히
+       쌓여 장시간 사용 시 메모리압으로 느려진다. 오래된 것부터 비운다(재생성 가능). */
+    var bgKeys = Object.keys(rig.backgrounds);
+    if (bgKeys.length >= 6) delete rig.backgrounds[bgKeys[0]];
     rig.backgrounds[key] = c;
     return c;
   }
@@ -19696,7 +19700,7 @@ window.gifenc=exports;})();
     mode = mode || GIF.mode;
     return mode === 'avatar' || mode === 'bottom' || mode === 'bottom6';
   }
-  function gifEncode(frames, W, H, fps, maxColors, step, transparent, fuzz, frameDelays) {
+  function gifEncode(frames, W, H, fps, maxColors, step, transparent, fuzz, frameDelays, byteLimit) {
     var GE = window.gifenc;
     var enc = GE.GIFEncoder();
     var prev = null; /* 직전에 실제 기록된 화면(소스 RGBA) — 델타 비교 기준이라 오차 누적 없음 */
@@ -19819,6 +19823,14 @@ window.gifenc=exports;})();
         var opaqueOpts = { delay: delay, colorDepth: colorDepth };
         if (i === 0) opaqueOpts.palette = framePal;
         enc.writeFrame(idx2, W, H, opaqueOpts);
+      }
+      /* ★ 한도 조기중단(byteLimit) — GIF 스트림은 덧붙이기 전용이라 누적이 한도를
+         넘는 순간 최종 크기도 반드시 넘는다(하한 증명 → 어느 등급이 채택되는지는 동일).
+         실패가 확정된 등급의 남은 프레임 인코드를 통째로 생략해 사다리 하강이 몇 배
+         빨라진다. 탈락 등급의 결과 바이트는 어디에도 저장되지 않으므로 안전하다.
+         (실패 안내창에 적히는 탈락 등급의 바이트 수치만 '중단 시점 크기'로 바뀐다) */
+      if (byteLimit && enc.bytesView().length > byteLimit) {
+        return { __oversize: true, length: enc.bytesView().length };
       }
     }
     enc.finish();
@@ -20327,7 +20339,8 @@ window.gifenc=exports;})();
       GIF_DITHER = ld.od || 0;
       GIF_FIRST_RICH = ld.first || 0;
       bytes = gifEncode(sampledFrames, GIF_BOTTOM6_SPEC.tileW, GIF_BOTTOM6_SPEC.tileH,
-        sampledFrames.length / GIF_BOTTOM_SPEC.len, ld.colors, 1, true, ld.fuzz, sampledDelays);
+        sampledFrames.length / GIF_BOTTOM_SPEC.len, ld.colors, 1, true, ld.fuzz, sampledDelays,
+        GIF_BOTTOM6_SPEC.limitBytes /* 한도 초과 확정 시 조기중단 — 채택 결과는 동일 */);
     } finally {
       GIF_FS = keepFs;
       GIF_DITHER = keepDither;
@@ -20401,16 +20414,33 @@ window.gifenc=exports;})();
          subject tears at tile seams. Try a rank across all tiles; publish only when all
          six fit. One tile's ~31MiB RGBA is released before the next tile. */
       var profile = gifBottomRenderProfile(), ladder = gifBottomProfileLadder(profile);
+      /* ★ 직전 rank에서 한도를 넘긴(=제일 무거운) 타일을 다음 rank에서 '먼저' 검사한다.
+         그 타일이 또 넘치면 나머지 5개는 굽지도 않고 다음 rank로 — 실패 하강 비용이
+         최대 1/6로 준다. 채택 rank와 각 타일의 최종 바이트는 순서와 무관해 결과 동일. */
+      var lastFail = -1;
       for (var rank = 0; rank < ladder.length; rank++) {
         out.length = 0;
         var ld = ladder[rank], allFit = true;
+        var probe = null;
+        if (lastFail >= 0) {
+          var pf = gifBottom6SliceOne(masterFrames, GIF_BOTTOM6_SPEC.order[lastFail], tilePool);
+          tilePool = pf;
+          probe = gifBottom6EncodeCandidate(pf, lastFail + 1, baseName, ld, rank, logs[lastFail]);
+          if (probe.sizeBytes > GIF_BOTTOM6_SPEC.limitBytes) continue;
+        }
         for (var i = 0; i < GIF_BOTTOM6_SPEC.tiles; i++) {
-          /* 한 타일짜리 72개 RGBA 버퍼를 모든 rank/타일에서 재사용한다. */
-          var tileFrames = gifBottom6SliceOne(masterFrames, GIF_BOTTOM6_SPEC.order[i], tilePool);
-          tilePool = tileFrames;
           var candidate;
-          candidate = gifBottom6EncodeCandidate(tileFrames, i + 1, baseName, ld, rank, logs[i]);
-          if (candidate.sizeBytes > GIF_BOTTOM6_SPEC.limitBytes) { allFit = false; out.length = 0; break; }
+          if (probe && i === lastFail) {
+            candidate = probe; /* 방금 선검사한 타일 재사용 — 이중 인코드 없음 */
+          } else {
+            /* 한 타일짜리 72개 RGBA 버퍼를 모든 rank/타일에서 재사용한다. */
+            var tileFrames = gifBottom6SliceOne(masterFrames, GIF_BOTTOM6_SPEC.order[i], tilePool);
+            tilePool = tileFrames;
+            candidate = gifBottom6EncodeCandidate(tileFrames, i + 1, baseName, ld, rank, logs[i]);
+          }
+          if (candidate.sizeBytes > GIF_BOTTOM6_SPEC.limitBytes) {
+            allFit = false; out.length = 0; lastFail = i; break;
+          }
           out.push(candidate);
         }
         if (allFit && out.length === GIF_BOTTOM6_SPEC.tiles) break;
@@ -20434,27 +20464,57 @@ window.gifenc=exports;})();
     GIF.out6 = out;
     return out;
   }
+  var gifSliceScratch = null; /* 반투명 폴백 전용 재사용 캔버스 — 호출마다 생성 금지(노화 원인) */
   function gifBottom6SliceOne(masterFrames, tile, reuseFrames) {
     /* ⚠ 예전엔 1440/450/720/150 이 숫자로 박혀 있었다 — 사이드(160x627) 스펙 스왑이
        여기서만 막힌다. 스펙에서 읽는다(값이 같아 하단 동작은 그대로). */
     var MW = GIF_BOTTOM6_SPEC.w, MH = GIF_BOTTOM6_SPEC.h;
     var TW = GIF_BOTTOM6_SPEC.tileW, TH = GIF_BOTTOM6_SPEC.tileH;
-    var src = document.createElement('canvas'), tc = document.createElement('canvas');
-    src.width = MW; src.height = MH; tc.width = TW; tc.height = TH;
-    var sg = src.getContext('2d', { willReadFrequently: true });
-    var tg = tc.getContext('2d', { willReadFrequently: true });
     var out = Array.isArray(reuseFrames) && reuseFrames.length === masterFrames.length ? reuseFrames : [];
     masterFrames.forEach(function (rgba, frameIndex) {
       if (!rgba || rgba.length !== MW * MH * 4) throw new Error('invalid ' + MW + 'x' + MH + ' RGBA master frame');
       var sourcePixels = rgba instanceof Uint8ClampedArray ? rgba : new Uint8ClampedArray(rgba);
-      sg.putImageData(new ImageData(sourcePixels, MW, MH), 0, 0);
-      tg.clearRect(0, 0, TW, TH); tg.drawImage(src, tile.x, tile.y, TW, TH, 0, 0, TW, TH);
-      var pixels = tg.getImageData(0, 0, TW, TH).data;
-      if (out[frameIndex] && out[frameIndex].length === pixels.length && typeof out[frameIndex].set === 'function') {
-        out[frameIndex].set(pixels);
-      } else out[frameIndex] = pixels.slice(0);
+      /* 배너 프레임은 전 픽셀 불투명이라 캔버스 왕복 없이 행 단위 복사가 바이트 동일하고
+         훨씬 빠르다(putImageData+drawImage+getImageData 3중 왕복 제거). 예전엔 rank×타일
+         호출마다 대형 캔버스 2개를 새로 만들어 장시간 사용 시 앱이 느려지는 원인이었다. */
+      var dst = (out[frameIndex] && out[frameIndex].length === TW * TH * 4 && typeof out[frameIndex].set === 'function')
+        ? out[frameIndex] : (out[frameIndex] = new Uint8ClampedArray(TW * TH * 4));
+      for (var y = 0; y < TH; y++) {
+        var srow = ((tile.y + y) * MW + tile.x) * 4;
+        dst.set(sourcePixels.subarray(srow, srow + TW * 4), y * TW * 4);
+      }
+      var opaque = true;
+      for (var a = 3; a < dst.length; a += 4) { if (dst[a] !== 255) { opaque = false; break; } }
+      if (!opaque) {
+        /* 반투명 픽셀이 섞이면 예전(캔버스 왕복) 결과를 그대로 재현 — 프리멀티 반올림까지 동일 */
+        if (!gifSliceScratch || gifSliceScratch.MW !== MW || gifSliceScratch.MH !== MH ||
+            gifSliceScratch.TW !== TW || gifSliceScratch.TH !== TH) {
+          var srcC = document.createElement('canvas'), tcC = document.createElement('canvas');
+          srcC.width = MW; srcC.height = MH; tcC.width = TW; tcC.height = TH;
+          gifSliceScratch = { MW: MW, MH: MH, TW: TW, TH: TH,
+            sg: srcC.getContext('2d', { willReadFrequently: true }),
+            tg: tcC.getContext('2d', { willReadFrequently: true }) };
+        }
+        var sg = gifSliceScratch.sg, tg = gifSliceScratch.tg;
+        sg.putImageData(new ImageData(sourcePixels, MW, MH), 0, 0);
+        tg.clearRect(0, 0, TW, TH); tg.drawImage(sg.canvas, tile.x, tile.y, TW, TH, 0, 0, TW, TH);
+        dst.set(tg.getImageData(0, 0, TW, TH).data);
+      }
     });
     return out;
+  }
+  /* ★ 숨은 탭 대응 양보(yield) — setTimeout은 백그라운드 탭에서 최소 1초로 클램프돼
+     인코드가 15배 느려졌다(실측). MessageChannel 포스트는 가시성 클램프가 없어
+     배경에서도 풀속도이면서, 매크로태스크라 화면 그리기와 이벤트는 그대로 끼어든다. */
+  var gifYield = (function () {
+    var q = [], ch = new MessageChannel();
+    ch.port1.onmessage = function () { var f = q.shift(); if (f) f(); };
+    return function (fn) { q.push(fn); ch.port2.postMessage(0); };
+  })();
+  /* 전면 탭에선 기존 setTimeout 그대로(진행 글자가 그려질 틈 유지 — 동작 불변),
+     숨은 탭에서만 MessageChannel 로 바꿔 1초 클램프를 피한다. */
+  function gifStep(fn, ms) {
+    if (document.hidden) gifYield(fn); else setTimeout(fn, ms || 0);
   }
   /* 이미 잡아 둔 72개 RGBA 버퍼를 버리거나 복제하지 않고 내용만 교체한다.
      1440x450은 한 프레임씩 양보해 작업하여 재렌더 중 순간 메모리와 UI 정지를 제한한다. */
@@ -20477,7 +20537,7 @@ window.gifenc=exports;})();
           frames[i].set(g.getImageData(0, 0, W, H).data);
           i++;
           if (onProgress) onProgress(i, frames.length, profile);
-          setTimeout(one, 0);
+          gifStep(one, 0); /* 전면=기존과 동일, 숨은 탭=클램프 없는 풀속도 */
         } catch (e) { reject(e); }
       }
       one();
@@ -20683,7 +20743,8 @@ window.gifenc=exports;})();
     }
     function pushFrame() {
       if (av) gifDrawRing(g, W, frames.length / total); /* 링은 전체 루프 위상으로 맨 위에 */
-      frames.push(g.getImageData(0, 0, W, H).data.slice(0));
+      /* getImageData는 호출마다 새 버퍼를 주므로 .slice(0)는 187MB급 이중 복사 낭비였다 */
+      frames.push(g.getImageData(0, 0, W, H).data);
     }
     var vfCv = document.createElement('canvas');
     vfCv.width = W; vfCv.height = H;
@@ -20858,7 +20919,7 @@ window.gifenc=exports;})();
           function runEncoder() {
             gifSetProg(kindLabel + ' 프레임 우선 자동 맞춤 중… ' + (at + 1) + '/' + profileIndices.length +
               ' · ' + profile.label);
-            setTimeout(function () {
+            gifStep(function () {
               try {
                 var result = encodeNow(), quality = gifBottomResultQuality(result, profileIndex);
                 var motionQuality = portrait ? gifBottomPortraitMotionQuality(result, profileIndex) : { passed: true };
@@ -20922,7 +20983,8 @@ window.gifenc=exports;})();
             GIF.out = null;
             GIF.out6 = set6;
             var totalBytes = set6.reduce(function (sum, t) { return sum + t.sizeBytes; }, 0);
-            gifEl('gifImg').src = URL.createObjectURL(new Blob([set6[0].bytes], { type: 'image/gif' }));
+            if (GIF.__previewUrl) URL.revokeObjectURL(GIF.__previewUrl); /* 이전 미리보기 블랍 해제 — 수십 회 반복 시 메모리 누적 방지 */
+            gifEl('gifImg').src = GIF.__previewUrl = URL.createObjectURL(new Blob([set6[0].bytes], { type: 'image/gif' }));
             gifEl('gifMeta').innerHTML = '<b>6개 전체 사전 검증 통과 · ' + totalBytes.toLocaleString() + ' bytes</b><br>' +
               set6.map(function (t) {
                 return PBK.esc(t.name) + ' — ' + t.frames + '프레임/' + t.fps + 'fps · ' +
@@ -20954,7 +21016,7 @@ window.gifenc=exports;})();
       }
       if (!av) {               /* 자유 크기 GIF는 용량 제한이 없다 — 최고 화질 한 번만 */
         gifSetProg('움짤 만드는 중…');
-        setTimeout(function () {
+        gifStep(function () {
           /* 용량 걱정이 없으니 디더를 끝까지 쓴다(색 뭉침 최소) */
           var keepFs = GIF_FS; GIF_FS = 1.0;
           try { bytes = gifEncode(frames, W, H, fps, 256, 1, gifUseDelta(), 0, bottom ? gifBottomDelays(frames.length) : null); }
@@ -20973,7 +21035,7 @@ window.gifenc=exports;})();
         gifSetProg('움짤 만드는 중… 2MB에 꽉 채우는 중 (' + ld.c + '색' +
           (ld.fs ? ' · 최고 화질' : '') +
           (ld.f ? ' · 미세압축 ±' + ld.f : '') + (ld.step > 1 ? ' · 프레임 ½' : '') + ')');
-        setTimeout(function () {
+        gifStep(function () {
           var b, keepFs = GIF_FS;
           if (ld.fs) GIF_FS = ld.fs;
           try { b = gifEncode(frames, W, H, fps, ld.c, ld.step, gifUseDelta(), ld.f); }
@@ -21041,7 +21103,8 @@ window.gifenc=exports;})();
         GIF.outSize = W; /* 저장 파일명에 실제 만든 해상도를 쓰려고 */
         var kb = bytes.length / 1024;
         var over = av && bytes.length > LIMIT;
-        gifEl('gifImg').src = URL.createObjectURL(new Blob([bytes], { type: 'image/gif' }));
+        if (GIF.__previewUrl) URL.revokeObjectURL(GIF.__previewUrl); /* 이전 미리보기 블랍 해제 */
+        gifEl('gifImg').src = GIF.__previewUrl = URL.createObjectURL(new Blob([bytes], { type: 'image/gif' }));
         /* 한도를 많이 남기고 끝났으면(= 압축을 하나도 안 썼는데도 여유) 더 좋게 뽑을 여지를 알려준다 */
         var room = av && !over && used.f === 0 && used.step === 1 && used.c === 256 && bytes.length < LIMIT * 0.75;
         var actualFrames = used.frames || Math.ceil(frames.length / used.step);
@@ -21207,6 +21270,8 @@ window.gifenc=exports;})();
       document.body.appendChild(a);
       a.click();
       a.remove();
+      /* 다운로드 시작 후 블랍 해제 — 저장 반복 시 2MB씩 눌러앉던 누수 */
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
     });
   };
 

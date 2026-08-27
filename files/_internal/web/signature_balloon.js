@@ -6563,16 +6563,26 @@
     }
     return pal.slice(0, maxColors);
   }
-  async function paletteQuantizedPng(source, maxColors, ditherStrength) {
+  async function paletteQuantizedPng(source, maxColors, ditherStrength, shared) {
     if (typeof CompressionStream !== "function") return null;
     const w = source.width, h = source.height;
-    const work = document.createElement("canvas");
-    work.width = w; work.height = h;
-    const wc = work.getContext("2d", { alpha: true, willReadFrequently: true });
-    wc.drawImage(source, 0, 0);
-    const img = wc.getImageData(0, 0, w, h);
+    /* shared: 색 수를 바꿔가며 여러 번 시도할 때 픽셀 추출·팔레트 계산을 재사용
+       (같은 소스·같은 색 수면 결과 완전 동일 — 계산만 아낀다) */
+    let img = shared && shared.img;
+    if (!img) {
+      const work = document.createElement("canvas");
+      work.width = w; work.height = h;
+      const wc = work.getContext("2d", { alpha: true, willReadFrequently: true });
+      wc.drawImage(source, 0, 0);
+      img = wc.getImageData(0, 0, w, h);
+      if (shared) shared.img = img;
+    }
     const data = img.data;
-    const pal = buildPalette(data, maxColors);
+    let pal = shared && shared.pals && shared.pals[maxColors];
+    if (!pal) {
+      pal = buildPalette(data, maxColors);
+      if (shared) (shared.pals = shared.pals || {})[maxColors] = pal;
+    }
     const palLen = pal.length;
     const cache = new Map();
     const nearest = (r, g, b, a) => {
@@ -6635,7 +6645,7 @@
     const blob = new Blob([sig, pngChunk("IHDR", ihdr), pngChunk("PLTE", plte),
       pngChunk("tRNS", trns), pngChunk("IDAT", idat), pngChunk("IEND", new Uint8Array(0))], { type: "image/png" });
     /* 미리보기·후속 검증용 캔버스도 실제 양자화 픽셀로 복원해 파일과 화면을 일치시킨다 */
-    const outImg = wc.createImageData(w, h);
+    const outImg = new ImageData(w, h); /* wc 없이도 동작(shared 재사용 경로) */
     for (let i = 0; i < idxBuf.length; i++) {
       const p = pal[idxBuf[i]];
       outImg.data[i * 4] = p[0]; outImg.data[i * 4 + 1] = p[1];
@@ -6653,9 +6663,10 @@
     if (bestBlob.size <= KB_LIMIT) return { blob: bestBlob, canvas: bestCanvas };
     /* 1순위: 팔레트 PNG — 디더를 줄이고 색을 줄여가며 50KB 안에 넣는다 */
     const palettePlans = [[256, .72], [256, .5], [192, .5], [128, .45], [96, .4], [64, .35]];
+    const shared = {}; /* 플랜 간 픽셀·팔레트 재사용 — 같은 팔레트 2회 재계산 제거 */
     for (const [colors, dither] of palettePlans) {
       let candidate = null;
-      try { candidate = await paletteQuantizedPng(source, colors, dither); } catch (e) { candidate = null; }
+      try { candidate = await paletteQuantizedPng(source, colors, dither, shared); } catch (e) { candidate = null; }
       if (!candidate) break;   /* CompressionStream 없음 등 — 예전 방식으로 */
       if (candidate.blob.size < bestBlob.size) { bestBlob = candidate.blob; bestCanvas = candidate.canvas; }
       if (candidate.blob.size <= KB_LIMIT) return { blob: bestBlob, canvas: bestCanvas };

@@ -8,7 +8,12 @@ window.PBK = (function () {
   'use strict';
 
   function esc(s) {
-    return String(s == null ? '' : s)
+    s = String(s == null ? '' : s);
+    /* 사진 base64 dataURL은 MB급 문자열인데 이스케이프 대상 문자가 없어 4패스
+       정규식이 통째로 낭비다(렌더마다 반복). 빠른 스캔으로 항등이면 그대로 반환. */
+    if (s.length > 1024 && s.lastIndexOf('data:image/', 0) === 0 &&
+        s.indexOf('<') < 0 && s.indexOf('>') < 0 && s.indexOf('"') < 0 && s.indexOf('&') < 0) return s;
+    return s
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
   }
