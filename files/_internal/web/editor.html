@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v6</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v7</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -24822,7 +24822,9 @@ window.gifenc=exports;})();
         if (mockPickResolve && !fi.files.length) { mockPickResolve([]); mockPickResolve = null; }
       }, 700);
     });
-    window.pywebview = { api: {
+    /* __mock — 인증 게이트(고객판)가 흉내 API 를 다리로 착각해 무인증 통과하지 않게
+       하는 표식. 게이트 bridgeUp() 이 이 표식을 보고 거른다(43차 — 실제로 새고 있었음). */
+    window.pywebview = { __mock: true, api: {
       get_assets: function () {
         var art = ['art/camlog_2cut.png', 'art/zine_collage.png', 'art/magazine_cover.png',
           'art/retro_camera.png', 'art/street_poster.png', 'art/newsprint.png', 'art/airmail.png',
@@ -25127,6 +25129,19 @@ window.gifenc=exports;})();
         늦게 붙는 컴에선 그 뒤에 다리가 붙어도 영영 안 열렸다.
         → 화면은 그대로 두고 뒤에서 계속(0.5초 간격) 기다리다 붙는 즉시 자동 진행. */
   var bootT0 = 0, bootTimer = null, waitStage = 0;
+  /* 문의 대응용 — pywebview 단계별 상태를 한 줄로 (P=코어, A=api 함수 수, C=_createApi, H=자가복구, M=흉내) */
+  function bridgeDiag() {
+    try {
+      var w = window.pywebview;
+      if (!w) return 'P무';
+      var a = w.api, n = 0;
+      for (var k in a) { if (typeof a[k] === 'function') n++; }
+      return 'P유' + (w.__mock ? '(M)' : '') + ' A' + n +
+        ' C' + (typeof w._createApi === 'function' ? '유' : '무') +
+        ' H' + (w.__pbkHealed ? '유' : '무') +
+        ' ' + Math.round((Date.now() - bootT0) / 1000) + 's';
+    } catch (e) { return '진단 실패'; }
+  }
   function boot() {
     if (passed) return;
     if (!bootT0) bootT0 = Date.now();
@@ -25250,6 +25265,8 @@ window.gifenc=exports;})();
         : '처음 켤 때는 조금 걸릴 수 있어요.<br>잠시만 기다려 주세요…') + '</p>' +
       (retry ? '<button id="licBtn">다시 시도</button>' : '<div class="licSpin"></div>') +
       (retry ? '<div class="licFoot">백신 검사나 첫 실행 때는 더 걸릴 수 있어요 —<br>이 화면이 떠 있어도 준비가 끝나면 자동으로 열려요.</div>' : '') +
+      /* 문의 대응용 진단 한 줄 — 어느 단계에서 다리가 멈췄는지 알 수 있다(43차) */
+      (retry ? '<div class="licFoot" style="opacity:.55;font-size:10px">진단: ' + bridgeDiag() + '</div>' : '') +
       '</div>';
     var b = document.getElementById('licBtn');
     if (b) b.onclick = function () { bootT0 = Date.now(); waitStage = 0; gate.innerHTML = '<div class="licSpin"></div>'; boot(); };
