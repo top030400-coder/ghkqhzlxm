@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v4</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v5</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -1083,7 +1083,7 @@
             <label class="ckRow wide">이름 X <input type="range" id="giBfxX" min="2" max="68" step="1" value="8"><span class="fxVal" id="giBfxXV">8%</span></label>
             <label class="ckRow wide">이름 Y <input type="range" id="giBfxY" min="18" max="88" step="1" value="58"><span class="fxVal" id="giBfxYV">58%</span></label>
             <label class="ckRow wide">글자 크기 <input type="range" id="giBfxSize" min="22" max="96" step="1" value="48"><span class="fxVal" id="giBfxSizeV">48</span></label>
-            <div class="ckRow">글꼴 <select id="giBfxFont" style="flex:1"><option value="-1">굵은 기본체</option></select></div>
+            <div class="ckRow">글꼴 <select id="giBfxFont" style="flex:1"><option value="-1">굵은 기본체</option><option value="-2">명조체 (동봉)</option><option value="-3">손글씨 (동봉)</option></select></div>
             <div class="ckRow" style="gap:6px">
               <button type="button" id="giBfxFontAdd" class="bnBigBtn" style="flex:1;margin:0;font-size:12px;padding:6px">＋ 글꼴 파일 불러오기</button>
               <button type="button" id="giBfxFontDir" class="bnBigBtn" style="flex:1;margin:0;font-size:12px;padding:6px">📂 폴더째 불러오기</button>
@@ -1178,7 +1178,7 @@
         글자 스타일(폰트·크기·색·테두리·글로우·위치·추가 텍스트)은 아래 설정을 그대로 씁니다.</div>
       <div id="giOpts" style="display:none">
         <div class="ckRow">이름 <input type="text" id="giName" placeholder="이름/닉네임 직접 입력" style="flex:1"></div>
-        <div class="ckRow">폰트 <select id="giFont" style="flex:1"><option value="-1">굵은 기본체</option></select></div>
+        <div class="ckRow">폰트 <select id="giFont" style="flex:1"><option value="-1">굵은 기본체</option><option value="-2">명조체 (동봉)</option><option value="-3">손글씨 (동봉)</option></select></div>
         <div class="ckRow">글자 크기 <input type="range" id="giSize" min="30" max="220" step="2" value="84" style="flex:1"><span id="giSizeV">84</span></div>
         <div class="ckRow">기울기 <input type="range" id="giNameRot" min="-45" max="45" step="1" value="0" style="flex:1"
           title="미리보기에서 마우스 휠을 굴리거나 Shift+드래그로도 돌릴 수 있어요"><span id="giNameRotV">0°</span></div>
@@ -2449,7 +2449,7 @@ window.gifenc=exports;})();
     var fc = faceOf(f);
     if (!fc) return null;
     /* 글꼴 이름에 따옴표가 든 폰트가 드물게 있다 — 안 지우면 style 속성이 중간에 끊긴다 */
-    return "'" + String(fc.fam).replace(/['"]/g, '') + "','Noto Serif KR','Batang',serif";
+    return "'" + String(fc.fam).replace(/['"]/g, '') + "','PB Myeongjo','Noto Serif KR','Batang',serif";
   }
   /* font-family 뒤에 같이 붙여야 하는 굵기·기울임.
      ⚠ 완성본(EXE/HTML)에는 붙이지 않는다 — 거기선 굵은 글꼴 파일 자체를 심으므로
@@ -2937,8 +2937,8 @@ window.gifenc=exports;})();
   function fontStack(slot) {
     var f = book.fonts[slot];
     var base = slot === 'disp'
-      ? "'Bodoni Moda',Georgia,'Noto Serif KR','Batang','바탕',serif"
-      : "'Noto Serif KR','Batang','바탕',Georgia,serif";
+      ? "'Bodoni Moda','PB Myeongjo',Georgia,'Noto Serif KR','Batang','바탕',serif"
+      : "'PB Myeongjo','Noto Serif KR','Batang','바탕',Georgia,serif";
     if (!f) return base;
     var fam = f.src === 'kit' ? 'PBKIT_' + slot : f.fam;
     return "'" + fam.replace(/'/g, '') + "'," + base;
@@ -3537,7 +3537,12 @@ window.gifenc=exports;})();
           '<div class="txoRow"><button data-f="cover">칸 꽉 채우기</button>' +
           '<button data-f="contain">전체 보이기</button>' +
           '<button data-f="one">원본 크기</button>' +
-          '<button data-f="center">가운데로</button></div>';
+          '<button data-f="center">가운데로</button></div>' +
+          /* 무드 필터 + 자동보정 — 페이지 톤을 한 번에 맞추는 41차 마감 */
+          '<div class="txoRow">필터 <select class="fFlt" style="flex:1"></select></div>' +
+          '<div class="txoRow"><button data-f2="auto" title="히스토그램으로 밝기·대비 자동 보정">✨ 자동보정</button>' +
+          '<button data-f2="off" title="필터·보정 전부 해제">해제</button>' +
+          '<button data-f2="all" title="이 사진의 필터·보정을 페이지 모든 사진에">페이지 전체 적용</button></div>';
         var ensure = function (after) {
           if (p.free) { after(); return; }
           if (!bookToFree(cur, i, function () { after(); touch(cur); })) after();
@@ -3562,6 +3567,44 @@ window.gifenc=exports;})();
           if (v > 0) p.fe = v; else delete p.fe;
           touchSoon(cur); /* 초당 60회 통짜 재구축 → 프레임당 1회 */
         };
+        /* 필터 셀렉트 채우기 + 배선 (BN_FLT_PRE_LABELS = 배너와 공용 목록) */
+        var fsel = fb.querySelector('.fFlt');
+        BN_FLT_PRE_LABELS.forEach(function (o2) {
+          var op4 = document.createElement('option');
+          op4.value = o2[0]; op4.textContent = o2[1];
+          fsel.appendChild(op4);
+        });
+        fsel.value = (p.flt && BN_FLT_PRE[p.flt]) ? p.flt : '';
+        fsel.onchange = function () {
+          if (fsel.value) p.flt = fsel.value; else delete p.flt;
+          touch(cur);
+        };
+        fb.querySelectorAll('button[data-f2]').forEach(function (b) {
+          b.onclick = function () {
+            var m2 = b.getAttribute('data-f2');
+            if (m2 === 'auto') {
+              bnAutoTone(srcOf(p)).then(function (t) {
+                if (!t) return;
+                p.fab = t.br; p.fac = t.ct;
+                if (t.sa !== 100) p.fas = t.sa; else delete p.fas;
+                touch(cur);
+              });
+            } else if (m2 === 'off') {
+              delete p.flt; delete p.fab; delete p.fac; delete p.fas;
+              fsel.value = '';
+              touch(cur);
+            } else { /* 페이지 전체 적용 */
+              (pg.photos || []).forEach(function (q) {
+                if (!q || !q.id || q === p) return;
+                if (p.flt) q.flt = p.flt; else delete q.flt;
+                ['fab', 'fac', 'fas'].forEach(function (k2) {
+                  if (p[k2] != null) q[k2] = p[k2]; else delete q[k2];
+                });
+              });
+              touch(cur);
+            }
+          };
+        });
         fb.querySelectorAll('button[data-f]').forEach(function (b) {
           b.onclick = function () {
             var mode = b.getAttribute('data-f');
@@ -5268,18 +5311,74 @@ window.gifenc=exports;})();
       return m;
     });
   }
+  /* 저장 전 사진 사전 다운샘플 — 큰 원본을 브라우저가 foreignObject 안에서 한 방에
+     칸 크기로 줄이면 머리카락·눈매가 뭉개진다(배너 쪽에서 실측된 문제). 배너의
+     stepDown(단계 축소)을 페이지에도 이식: 표시 크기의 2배를 넘는 원본만 미리 접는다. */
+  function pageBakeDownsampled(pgIdx, scale) {
+    var slots;
+    try { slots = bookSlotLayout(pgIdx); } catch (e) { return Promise.resolve(null); }
+    if (!slots || !slots.length) return Promise.resolve(null);
+    var need = {};
+    slots.forEach(function (s) {
+      var p = s.p;
+      if (!p || !p.id) return;
+      var iw = p.iw > 0 ? p.iw : 0, ih = p.ih > 0 ? p.ih : 0;
+      var dw;   /* 실제 표시 폭(페이지 1200 단위) */
+      if (p.free && iw > 0) {
+        var sc2 = parseFloat(p.sc);
+        if (!isFinite(sc2) || sc2 <= 0) sc2 = 1;
+        dw = iw * sc2;
+      } else if (iw > 0 && ih > 0) {
+        dw = Math.max(s.w / iw, s.h / ih) * iw;   /* cover 맞춤 배율 */
+      } else dw = s.w;
+      need[p.id] = Math.max(need[p.id] || 0, dw);
+    });
+    var jobs = Object.keys(need).map(function (id) {
+      return new Promise(function (ok) {
+        var url = (hiRes && hiRes[id]) || thumbs[id];
+        if (!url) return ok(null);
+        var im = new Image();
+        im.onload = function () {
+          try {
+            var targetW = Math.round(need[id] * scale * 1.15);
+            if (!(targetW > 8) || im.naturalWidth <= targetW * 2) return ok(null);
+            var c0 = document.createElement('canvas');
+            c0.width = im.naturalWidth; c0.height = im.naturalHeight;
+            c0.getContext('2d').drawImage(im, 0, 0);
+            var out = stepDown(c0, targetW,
+              Math.max(1, Math.round(im.naturalHeight * targetW / im.naturalWidth)));
+            ok({ id: id, d: out.toDataURL('image/png') });
+          } catch (e) { ok(null); }
+        };
+        im.onerror = function () { ok(null); };
+        im.src = url;
+      });
+    });
+    return Promise.all(jobs).then(function (rs) {
+      var m = null;
+      rs.forEach(function (r2) { if (r2) { (m = m || {})[r2.id] = r2.d; } });
+      return m;
+    });
+  }
   function renderPagePNG(i, scale, noBg, extraCss) {
     scale = scale || 2;
     var W = 1200 * scale, H = 1600 * scale;
     var pg0 = book.pages[i];
-    return pageBakeFeathers(pg0).then(function (feMap) {
+    return Promise.all([pageBakeFeathers(pg0), pageBakeDownsampled(i, scale)]).then(function (bk) {
+    var feMap = bk[0], dsMap = bk[1];
     return new Promise(function (ok, fail) {
       if (!ASSETS) return fail('아직 준비 중이에요');
       var pg = book.pages[i];
       var sheetHtml = PBK.render(pg, {
         mode: 'export', pnum: bookPnum(i), tstyle: tstyleOf(pg), tfx: tfxOf(pg),
         feBake: !!feMap,
-        src: feMap ? function (p) { return (p && p.id && feMap[p.id]) || srcOf(p); } : srcOf
+        src: (feMap || dsMap) ? function (p) {
+          if (p && p.id) {
+            if (feMap && feMap[p.id]) return feMap[p.id];
+            if (dsMap && dsMap[p.id]) return dsMap[p.id];
+          }
+          return srcOf(p);
+        } : srcOf
       });
       var css = ASSETS.fonts_embed + '\n' + slimArtCss(ASSETS.engine_css, sheetHtml) + '\n' +
         previewFontCSS() + '\n' + paletteCSS();
@@ -6232,7 +6331,10 @@ window.gifenc=exports;})();
     '.bnr img[data-pi]{cursor:grab;touch-action:none}' +
     /* 캐릭터(누끼 PNG) 레이어 — 자유 배치: 위치 %(중심 기준)·높이 %(배너 높이 대비) */
     '.bnr .bchar{position:absolute;transform:translate(-50%,-50%);width:auto;cursor:grab;touch-action:none;' +
-    'filter:drop-shadow(0 4px 16px rgba(0,0,0,.28))}' +
+    'filter:drop-shadow(0 1px 3px rgba(0,0,0,.2)) drop-shadow(0 4px 14px rgba(0,0,0,.24))}' +
+    /* 캐릭터 그림자는 배너 높이에 비례 — 80px 사이드에 4px/16px는 과함, 720px 썸네일엔 부족 */
+    '.bnr.b-side .bchar{filter:drop-shadow(0 1px 2px rgba(0,0,0,.22)) drop-shadow(0 2px 7px rgba(0,0,0,.26))}' +
+    '.bnr.b-thumb .bchar{filter:drop-shadow(0 2px 6px rgba(0,0,0,.2)) drop-shadow(0 9px 28px rgba(0,0,0,.28))}' +
     '.bnr .phE{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;' +
     'gap:4px;background:#efede4;border:2px dashed #b9b4a4;color:#8a877b;cursor:pointer;text-align:center}' +
     '.bnr .phE b{font-size:20px}.bnr .phE span{font-size:13px}' +
@@ -7585,6 +7687,10 @@ window.gifenc=exports;})();
     '.bnr .bchar.bk{z-index:1}' +
     '.bnr .date{z-index:7}' +
     '.bnr .btxt{z-index:8}' +
+    /* 필름 그레인 한 겹 — 대형 스크림 그라데이션의 8bit 밴딩을 노이즈로 디더링(3%라 육안엔 질감만) */
+    '.bnr::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:999;' +
+    'background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'240\' height=\'240\'%3E%3Cfilter id=\'pbn\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'2\' stitchTiles=\'stitch\'/%3E%3CfeColorMatrix type=\'saturate\' values=\'0\'/%3E%3C/filter%3E%3Crect width=\'240\' height=\'240\' filter=\'url(%23pbn)\'/%3E%3C/svg%3E");' +
+    'background-size:240px 240px;opacity:.03;mix-blend-mode:overlay}' +
     /* 레이아웃 크기(--lsc): 장식·글자 틀만 zoom — 배경·캐릭터·자유텍스트는 그대로.
        zoom이라 px 오프셋·크기는 배율대로, %위치·inset:0(스크림)은 제자리 유지 */
     '.bnr > :not(.bph):not(.bchar):not(.btxt){zoom:var(--lsc,1)}' +
@@ -9094,6 +9200,20 @@ window.gifenc=exports;})();
   /* ── 포토샵식 레이어 보정 → 인라인 스타일 (배경·캐릭터·소품·텍스트 공통, 전 배너+편집 캔버스) ──
      o.op = 불투명도(0~100) · o.bl = 블렌드 모드 · o.flt = {br밝기,ct대비,sa채도,hu색조,bb흐림}. 값 전부 검증. */
   var BN_BLENDS = ['multiply', 'screen', 'overlay', 'soft-light', 'hard-light', 'color-dodge', 'color-burn', 'darken', 'lighten', 'difference'];
+  /* 무드 필터 프리셋 — 배너 레이어(f.pre)와 화보집 사진(p.flt)이 같은 키를 쓴다.
+     ⚠ engine.js 의 FLT_PRE 와 값 동기 유지(둘 다 CSS filter라 저장 렌더에 그대로 구워짐) */
+  var BN_FLT_PRE = {
+    film:  'contrast(1.06) saturate(.9) sepia(.14) brightness(1.02)',
+    pastel:'saturate(.8) brightness(1.07) contrast(.94)',
+    cine:  'contrast(1.13) saturate(1.06) sepia(.07) brightness(.97)',
+    mono:  'grayscale(1) contrast(1.08)',
+    warm:  'sepia(.2) saturate(1.04) brightness(1.03)',
+    cool:  'hue-rotate(-8deg) saturate(.94) brightness(1.02) contrast(1.05)',
+    vivid: 'saturate(1.28) contrast(1.09)',
+    soft:  'contrast(.9) brightness(1.06) saturate(.88)'
+  };
+  var BN_FLT_PRE_LABELS = [['', '없음'], ['film', '필름'], ['pastel', '파스텔'], ['cine', '시네마틱'],
+    ['mono', '흑백'], ['warm', '따뜻하게'], ['cool', '차갑게'], ['vivid', '쨍하게'], ['soft', '부드럽게']];
   function bnLayerFxStyle(o) {
     if (!o) return '';
     var st = '';
@@ -9102,6 +9222,7 @@ window.gifenc=exports;})();
     if (o.bl && BN_BLENDS.indexOf(o.bl) >= 0) st += ';mix-blend-mode:' + o.bl;
     var f = o.flt || {};
     var parts = [];
+    if (f.pre && BN_FLT_PRE[f.pre]) parts.push(BN_FLT_PRE[f.pre]);
     var br = clampN(f.br, 100, 0, 300); if (br !== 100) parts.push('brightness(' + br / 100 + ')');
     var ct = clampN(f.ct, 100, 0, 300); if (ct !== 100) parts.push('contrast(' + ct / 100 + ')');
     var sa = clampN(f.sa, 100, 0, 300); if (sa !== 100) parts.push('saturate(' + sa / 100 + ')');
@@ -10663,6 +10784,47 @@ window.gifenc=exports;})();
         bw.appendChild(bs);
         box.appendChild(bw);
         var f0 = selP.flt || {};
+        /* 무드 필터 프리셋 — 아래 슬라이더들과 곱해져 적용(프리셋 먼저, 슬라이더 나중) */
+        var pw = document.createElement('div');
+        pw.className = 'ckRow';
+        pw.appendChild(document.createTextNode('필터 '));
+        var ps2 = document.createElement('select');
+        ps2.style.flex = '1';
+        BN_FLT_PRE_LABELS.forEach(function (o2) {
+          var op3 = document.createElement('option');
+          op3.value = o2[0]; op3.textContent = o2[1];
+          ps2.appendChild(op3);
+        });
+        ps2.value = (f0.pre && BN_FLT_PRE[f0.pre]) ? f0.pre : '';
+        ps2.onchange = function () {
+          if (ps2.value) flt().pre = ps2.value;
+          else if (selP.flt) delete selP.flt.pre;
+          cleanFlt();
+          refreshBnStage();
+        };
+        pw.appendChild(ps2);
+        box.appendChild(pw);
+        /* ✨ 자동보정 — 히스토그램에서 밝기·대비를 재서 아래 슬라이더 값으로 넣는다(비파괴) */
+        var aw = document.createElement('div');
+        aw.className = 'ckRow';
+        var ab = document.createElement('button');
+        ab.type = 'button'; ab.textContent = '✨ 자동보정'; ab.style.flex = '1';
+        ab.onclick = function () {
+          var src = selP && selP.id ? (thumbs[selP.id] || null) : null;
+          if (!src && selP && selP.id) src = srcOf(selP);
+          if (!src) return;
+          bnAutoTone(src).then(function (t) {
+            if (!t) return;
+            var f2 = flt();
+            f2.br = t.br; f2.ct = t.ct;
+            if (t.sa !== 100) f2.sa = t.sa;
+            cleanFlt();
+            refreshBnStage();
+            renderBnInspector();
+          });
+        };
+        aw.appendChild(ab);
+        box.appendChild(aw);
         corRow('밝기', 0, 200, 5, Math.round(clampN(f0.br, 100, 0, 300)), '', function (v) { flt().br = v; cleanFlt(); });
         corRow('대비', 0, 200, 5, Math.round(clampN(f0.ct, 100, 0, 300)), '', function (v) { flt().ct = v; cleanFlt(); });
         corRow('채도', 0, 200, 5, Math.round(clampN(f0.sa, 100, 0, 300)), '', function (v) { flt().sa = v; cleanFlt(); });
@@ -12208,6 +12370,8 @@ window.gifenc=exports;})();
           var cv = document.createElement('canvas');
           cv.width = W; cv.height = H;
           var g = cv.getContext('2d');
+          g.imageSmoothingEnabled = true;
+          g.imageSmoothingQuality = 'high';   /* 기본 low 로 크게 줄이면 계단 (41차) */
           if (slot.flt) {
             /* 2배 해상도로 뜨니 px 단위 값도 2배로 키워야 화면과 같은 세기가 된다 */
             try {
@@ -12884,6 +13048,46 @@ window.gifenc=exports;})();
     g.putImageData(im, 0, 0);
     return out;
   }
+  /* 엣지 색 번짐 제거(defringe) — 반투명 엣지 픽셀의 RGB 를 안쪽(불투명) 색으로 당겨서,
+     밝은 배경에서 딴 인물을 어두운 배너/움짤에 얹을 때 생기던 흰 헤일로를 지운다.
+     픽셀만 보는 결정적 연산이라 같은 입력 → 같은 출력(누끼 생성 시 1회만 돈다). */
+  function pbDefringeSubject(cv) {
+    try {
+      var W = cv.width, H = cv.height;
+      if (W < 3 || H < 3) return cv;
+      var g = cv.getContext('2d', { willReadFrequently: true });
+      var img = g.getImageData(0, 0, W, H);
+      var d = img.data;
+      for (var pass = 0; pass < 2; pass++) {
+        var src = new Uint8ClampedArray(d);
+        for (var y = 0; y < H; y++) {
+          for (var x = 0; x < W; x++) {
+            var i = (y * W + x) * 4, a = src[i + 3];
+            if (a === 0 || a >= 242) continue;
+            var bi = -1, ba = a;
+            for (var dy = -1; dy <= 1; dy++) {
+              var yy = y + dy;
+              if (yy < 0 || yy >= H) continue;
+              for (var dx = -1; dx <= 1; dx++) {
+                var xx = x + dx;
+                if (xx < 0 || xx >= W) continue;
+                var j = (yy * W + xx) * 4;
+                if (src[j + 3] > ba) { ba = src[j + 3]; bi = j; }
+              }
+            }
+            if (bi >= 0) {
+              var w = (1 - a / 255) * 0.85;
+              d[i] = Math.round(src[i] * (1 - w) + src[bi] * w);
+              d[i + 1] = Math.round(src[i + 1] * (1 - w) + src[bi + 1] * w);
+              d[i + 2] = Math.round(src[i + 2] * (1 - w) + src[bi + 2] * w);
+            }
+          }
+        }
+      }
+      g.putImageData(img, 0, 0);
+    } catch (e) {}
+    return cv;
+  }
   function gifPortraitDerived(source, mask) {
     var bbox = gifPortraitBBox(mask);
     if (!bbox) throw new Error('보정 뒤 인물 영역이 비었습니다. 실행 취소 후 다시 칠해 주세요.');
@@ -12896,6 +13100,7 @@ window.gifenc=exports;})();
     g.globalCompositeOperation = 'destination-in';
     g.drawImage(renderMask, 0, 0);
     g.globalCompositeOperation = 'source-over';
+    pbDefringeSubject(subject);
     return { bbox: bbox, edgeProfile: edge, renderMask: renderMask, subject: subject,
       bgCrop: gifPortraitBgCrop(source, bbox) };
   }
@@ -13530,6 +13735,10 @@ window.gifenc=exports;})();
   function gifDrawBfxSlowGlow(g, W, H, uSlow) {
     var C = gifBfxCfg(), tau = Math.PI * 2, i;
     var sc = W / gifBannerBaseW() * (GIF.bannerKind === 'side' ? .42 : 1);
+    g.save();
+    /* 빛은 가산('lighter') — 겹치는 글로우·빛망울이 실제 광원처럼 밝게 합산된다(41차).
+       FXPACK 전환들이 이미 쓰는 방식과 통일. 고정 등급의 배경 굽기 경로도 같이 지나간다. */
+    g.globalCompositeOperation = 'lighter';
     if (C.glow > 0) {
       var sweepX = W * (.06 + .42 * (.5 + .5 * Math.sin(tau * uSlow)));
       var glow = g.createRadialGradient(sweepX, H * .54, 0, sweepX, H * .54, W * .23);
@@ -13550,6 +13759,7 @@ window.gifenc=exports;})();
       og.addColorStop(1, gifBfxColorAlpha(C.particleCol, 0));
       g.fillStyle = og; g.beginPath(); g.arc(ox, oy, rr, 0, tau); g.fill();
     }
+    g.restore();
   }
   function gifPortraitBackground(W, H) {
     var rig = PHOTO.rig;
@@ -13761,6 +13971,9 @@ window.gifenc=exports;})();
   var giBfxFontLoaded = {};
   function gifBfxFontFace() {
     var el = gifEl('giBfxFont'), i = el ? parseInt(el.value, 10) : -1;
+    /* 음수 -2/-3 = 동봉 서체(명조/손글씨) */
+    if (el && el.value === '-2') return { fam: '"PB Myeongjo"', w: '800', st: '' };
+    if (el && el.value === '-3') return { fam: '"PB Pen"', w: '', st: '' };
     if (!(i >= 0) || !FONTS[i]) return null;
     var f = FONTS[i], fc = faceOf(f);
     var fam = fc ? fc.fam : (f.src === 'kit' ? kitFaceName(f) : f.fam);
@@ -13862,7 +14075,7 @@ window.gifenc=exports;})();
     g.textAlign = 'left'; g.textBaseline = 'alphabetic';
     var bf = gifBfxFontFace();
     g.font = (bf && bf.st ? bf.st + ' ' : '') + ((bf && bf.w) || '900') + ' ' + fs.toFixed(1) + 'px ' +
-      (bf ? bf.fam + ',' : '') + '"Arial Black","Noto Sans KR",sans-serif';
+      (bf ? bf.fam + ',' : '') + '"Arial Black","PB Black","Noto Sans KR",sans-serif';
     var fullW = Math.min(W - x - 8 * sc, g.measureText(C.name).width);
     if (C.reveal === 'sweep') {
       g.beginPath(); g.rect(x - 4 * sc, 0, Math.max(0, fullW * reveal + 10 * sc), H); g.clip();
@@ -13902,6 +14115,8 @@ window.gifenc=exports;})();
     var u = gifBfxPhase(ph), tau = Math.PI * 2, sc = W / gifBannerBaseW() * (GIF.bannerKind === 'side' ? .42 : 1);
     if (C.sparkle > 0) {
       var n = Math.round(C.sparkle / 10);
+      g.save();
+      g.globalCompositeOperation = 'lighter';   /* 별빛도 가산 — 겹칠수록 밝게(41차) */
       for (var i = 0; i < n; i++) {
         var p = gifBfxHash(i, 20), x = (gifBfxHash(i, 21) * .93 + .035) * W;
         var y = (gifBfxHash(i, 22) * .76 + .10) * H;
@@ -13912,6 +14127,7 @@ window.gifenc=exports;})();
         gifBfxDrawStar(g, x, y, r, i % 3 ? C.nameCol : C.particleCol,
           tw * (.35 + C.sparkle / 140), tau * u + p * tau);
       }
+      g.restore();
     }
     /* 사이드: 인물이 판 전체를 덮으므로 이름·서브를 인물 앞에 그린다(외곽선+글로우로 판독). */
     if (GIF.bannerKind === 'side') gifDrawBfxNameSub(g, W, H, u);
@@ -14505,7 +14721,7 @@ window.gifenc=exports;})();
         }
         var ph0 = ln0 ? ((v.currentTime - st0) / ln0) : 0;
         if (v.readyState >= 2) gifDrawFrame(g, v, cv.width, cv.height, ph0, true);
-        if (gifEl('giOverlay').checked && !gifPortraitBottomFx()) gifOverlayTexts(g, cv.width, ph0 * ln0);
+        if (gifEl('giOverlay').checked && !gifPortraitBottomFx()) gifOverlayTexts(g, cv.width, ph0 * ln0, ln0);
         requestAnimationFrame(loop);
         return;
       }
@@ -14616,7 +14832,7 @@ window.gifenc=exports;})();
         var ph = ((((v.currentTime - stP) % lnP) + lnP) % lnP) / lnP;
         gifDrawFrame(g, v, 420, 420, ph, true);
         /* 영상 위 글자 — 카드 없이 프레임 위에 바로 (링보다 아래) */
-        if (gifEl('giOverlay').checked && !gifPortraitBottomFx()) gifOverlayTexts(g, 420, ph * lnP);
+        if (gifEl('giOverlay').checked && !gifPortraitBottomFx()) gifOverlayTexts(g, 420, ph * lnP, lnP);
         gifDrawRing(g, 420, ph);
       }
       requestAnimationFrame(loop);
@@ -15186,7 +15402,7 @@ window.gifenc=exports;})();
       if (bsel.dataset.filled || !FONTS.length) return;
       bsel.dataset.filled = '1'; fontSelPrep(bsel);
       var keep = bsel.value;
-      bsel.innerHTML = '<option value="-1">굵은 기본체</option>';
+      bsel.innerHTML = '<option value="-1">굵은 기본체</option><option value="-2">명조체 (동봉)</option><option value="-3">손글씨 (동봉)</option>';
       FONTS.forEach(function (ft, i) {
         var o = document.createElement('option');
         o.value = String(i);
@@ -15401,7 +15617,7 @@ window.gifenc=exports;})();
       if (fsel2.dataset.filled || !FONTS.length) return;
       fsel2.dataset.filled = '1'; fontSelPrep(fsel2);
       var keep = fsel2.value;
-      fsel2.innerHTML = '<option value="-1">굵은 기본체</option>';
+      fsel2.innerHTML = '<option value="-1">굵은 기본체</option><option value="-2">명조체 (동봉)</option><option value="-3">손글씨 (동봉)</option>';
       FONTS.forEach(function (ft, i) {
         var o = document.createElement('option');
         o.value = String(i);
@@ -15422,7 +15638,11 @@ window.gifenc=exports;})();
     return (isFinite(v) && v >= 100 && v <= 900) ? v : 800;
   }
   function gifCardFontFam() {
-    var i = parseInt(gifEl('giFont').value, 10);
+    var vRaw = gifEl('giFont').value;
+    /* 음수 -2/-3 = 동봉 서체(명조/손글씨). FONTS 인덱스와 무관해 목록이 바뀌어도 안전. */
+    if (vRaw === '-2') return "'PB Myeongjo','Noto Serif KR','Batang',serif";
+    if (vRaw === '-3') return "'PB Pen','Malgun Gothic',sans-serif";
+    var i = parseInt(vRaw, 10);
     if (i >= 0 && FONTS[i]) {
       var f = FONTS[i];
       /* 키트 폰트의 CSS 이름은 "몇 번째 항목이냐"가 아니라 파일 기준 해시로 잡는다.
@@ -15440,7 +15660,7 @@ window.gifenc=exports;})();
       }
       return "'" + String(fam).replace(/'/g, '') + "','Malgun Gothic',sans-serif";
     }
-    return "'Malgun Gothic','Segoe UI',sans-serif";
+    return "'PB Black','Malgun Gothic','Segoe UI',sans-serif";
   }
   /* 글자 한 획 그리기 — 글로우·테두리·그림자·본색. 카드 글자와 "영상 위 글자"가 공용.
      g.font·textAlign·baseline·globalAlpha 는 부르는 쪽이 미리 세팅한다. */
@@ -15469,7 +15689,7 @@ window.gifenc=exports;})();
      불투명·정지라 GIF 델타 압축에 부담이 없다(글자 픽셀이 매 프레임 동일).
      이름 카드와 같은 스타일 컨트롤(폰트·크기·색·테두리·글로우·그림자·위치·추가 텍스트)을 그대로 쓴다.
      tv = 이번 루프에서 흐른 시간(초). */
-  function gifOverlayTexts(g, W, tv) {
+  function gifOverlayTexts(g, W, tv, len) {
     var items = [];
     var nm = (gifEl('giName').value || '').trim();
     if (nm) items.push({ s: nm, fs: clampN(gifEl('giSize').value, 84, 30, 220),
@@ -15505,8 +15725,19 @@ window.gifenc=exports;})();
       var u = noAnim ? 1 : Math.max(0, Math.min(1, us / IN));
       if (u <= 0.004) continue;
       var fu = noAnim ? 1 : (1 - Math.pow(1 - u, 3));
+      /* [41차] 루프 끝 페이드아웃 — 등장과 대칭으로 마감(없으면 복귀 프레임에서 뚝 사라짐).
+         '없음(상시)' 모드는 원래 잔상 걱정 없는 경로라 그대로 둔다. */
+      var outA = 1;
+      if (!noAnim && isFinite(len) && len > IN + 0.5) {
+        var to0 = len - 0.34;
+        if (tv > to0) {
+          var uo = Math.max(0, Math.min(1, (tv - to0) / 0.3));
+          outA = 1 - uo * uo * (3 - 2 * uo);
+        }
+      }
+      if (outA <= 0.004) continue;
       g.save();
-      g.globalAlpha = noAnim ? 1 : Math.min(1, u * 2.5);
+      g.globalAlpha = (noAnim ? 1 : Math.min(1, u * 2.5)) * outA;
       g.translate(cxT, cyT + (noAnim ? 0 : (1 - fu) * W * 0.06));
       gifPaintText(g, it.s, 0, 0, { outW: outW, glowOn: glowOn, glowC: glowC, glowW: glowW,
         shadowOn: shadowOn, sK: sK, oc: it.oc, col: it.col });
@@ -18379,6 +18610,30 @@ window.gifenc=exports;})();
         그런데 배경·정착·파티클까지 그 시계를 쓰는 바람에, 전환 속도를 길게 잡으면
         전환 내내 카드가 "정지 이미지"로 합성돼 화면이 그만큼 멈춰 보였다(복귀 전환은 t01=1 고정).
         움직임만 따로 연속으로 흐르게 해서 전환 중에도 카드가 살아 있게 한다. */
+  /* 베지어 하트 — 글리프(♥) 대신 path 로 그려 OS 폰트에 안 흔들리고 글로우도 먹는다 (41차) */
+  function pbHeartPath(g, x, y, s) {
+    g.beginPath();
+    g.moveTo(x, y + s * 0.6);
+    g.bezierCurveTo(x - s, y + s * 0.1, x - s * 0.9, y - s * 0.55, x, y - s * 0.15);
+    g.bezierCurveTo(x + s * 0.9, y - s * 0.55, x + s, y + s * 0.1, x, y + s * 0.6);
+    g.closePath();
+  }
+  /* 조명 패스 — flat 패턴 배경(체크/하트/도트)에 깊이. FXPACK 배경들과 톤 통일 (41차) */
+  function gifCardLight(g, W) {
+    var lg = g.createLinearGradient(0, 0, W, W);
+    lg.addColorStop(0, 'rgba(255,255,255,.16)');
+    lg.addColorStop(.5, 'rgba(255,255,255,0)');
+    lg.addColorStop(1, 'rgba(0,0,0,.10)');
+    g.fillStyle = lg; g.fillRect(0, 0, W, W);
+    var rg = g.createRadialGradient(W / 2, W * 0.42, W * 0.05, W / 2, W * 0.42, W * 0.75);
+    rg.addColorStop(0, 'rgba(255,255,255,.14)');
+    rg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, W, W);
+    var vg = g.createRadialGradient(W / 2, W / 2, W * 0.52, W / 2, W / 2, W * 0.78);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,.12)');
+    g.fillStyle = vg; g.fillRect(0, 0, W, W);
+  }
   function gifCardFrame(g, blurSrc, W, t01, ringPh, mv) {
     var mt = (mv != null && isFinite(mv)) ? mv : t01;
     g.clearRect(0, 0, W, W);
@@ -18431,15 +18686,14 @@ window.gifenc=exports;})();
       } else { /* heart */
         var sp2 = Math.max(30, Math.round(W / 6));
         g.fillStyle = hexA(cA, 0.7);
-        g.font = Math.round(sp2 * 0.5) + 'px sans-serif';
-        g.textAlign = 'center';
-        g.textBaseline = 'middle';
         for (var hy = -1; hy * sp2 < W + sp2; hy++) {
           for (var hx = -1; hx * sp2 < W + sp2; hx++) {
-            g.fillText('♥', hx * sp2 + ((hy % 2) ? sp2 / 2 : 0) + off * 0.5, hy * sp2 + off * 0.3);
+            pbHeartPath(g, hx * sp2 + ((hy % 2) ? sp2 / 2 : 0) + off * 0.5, hy * sp2 + off * 0.3, sp2 * 0.24);
+            g.fill();
           }
         }
       }
+      gifCardLight(g, W);   /* flat 패턴에 조명 한 겹 — 벽지 느낌 제거 */
     } else if ((bgm === 'image' || bgm.indexOf('art:') === 0) && giBgImg) {
       var iw = giBgImg.naturalWidth || 1, ih = giBgImg.naturalHeight || 1;
       var cov = Math.max(W / iw, W / ih);
@@ -18470,18 +18724,27 @@ window.gifenc=exports;})();
         var py4 = (((q2 - mt * (0.55 + q1 * 0.5)) % 1) + 1) % 1 * W;
         var sz = W * (0.035 + q1 * 0.045);
         g.globalAlpha = 0.3 + q2 * 0.35;
+        /* [41차] flat 글리프 → 소프트 스프라이트: 유리알 버블 · 글로우 별 · 베지어 하트.
+           위치·개수·시드는 그대로 — 루프 안정성/프레임 간 무떨림 유지 */
         if (parti === 'bubble') {
-          g.strokeStyle = 'rgba(255,255,255,.9)';
-          g.lineWidth = Math.max(1.5, W * 0.006);
-          g.beginPath();
-          g.arc(px4, py4, sz * 0.7, 0, Math.PI * 2);
-          g.stroke();
+          var bgr = g.createRadialGradient(px4 - sz * 0.2, py4 - sz * 0.25, sz * 0.05, px4, py4, sz * 0.7);
+          bgr.addColorStop(0, 'rgba(255,255,255,.30)');
+          bgr.addColorStop(.75, 'rgba(255,255,255,.05)');
+          bgr.addColorStop(1, 'rgba(255,255,255,.55)');
+          g.fillStyle = bgr;
+          g.beginPath(); g.arc(px4, py4, sz * 0.7, 0, Math.PI * 2); g.fill();
+          g.fillStyle = 'rgba(255,255,255,.85)';
+          g.beginPath(); g.arc(px4 - sz * 0.25, py4 - sz * 0.3, sz * 0.12, 0, Math.PI * 2); g.fill();
+        } else if (parti === 'star') {
+          gifBfxDrawStar(g, px4, py4, sz * 0.75, hexA(gifEl('giBgCol').value, 0.95),
+            g.globalAlpha, (q1 - 0.5) * 0.8);
         } else {
-          g.fillStyle = hexA(gifEl('giBgCol').value, 0.9);
-          g.font = Math.round(sz * 1.6) + 'px sans-serif';
-          g.textAlign = 'center';
-          g.textBaseline = 'middle';
-          g.fillText(parti === 'star' ? '✦' : '♥', px4, py4);
+          g.fillStyle = hexA(gifEl('giBgCol').value, 0.95);
+          g.shadowColor = hexA(gifEl('giBgCol').value, 0.8);
+          g.shadowBlur = sz * 0.5;
+          pbHeartPath(g, px4, py4, sz * 0.85);
+          g.fill();
+          g.shadowBlur = 0; g.shadowColor = 'transparent';
         }
       }
       g.restore();
@@ -19422,6 +19685,23 @@ window.gifenc=exports;})();
     }
     g.closePath();
   }
+  /* [41차] 2단계 축소 — 1080p+ 소스를 420px 로 한 방에 줄이면 'high' 필터로도 이목구비가
+     뭉개진다. 목표 2배 중간 캔버스(재사용)를 거쳐 두 번 줄인다. 미리보기·인코드가 같은
+     경로를 지나므로 둘이 항상 일치한다. */
+  var gifDF2x = null;
+  function gifDrawScaled(g, img, dx, dy, dw, dh) {
+    var sw = img.videoWidth || img.naturalWidth || img.width || 0;
+    if (!(sw > 0) || sw <= dw * 2.5) { g.drawImage(img, dx, dy, dw, dh); return; }
+    var mw = Math.max(2, Math.round(dw * 2)), mh = Math.max(2, Math.round(dh * 2));
+    if (!gifDF2x) gifDF2x = document.createElement('canvas');
+    if (gifDF2x.width !== mw || gifDF2x.height !== mh) { gifDF2x.width = mw; gifDF2x.height = mh; }
+    var mg = gifDF2x.getContext('2d');
+    mg.imageSmoothingEnabled = true;
+    mg.imageSmoothingQuality = 'high';
+    mg.clearRect(0, 0, mw, mh);
+    mg.drawImage(img, 0, 0, mw, mh);
+    g.drawImage(gifDF2x, dx, dy, dw, dh);
+  }
   function gifDrawFrame(g, v, W, H, ph, noRing) {
     g.clearRect(0, 0, W, H);
     /* 소스가 아직/이미 없는 순간(GIF 디코딩 중, 소스 교체 직후)에 그리려다 죽지 않게 */
@@ -19459,11 +19739,11 @@ window.gifenc=exports;})();
       g.beginPath();
       gifRingClipPath(g, W, ph);      /* 손그림이면 흔들리는 선을 따라, 나머지는 원 전체 */
       g.clip();
-      g.drawImage(img, dx, dy, dw, dh);
+      gifDrawScaled(g, img, dx, dy, dw, dh);
       g.restore();
       if (!noRing) gifDrawRing(g, W, ph);
     } else {
-      g.drawImage(img, dx, dy, dw, dh);
+      gifDrawScaled(g, img, dx, dy, dw, dh);
     }
   }
   /* 이동이 너무 커서 빈 공간이 보이지 않게 — 확대한 만큼만 움직일 수 있다 */
@@ -19752,7 +20032,9 @@ window.gifenc=exports;})();
           }
         }
         return gifRefinePalette(
-          GE.quantize(ditherFn ? ditherFn(op) : op, Math.max(2, colors), { format: 'rgb565' }),
+          /* ⚠ op 는 불투명 픽셀만 눌러 담은 배열 — 좌표 기반 디더(ditherFn)를 걸면
+             W×H 좌표가 어긋나 엉뚱한 지터가 든다. op 경로는 디더 없이 그대로. */
+          GE.quantize(op, Math.max(2, colors), { format: 'rgb565' }),
           op, refineIters);
       }
     }
@@ -19795,6 +20077,20 @@ window.gifenc=exports;})();
     }
     return true;
   }
+  /* 알파 실루엣(임계 128 이진화)이 전 프레임 완전 동일한지 — 프사처럼 클립이 고정이면
+     델타(dispose=1)를 써도 실루엣 잔상이 없다. 한 픽셀이라도 다르면 false(fail-closed). */
+  function gifFramesAlphaStatic(frames, step) {
+    if (!frames.length) return false;
+    var base = frames[0];
+    for (var fi = step; fi < frames.length; fi += step) {
+      var d = frames[fi];
+      if (!d || d.length !== base.length) return false;
+      for (var p = 3; p < base.length; p += 4) {
+        if ((base[p] < 128) !== (d[p] < 128)) return false;
+      }
+    }
+    return true;
+  }
   /* ⚠ gifEncode 의 7번째 인자(transparent)는 원래 '프사(동그라미)냐' 로만 켰다.
      그런데 이 값은 실제로는 **델타 압축 스위치**다 — 켜면 '직전 프레임과 같은 픽셀'을
      투명으로 두어 LZW 가 통째로 건너뛴다.
@@ -19828,8 +20124,10 @@ window.gifenc=exports;})();
        table on every frame. One global table plus the real bit depth is byte-smaller
        without changing a single decoded pixel. */
     var colorDepth = Math.max(2, Math.min(8, Math.ceil(Math.log(framePal.length) / Math.LN2)));
-    /* 오차확산용 최근접색 표 — 팔레트가 정해진 뒤 한 번만 만든다 */
-    var gLut = GIF_FS ? gifNearLut(gPal) : null;
+    /* 최근접색 표 — 팔레트가 정해진 뒤 한 번만 만든다.
+       무디더 경로도 이 표(676 격자·칸 중앙 측정)로 인덱싱한다 — applyPalette 의
+       565 빈 바닥 측정이 넓은 면에 남기던 띠·계단이 사라진다(41차, 실측 주석 19773 참조). */
+    var gLut = gifNearLut(gPal);
     var lastFrameIndex = Math.floor((frames.length - 1) / step) * step;
     var closedRawLoop = transparent && lastFrameIndex > 0 && gifPixelsEqual(frames[lastFrameIndex], frames[0]);
     /* 첫 장 리치 팔레트 — 델타 장부(prev/prevIdx/firstIdx)는 기존 전역 팔레트 기준을
@@ -19851,7 +20149,10 @@ window.gifenc=exports;})();
     /* 투명 피사체를 dispose=1 델타로 누적하면 이전 위치의 불투명 픽셀을 투명
        인덱스로 지울 수 없어 실루엣이 프레임마다 자란다. 실제 alpha가 하나라도
        있으면 각 프레임을 독립 상태로 기록하고 dispose=2로 바로 비운다. */
-    var independentAlpha = transparent && !gifFramesFullyOpaque(frames, step);
+    /* 알파 실루엣이 전 프레임 동일(비트 일치)하면 dispose=1 델타로도 실루엣이 안 자란다 —
+       프사(고정 원형 클립)의 델타·fuzz 를 살린다(41차). 패턴이 다르면 기존 독립 경로(fail-closed). */
+    var independentAlpha = transparent && !gifFramesFullyOpaque(frames, step) &&
+      !gifFramesAlphaStatic(frames, step);
     for (var i = 0; i < frames.length; i += step) {
       var data = frames[i];
       var delay = Math.round(1000 * step / fps);
@@ -19863,8 +20164,9 @@ window.gifenc=exports;})();
       /* 색을 고를 때만 디더한 사본을 쓴다 — 델타 비교·투명 판정은 원본 그대로 */
       var qdat = GIF_DITHER ? gifDitherCopy(data, W, H, GIF_DITHER) : data;
       if (transparent) {
-        var idx = gLut ? gifFsDither(data, W, H, gPal, gLut, GIF_FS)
-                       : GE.applyPalette(qdat, gPal, 'rgb565');
+        /* FS(오차확산)는 원본에서, Bayer(od)는 디더 사본에서 색만 고른다.
+           GIF_FS=0 이면 순수 최근접(676 중앙 측정) — 델타 비교는 늘 원본 기준. */
+        var idx = gifFsDither(GIF_DITHER ? qdat : data, W, H, gPal, gLut, GIF_FS);
         var ti = transparentIndex;
         if (independentAlpha) {
           /* 현재 프레임의 alpha/팔레트 상태를 그대로 기록한다. 이전 합성 화면과
@@ -19924,12 +20226,13 @@ window.gifenc=exports;})();
                            : gifCropTransparentFrame(idx, W, H, ti);
         var transparentOpts = { delay: delay, transparent: true, transparentIndex: ti,
           dispose: independentAlpha ? 2 : 1, colorDepth: colorDepth, x: crop.x, y: crop.y };
-        if (i === 0) transparentOpts.palette = framePal;
+        /* ⚠ 리치 첫 장이 쓰였으면 전역 색표는 richPal 이다 — 델타 프레임(framePal 인덱스)에
+           로컬 색표를 안 붙이면 richPal 로 디코드돼 움직인 픽셀 색이 통째로 깨진다(41차 수정). */
+        if (i === 0 || richIdx0) transparentOpts.palette = framePal;
         enc.writeFrame(crop.index, crop.w, crop.h, transparentOpts);
         }
       } else {
-        var idx2 = gLut ? gifFsDither(data, W, H, gPal, gLut, GIF_FS)
-                        : GE.applyPalette(qdat, gPal, 'rgb565');
+        var idx2 = gifFsDither(GIF_DITHER ? qdat : data, W, H, gPal, gLut, GIF_FS);
         var opaqueOpts = { delay: delay, colorDepth: colorDepth };
         if (i === 0) opaqueOpts.palette = framePal;
         enc.writeFrame(idx2, W, H, opaqueOpts);
@@ -19990,18 +20293,27 @@ window.gifenc=exports;})();
        색으로도 200KB 에 들어온다. FS 칸은 델타를 망가뜨려 사실상 못 들어가므로
        무디더 칸이 실질적인 '최대 색' 경로다. */
     [1,256,2,0],[1,256,4,0],
-    /* 128색·FS 디더 없음 — 밝은 블러 배경의 띠(포스터리제이션)를 절반으로.
-       배경은 정지(델타 0)라 색이 늘어도 반복 비용이 없고, 첫 장·인물 갱신만 ~15% 커진다.
-       fuzz 로 그 차액을 회수해 본다 — 안 되면 아래 64색 칸으로 자연 강등. */
+    /* [41차] 리치 첫 장(first:256) — 정지 배경은 델타 구조상 첫 장에 한 번만 기록돼
+       루프 내내 남으므로, 첫 장만 256색 로컬 팔레트로 굽고 움직임만 128/64색으로.
+       od(위치 고정 Bayer)는 정지 픽셀 인덱스가 안 변해 델타 비용 0 — 움직이는
+       인물·글로우의 밴딩만 깬다. 리치+디더 칸을 먼저, 넘치면 기존 칸으로 자연 강등. */
+    [1,128,3,0,6,256],[1,128,4,0,6,256],
+    [1,128,3,0,6],[1,128,4,0,6],
     [1,128,3,0],[1,128,4,0],[1,128,5,0],[1,128,6,0],
+    [1,64,3,0,6,256],[1,64,4,0,6,256],
+    [1,64,3,0,6],
     [1,64,3,0],[1,64,4,0],[1,64,5,0],
     [1.5,256,0,.20],[1.5,128,2,.15],
     [1.5,256,3,0],
+    [1.5,128,4,0,6,256],
     [1.5,128,4,0],[1.5,128,6,0],
+    [1.5,64,3,0,6,256],
     [1.5,64,3,0],[1.5,64,5,0],
     [2,256,0,.20],[2,128,2,.15],
     [2,256,3,0],
+    [2,128,4,0,6,256],
     [2,128,4,0],[2,128,6,0],
+    [2,64,3,0,6,256],
     [2,64,3,0],[2,64,5,0]
   ].map(function (v) {
       return { step: v[0], frames: GIF_BOTTOM_SPEC.frames / v[0], fps: GIF_BOTTOM_SPEC.fps / v[0],
@@ -20589,7 +20901,7 @@ window.gifenc=exports;})();
   function gifWorkerSrc() {
     var fns = [gifOk2Rgb, gifRgb2Ok, gifNearIdx, gifDitherCopy, gifNearLut, gifFsDither,
       gifRefinePalette, gifGlobalPalette, gifCropTransparentFrame, gifPixelsEqual,
-      gifFramesFullyOpaque, gifEncode];
+      gifFramesFullyOpaque, gifFramesAlphaStatic, gifEncode];
     return [
       'self.window = self;',
       'importScripts(' + JSON.stringify(new URL('gifenc.js', location.href).href) + ');',
@@ -21039,6 +21351,11 @@ window.gifenc=exports;})();
        루프 이음새(카드 끝 → 영상 시작)에서 배경이 확 튄다. 미리보기도 카드 구간엔
        시작 지점으로 되감으므로 완성본과 같은 장면이 된다. */
     var blurSrc = null;
+    /* [41차] 루프 부드럽게 — 인트로 카드가 없으면 마지막 프레임→첫 프레임이 소스 그대로
+       하드컷이었다. 시작 K프레임을 떠 두고 끝 K프레임에 스무스스텝으로 덧섞어서
+       마지막 장이 첫 장으로 수렴하게 한다(사진 소스·인트로 카드 경로는 이미 이음새 처리됨). */
+    var XK = (!intro && n > Math.round(fps * 0.8) + 2) ? Math.max(2, Math.round(fps * 0.4)) : 0;
+    var xStart = [];
     (function step(i) {
       if (i >= n) { cardFrames(); return; }
       gifSetProg('프레임 담는 중… ' + (i + 1) + ' / ' + n);
@@ -21048,8 +21365,21 @@ window.gifenc=exports;})();
         var rph = (portrait && !intro && n > 1) ? i / (n - 1) : frames.length / total;
         if (!intro) {
           gifDrawFrame(g, v, W, H, rph, true);
+          if (XK) {
+            if (i < XK) {
+              var snap = document.createElement('canvas');
+              snap.width = W; snap.height = H;
+              snap.getContext('2d').drawImage(g.canvas, 0, 0);
+              xStart.push(snap);
+            } else if (i >= n - XK && xStart[i - (n - XK)]) {
+              var xk2 = i - (n - XK);
+              var xa = (xk2 + 1) / (XK + 1);
+              xa = xa * xa * (3 - 2 * xa);   /* smoothstep — 마지막 장 ≈ 첫 장 */
+              g.save(); g.globalAlpha = xa; g.drawImage(xStart[xk2], 0, 0); g.restore();
+            }
+          }
           /* 영상 위 글자 — 카드 전환 없이 프레임 위에 바로 얹는다(링은 pushFrame에서 위에) */
-          if (overlayTxt) gifOverlayTexts(g, W, i / fps);
+          if (overlayTxt) gifOverlayTexts(g, W, i / fps, n / fps);
         } else {
           /* 이번 영상 프레임을 따로 떠서 전환의 한쪽 소스로 쓴다 */
           vfG.clearRect(0, 0, W, H);
@@ -23447,16 +23777,78 @@ window.gifenc=exports;})();
 
   function chromaProcess(srcData, out, kr, kg, kb, tol, soft) {
     var s = srcData.data, o = out.data;
+    var W = srcData.width, H = srcData.height;
     var t1 = soft ? tol * 1.6 + 24 : tol + 0.0001;
     for (var i = 0; i < s.length; i += 4) {
       var dr = s[i] - kr, dg = s[i + 1] - kg, db = s[i + 2] - kb;
       var d = Math.sqrt(dr * dr + dg * dg + db * db);
-      o[i] = s[i]; o[i + 1] = s[i + 1]; o[i + 2] = s[i + 2];
+      var r = s[i], g = s[i + 1], b = s[i + 2];
       var a = s[i + 3];
       if (d <= tol) a = 0;
-      else if (d < t1) a = Math.round(a * (d - tol) / (t1 - tol));
+      else if (d < t1) {
+        var u = (d - tol) / (t1 - tol);
+        a = Math.round(a * u);
+        /* 스필 억제(defringe) — 반투명 엣지 픽셀을 키 색 반대 방향으로 밀어서,
+           딴 누끼를 다른 배경에 얹었을 때 남던 초록/단색 테두리를 지운다 */
+        var f = (1 - u) * 0.7;
+        r += dr * f; g += dg * f; b += db * f;
+        r = r < 0 ? 0 : r > 255 ? 255 : Math.round(r);
+        g = g < 0 ? 0 : g > 255 ? 255 : Math.round(g);
+        b = b < 0 ? 0 : b > 255 ? 255 : Math.round(b);
+      }
+      o[i] = r; o[i + 1] = g; o[i + 2] = b;
       o[i + 3] = a;
     }
+    /* 최소 1px 엣지 안티앨리어스 — '부드럽게'를 꺼도 계단이 안 남게 알파만 3×3 블러 */
+    if (W > 2 && H > 2) {
+      var A = new Uint8ClampedArray(W * H);
+      for (var q0 = 0; q0 < W * H; q0++) A[q0] = o[q0 * 4 + 3];
+      for (var y = 1; y < H - 1; y++) {
+        var row = y * W;
+        for (var x = 1; x < W - 1; x++) {
+          var q = row + x;
+          var sum = A[q - W - 1] + A[q - W] + A[q - W + 1] + A[q - 1] + A[q] * 2 +
+            A[q + 1] + A[q + W - 1] + A[q + W] + A[q + W + 1];
+          o[q * 4 + 3] = (sum / 10) | 0;
+        }
+      }
+    }
+  }
+  /* ✨ 자동보정 — 64px 축소본 히스토그램으로 밝기/대비/채도 보정값(슬라이더 %)을 계산.
+     비파괴: 픽셀을 안 바꾸고 CSS filter 슬라이더 값만 제안한다(화보집·배너 공용). */
+  function bnAutoTone(srcUrl) {
+    return new Promise(function (ok) {
+      var im = new Image();
+      im.onload = function () {
+        try {
+          var c = document.createElement('canvas');
+          c.width = 64; c.height = 64;
+          var g = c.getContext('2d', { willReadFrequently: true });
+          g.drawImage(im, 0, 0, 64, 64);
+          var d = g.getImageData(0, 0, 64, 64).data;
+          var hist = new Uint32Array(256), n = 0, satSum = 0;
+          for (var i = 0; i < d.length; i += 4) {
+            if (d[i + 3] < 32) continue;   /* 투명(누끼) 픽셀 제외 */
+            var r = d[i], gg = d[i + 1], b = d[i + 2];
+            var l = (r * 54 + gg * 183 + b * 19) >> 8;
+            hist[l]++; n++;
+            var mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+            satSum += mx ? (mx - mn) / mx : 0;
+          }
+          if (n < 64) { ok(null); return; }
+          var cut = n * 0.02, lo = 0, hi = 255, j, acc;
+          for (acc = 0, j = 0; j < 256; j++) { acc += hist[j]; if (acc >= cut) { lo = j; break; } }
+          for (acc = 0, j = 255; j >= 0; j--) { acc += hist[j]; if (acc >= cut) { hi = j; break; } }
+          var mid = (lo + hi) / 2;
+          var ct = Math.round(Math.max(100, Math.min(135, 255 / Math.max(40, hi - lo) * 100)));
+          var br = Math.round(Math.max(85, Math.min(125, 128 / Math.max(32, mid) * 100)));
+          var sa = (satSum / n) < 0.14 ? 112 : 100;   /* 많이 물빠진 사진만 살짝 */
+          ok({ br: br, ct: ct, sa: sa });
+        } catch (e) { ok(null); }
+      };
+      im.onerror = function () { ok(null); };
+      im.src = srcUrl;
+    });
   }
   /* dataURL → 크로마키 적용 dataURL (QA·프로젝트 다시열기 재적용에도 사용) */
   function chromaKeyDataUrl(srcUrl, hex, tol, soft) {
@@ -24085,6 +24477,7 @@ window.gifenc=exports;})();
     gifFsDither: gifFsDither, gifNearLut: gifNearLut,
     gifRefinePalette: gifRefinePalette, gifSetKmeans: function (v) { GIF_KMEANS = v; },
     gifSetFs: function (v) { GIF_FS = v; }, gifSetDither: function (v) { GIF_DITHER = v; },
+    gifSetFirst: function (v) { GIF_FIRST_RICH = v; },
     gifDrawFrame: gifDrawFrame, gifClampPan: gifClampPan, gifCardPeekT: gifCardPeekT,
     gifSrcInfo: function () {
       var v = gifV();
@@ -24260,6 +24653,12 @@ window.gifenc=exports;})();
     });
   }
   var booted = false;
+  /* 동봉 서체(PB 명조/펜/블랙) 선로드 — 캔버스 fillText 는 CSS 폰트 로드를 자동으로
+     트리거하지 않아, 처음 만든 움짤/시그 글자가 폴백 폰트로 굳는다. 부팅 때 미리 로드. */
+  try {
+    ['400 16px "PB Myeongjo"', '800 16px "PB Myeongjo"', '400 16px "PB Pen"', '400 16px "PB Black"']
+      .forEach(function (s) { document.fonts.load(s).catch(function () {}); });
+  } catch (e) {}
   function boot() {
     api = window.pywebview.api;
     /* 목 API로 먼저 떴다가 진짜 pywebview가 늦게 붙는 경우 — 데이터 소스만 갈아끼움 */

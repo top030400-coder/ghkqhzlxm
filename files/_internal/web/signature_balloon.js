@@ -10,6 +10,8 @@
   const WEFLAB_WIDTH = 668;
   const WEFLAB_HEIGHT = 374;
   const WEFLAB_RENDER_SCALE = 2;
+  // 모바일·PC 내보내기도 위플랩과 같은 2× 작업면에 렌더한 뒤 한 번에 축소한다(품질용, 최종 치수는 불변).
+  const SOOP_RENDER_SCALE = 2;
   const WEFLAB_UPLOAD_LIMIT = 10 * 1024 * 1024;
   const DPR = 2;
   const MOBILE_NUMBER_SIZE = 55;
@@ -46,8 +48,9 @@
     { key: "sig-jua", label: "BM JUA · 기본", family: '\"SigJua\",\"Arial Rounded MT Bold\",sans-serif' },
     { key: "rounded", label: "둥근 고딕", family: '\"Arial Rounded MT Bold\",\"Pretendard\",\"Noto Sans KR\",sans-serif' },
     { key: "sans", label: "깔끔한 고딕", family: '\"Pretendard\",\"Noto Sans KR\",\"Malgun Gothic\",sans-serif' },
-    { key: "serif", label: "명조", family: '\"Noto Serif KR\",\"Batang\",\"Times New Roman\",serif' },
-    { key: "bold", label: "굵은 제목체", family: 'Impact,\"Arial Black\",\"Pretendard\",\"Noto Sans KR\",sans-serif' }
+    { key: "serif", label: "명조", family: '\"PB Myeongjo\",\"Noto Serif KR\",\"Batang\",serif' },
+    { key: "bold", label: "굵은 제목체", family: '\"PB Black\",Impact,\"Arial Black\",sans-serif' },
+    { key: "pen", label: "손글씨 펜", family: '\"PB Pen\",\"Malgun Gothic\",sans-serif' }
   ];
 
   const textureFiles = {
@@ -498,6 +501,28 @@
     Object.assign({}, layouts[3], { key: "char-center-split", name: "캐릭터 중앙 · 숫자 양쪽" })
   ];
 
+  /* ── 완성 템플릿 8종 — 배경+배경판 모양+소품+문구색+숫자 배치를 한 번에 세팅.
+     테마×레이아웃×마스크 시드(일자·돔·하트·웨이브)를 서로 확실히 다르게 큐레이션.
+     사용자의 캐릭터 이미지와 문구·숫자 "내용"은 건드리지 않는다(applyTemplate).
+     maskSeed는 배경판 작업실의 createMaskSeed 시드 키(null이면 일자 기본판). */
+  const templateDefs = [
+    { name: "피치 스탠다드", themeKey: "modernPeach", layoutKey: "full", maskSeed: null },
+    { name: "스카이 버블 돔", themeKey: "modernSky", layoutKey: "cloud", maskSeed: "dome-low" },
+    { name: "로즈 하트판", themeKey: "modernRose", layoutKey: "slope", maskSeed: "heart-wide" },
+    { name: "러브 하트 아치", themeKey: "modernPink", layoutKey: "twin", maskSeed: "heart-wide" },
+    { name: "라일락 펄 밴드", themeKey: "modernLilac", layoutKey: "dome", maskSeed: null },
+    { name: "민트 웨이브", themeKey: "modernMint", layoutKey: "burst", maskSeed: "organic" },
+    { name: "엔젤 윙 돔", themeKey: "modernBlue", layoutKey: "wings", maskSeed: "dome-high" },
+    { name: "아쿠아 룰렛 돔", themeKey: "modernAqua", layoutKey: "roulette", maskSeed: "dome-low" }
+  ];
+  const templatePresets = templateDefs.map((def, index) => {
+    const theme = themes.find(item => item.key === def.themeKey);
+    const layout = layouts.find(item => item.key === def.layoutKey);
+    if (!theme || !layout) return null;
+    /* layoutIndex는 buildPropsForPreset의 소품 조합 변주 키 — 템플릿마다 다르게 */
+    return { name: def.name, theme, layout, layoutIndex: index, maskSeed: def.maskSeed };
+  }).filter(Boolean);
+
   const state = {
     presetIndex: 0,
     placementIndex: 0,
@@ -607,6 +632,7 @@
   let layerHitCtx = null;
   const imageAlphaBoundsCache = new WeakMap();
   let renderQueued = false;
+  let activeTemplateIndex = -1; /* 완성 템플릿 하이라이트(UI 전용 — 저장·언두에 안 들어감) */
   let customPropSequence = 0;
   let customPhraseFontSequence = 0;
   const customPhraseFonts = new Map();
@@ -810,10 +836,13 @@
       <div class="sig-shell">
         <aside class="sig-panel">
           <div class="sig-panel-head">
-            <h2>빠른 배경 ${presets.length}종 · 전체 43종</h2>
-            <p>왼쪽은 대표 배경 12종 빠른 선택이야. 오른쪽에서 전체 43종·커스텀 PNG·소품과 배경판 직접 그리기를 조절해.</p>
+            <h2>완성 템플릿 ${templatePresets.length}종 · 빠른 배경 ${presets.length}종</h2>
+            <p>완성 템플릿은 배경판 모양·소품·문구색·숫자 배치까지 한 번에 세팅해(내 캐릭터·문구 내용은 유지). 빠른 배경은 배경만 갈아입혀.</p>
           </div>
           <div class="sig-scroll">
+            <div class="sig-grid-title">✨ 완성 템플릿</div>
+            <div id="sigTemplateGrid" class="sig-preset-grid"></div>
+            <div class="sig-grid-title">🎨 빠른 배경</div>
             <div id="sigPresetGrid" class="sig-preset-grid"></div>
           </div>
         </aside>
@@ -1469,9 +1498,78 @@
       state.num1.text = preset.theme.defaultNum || state.num1.text;
       state.num2.enabled = false;
     }
+    activeTemplateIndex = -1;
     syncControls();
     renderLayerList();
     highlightPreset();
+    highlightTemplate();
+    requestRender();
+    commitMainChange(historyBefore);
+  }
+
+  /* 완성 템플릿 적용 — applyPreset(index, false)와 같은 일괄 세팅 경로지만
+     ① 배경판 모양(마스크 시드)까지 템플릿이 정하고 ② 사용자의 캐릭터 이미지·
+     문구/숫자 텍스트·폰트는 보존한다(레이아웃 객체에 해당 키가 없어 Object.assign이
+     건드리지 않는 기존 preserve 방식 그대로). 언두는 1스텝. */
+  function applyTemplate(index) {
+    const tpl = templatePresets[index];
+    if (!tpl) return;
+    const historyBefore = beginMainChange();
+    /* 빠른 배경 그리드 하이라이트도 같은 테마를 따라가게 presetIndex를 맞춘다 */
+    const gridIndex = presets.findIndex(preset => preset.theme.key === tpl.theme.key);
+    if (gridIndex >= 0) state.presetIndex = gridIndex;
+    state.placementIndex = 0;
+    Object.assign(state.background, {
+      texture: tpl.theme.texture,
+      hue: tpl.theme.hue || 0,
+      saturation: tpl.theme.saturation == null ? 100 : tpl.theme.saturation,
+      brightness: tpl.theme.brightness == null ? 100 : tpl.theme.brightness,
+      modern: !!tpl.theme.modern,
+      surface: tpl.theme.surface || "none",
+      motif: tpl.theme.motif || "none",
+      variant: tpl.layoutIndex,
+      primary: tpl.theme.primary,
+      secondary: tpl.theme.secondary,
+      tintOpacity: tpl.theme.modern || tpl.theme.simple || tpl.theme.key.startsWith("flat") ? 0 : 12,
+      pattern: tpl.theme.pattern,
+      maskPaintMode: "theme",
+      imageScale: 1,
+      offsetX: 0,
+      offsetY: 0
+    });
+    if (tpl.maskSeed) {
+      /* 시드는 적용할 때마다 새 캔버스 — "적용된 마스크는 불변" 계약(captureMainSnapshot
+         주석 참고)을 지켜 언두 스냅샷 참조 공유가 안전하다. */
+      state.background.maskCanvas = createMaskSeed(tpl.maskSeed);
+      state.background.mask = "alpha-custom";
+      state.background.top = 84;
+      state.background.curve = 24;
+      state.background.maskStrokeColor = tpl.theme.accent;
+      state.background.maskStrokeWidth = 3;
+      state.background.maskDoubleOutline = true;
+      state.background.maskOuterColor = "#ffffff";
+      state.background.maskOuterWidth = 2;
+    } else {
+      state.background.mask = "band-straight";
+      state.background.top = tpl.layout.top;
+      state.background.curve = tpl.layout.curve;
+    }
+    /* 위치·크기·색만 템플릿 값으로 — img·text·fontKey 키는 레이아웃에 없어 보존됨 */
+    Object.assign(state.character, deepCopy(tpl.layout.char));
+    Object.assign(state.phrase, deepCopy(tpl.layout.phrase), {
+      fill: "#ffffff",
+      stroke: tpl.theme.accent,
+      shadow: mixHex(tpl.theme.accent, "#28222c", .48)
+    });
+    Object.assign(state.num1, deepCopy(tpl.layout.num1), { enabled: true, size: MOBILE_NUMBER_SIZE, rot: 0 });
+    Object.assign(state.num2, deepCopy(tpl.layout.num2), { size: MOBILE_NUMBER_SIZE, rot: 0 });
+    state.props = buildPropsForPreset(tpl);
+    state.selected = { kind: "character", index: -1 };
+    activeTemplateIndex = index;
+    syncControls();
+    renderLayerList();
+    highlightPreset();
+    highlightTemplate();
     requestRender();
     commitMainChange(historyBefore);
   }
@@ -1550,7 +1648,133 @@
   }
 
   function highlightPreset() {
-    document.querySelectorAll(".sig-preset").forEach((el, i) => el.classList.toggle("on", i === state.presetIndex));
+    /* 템플릿 그리드도 .sig-preset 클래스를 쓰므로 반드시 배경 그리드로 한정한다 */
+    document.querySelectorAll("#sigPresetGrid .sig-preset").forEach((el, i) => el.classList.toggle("on", i === state.presetIndex));
+  }
+
+  function highlightTemplate() {
+    document.querySelectorAll("#sigTemplateGrid .sig-preset").forEach((el, i) => el.classList.toggle("on", i === activeTemplateIndex));
+  }
+
+  function renderTemplateGrid() {
+    const grid = document.getElementById("sigTemplateGrid");
+    if (!grid) return;
+    grid.innerHTML = "";
+    templatePresets.forEach((tpl, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "sig-preset sig-template";
+      button.title = `${tpl.name} — 배경·배경판·소품·문구색·숫자 배치를 한 번에 (내 캐릭터·문구 내용은 유지)`;
+      button.innerHTML = `<canvas width="293" height="164"></canvas><span>${String(index + 1).padStart(2, "0")} ${escapeHtml(tpl.name)}</span>`;
+      button.addEventListener("click", () => applyTemplate(index));
+      grid.appendChild(button);
+      drawTemplateThumb(button.querySelector("canvas"), tpl);
+    });
+    highlightTemplate();
+  }
+
+  /* 템플릿 썸네일 속 캐릭터 자리 목업 — 실제 캐릭터 대신 위치·크기를 보여주는 실루엣 */
+  function drawTemplateThumbCharacter(c, tpl) {
+    const char = tpl.layout.char;
+    const s = char.scale || 1;
+    c.save();
+    c.translate(char.x, char.y);
+    c.scale(s, s);
+    c.globalAlpha = .92;
+    c.lineWidth = 3;
+    c.strokeStyle = tpl.theme.accent;
+    c.fillStyle = "#ffffff";
+    c.beginPath();
+    c.moveTo(-30, 62);
+    c.quadraticCurveTo(-34, -6, 0, -10);
+    c.quadraticCurveTo(34, -6, 30, 62);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.beginPath();
+    c.arc(0, -44, 33, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+    c.fillStyle = tpl.theme.accent;
+    c.beginPath();
+    c.arc(-11, -46, 3.2, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(11, -46, 3.2, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.arc(0, -40, 7, .18 * Math.PI, .82 * Math.PI);
+    c.lineWidth = 2.4;
+    c.stroke();
+    c.restore();
+  }
+
+  /* 완성 템플릿 썸네일 — 배경만 그리던 기존 썸네일과 달리 배경판 모양+소품+문구+
+     숫자 목업까지 그려 "완성본"처럼 보여준다(미리보기 전용, 출력 경로와 무관). */
+  function drawTemplateThumb(target, tpl) {
+    const c = target.getContext("2d");
+    c.clearRect(0, 0, 293, 164);
+    const bgMock = {
+      texture: tpl.theme.texture,
+      hue: tpl.theme.hue || 0,
+      saturation: tpl.theme.saturation == null ? 100 : tpl.theme.saturation,
+      brightness: tpl.theme.brightness == null ? 100 : tpl.theme.brightness,
+      modern: !!tpl.theme.modern,
+      surface: tpl.theme.surface || "none",
+      motif: tpl.theme.motif || "none",
+      variant: tpl.layoutIndex,
+      primary: tpl.theme.primary,
+      secondary: tpl.theme.secondary,
+      tintOpacity: tpl.theme.modern || tpl.theme.simple || tpl.theme.key.startsWith("flat") ? 0 : 12,
+      pattern: tpl.theme.pattern,
+      maskPaintMode: "theme",
+      imageScale: 1,
+      offsetX: 0,
+      offsetY: 0
+    };
+    if (tpl.maskSeed) {
+      if (!tpl.thumbSeedCanvas) tpl.thumbSeedCanvas = createMaskSeed(tpl.maskSeed); /* 썸네일 전용 캐시(읽기만) */
+      Object.assign(bgMock, {
+        mask: "alpha-custom",
+        maskCanvas: tpl.thumbSeedCanvas,
+        top: 84,
+        curve: 24,
+        maskStrokeColor: tpl.theme.accent,
+        maskStrokeWidth: 3,
+        maskDoubleOutline: true,
+        maskOuterColor: "#ffffff",
+        maskOuterWidth: 2
+      });
+    } else {
+      Object.assign(bgMock, { mask: "band-straight", top: tpl.layout.top, curve: tpl.layout.curve });
+    }
+    c.save();
+    c.translate(0, -84);
+    drawBackground(c, bgMock, true);
+    const props = buildPropsForPreset(tpl);
+    props.filter(prop => !prop.front).forEach(prop => drawProp(c, prop));
+    drawTemplateThumbCharacter(c, tpl);
+    drawOutlinedText(c, "사랑해", Object.assign({}, tpl.layout.phrase, {
+      enabled: true,
+      fontKey: "sig-jua",
+      lineHeight: .83,
+      fill: "#ffffff",
+      stroke: tpl.theme.accent,
+      innerStrokeEnabled: true,
+      innerStrokeWidth: .075,
+      middleStrokeEnabled: true,
+      middleStroke: "#ffffff",
+      middleStrokeWidth: .14,
+      outerStrokeEnabled: true,
+      shadow: mixHex(tpl.theme.accent, "#28222c", .48),
+      outerStrokeWidth: .2
+    }), false);
+    props.filter(prop => prop.front).forEach(prop => drawProp(c, prop));
+    drawOutlinedText(c, "486", Object.assign({}, tpl.layout.num1, { enabled: true, rot: 0 }), true);
+    if (tpl.layout.num2 && tpl.layout.num2.enabled) {
+      drawOutlinedText(c, "46", Object.assign({}, tpl.layout.num2, { enabled: true, rot: 0 }), true);
+    }
+    c.restore();
   }
 
   function drawPresetThumb(target, preset) {
@@ -1812,9 +2036,11 @@
       if (asset.image) propImages[type] = asset.image;
       if (asset.label) propLabels[type] = asset.label;
     });
+    activeTemplateIndex = -1; /* 언두/리두 후 상태가 템플릿과 같다는 보장이 없다 */
     syncControls();
     renderLayerList();
     highlightPreset();
+    highlightTemplate();
     requestRender();
   }
 
@@ -4136,6 +4362,9 @@
     const fill = prop.color2 || state.background.secondary;
     const raster = propImages[prop.type];
     if (raster && raster.naturalWidth) {
+      // 큰 소품 PNG 축소도 캐릭터와 같은 고품질 리샘플링으로.
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = "high";
       c.filter = `hue-rotate(${prop.hue || 0}deg) saturate(${prop.saturation == null ? 100 : prop.saturation}%) brightness(${prop.brightness == null ? 100 : prop.brightness}%)`;
       const fit = Math.min(140 / raster.naturalWidth, 140 / raster.naturalHeight);
       const rasterWidth = raster.naturalWidth * fit;
@@ -4340,7 +4569,12 @@
     c.translate(char.x, char.y);
     c.rotate(char.rot * Math.PI / 180);
     c.scale(char.flip ? -1 : 1, 1);
-    c.filter = "drop-shadow(2px 0 0 white) drop-shadow(-2px 0 0 white) drop-shadow(0 2px 0 white) drop-shadow(0 -2px 0 white)";
+    // 수천 px 원본을 한 방에 축소해도 계단 에지가 안 생기게 고품질 리샘플링을 명시한다.
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = "high";
+    // 흰 테두리는 4방향(상하좌우 2px)만 있으면 대각 에지가 1.4px로 얇아지고 45° 코너에
+    // 노치가 생긴다 → 대각 4방향(±1.4px, 유클리드 ≈2px)을 더해 8방향 균일 두께로.
+    c.filter = "drop-shadow(2px 0 0 white) drop-shadow(-2px 0 0 white) drop-shadow(0 2px 0 white) drop-shadow(0 -2px 0 white) drop-shadow(1.4px 1.4px 0 white) drop-shadow(-1.4px 1.4px 0 white) drop-shadow(1.4px -1.4px 0 white) drop-shadow(-1.4px -1.4px 0 white)";
     c.drawImage(char.img, -bounds.w / 2, -bounds.h / 2, bounds.w, bounds.h);
     c.restore();
   }
@@ -4795,16 +5029,18 @@
   function renderTo(c, options = {}) {
     const preview = options.preview !== false;
     const showSelection = options.showSelection !== false;
+    // 내보내기 경로에서만 문구·숫자 좌표를 출력 픽셀 격자에 스냅(미리보기는 0 = 그대로).
+    const snapLayer = layer => snapLayerXYForExport(layer, options.textSnapScale || 0);
     c.save();
     c.clearRect(0, 0, W, H);
     drawBackground(c, state.background, true);
     state.props.filter(p => !p.front).forEach(prop => drawProp(c, prop));
     drawCharacter(c, preview);
-    drawOutlinedText(c, state.phrase.text, Object.assign({ enabled: true }, state.phrase), false);
+    drawOutlinedText(c, state.phrase.text, snapLayer(Object.assign({ enabled: true }, state.phrase)), false);
     state.props.filter(p => p.front).forEach(prop => drawProp(c, prop));
     if (!options.skipNumbers) {
-      drawOutlinedText(c, state.num1.text, state.num1, true);
-      drawOutlinedText(c, state.num2.text, state.num2, true);
+      drawOutlinedText(c, state.num1.text, snapLayer(state.num1), true);
+      drawOutlinedText(c, state.num2.text, snapLayer(state.num2), true);
     }
     // 메인 작업면은 모바일 기준이다. 저장 때 강제로 비우는 84px을 화면에서도
     // 똑같이 비워 WYSIWYG를 지키고, 선택선/가이드만 그 위에 안내로 표시한다.
@@ -6159,10 +6395,22 @@
     else if (sel.kind === "prop") syncPropControls(light);
   }
 
-  function drawContentWithoutNumbers(c, preview = false) {
+  /* 내보내기 전용 정수 픽셀 스냅 — 드래그로 생긴 소수점 좌표 때문에 문구·숫자의
+     3중 스트로크가 반픽셀에 걸리는 것을 막는다. 사본만 만들고 편집 상태·프로젝트
+     저장값·언두 스냅샷은 절대 건드리지 않는다. snapScale=2면 0.5px 단위(2× 작업면
+     에서 정수), snapScale=1이면 1px 단위, 0이면 스냅 없음. */
+  function snapLayerXYForExport(layer, snapScale) {
+    if (!snapScale) return layer;
+    return Object.assign({}, layer, {
+      x: Math.round(layer.x * snapScale) / snapScale,
+      y: Math.round(layer.y * snapScale) / snapScale
+    });
+  }
+
+  function drawContentWithoutNumbers(c, preview = false, textSnapScale = 0) {
     state.props.filter(prop => !prop.front).forEach(prop => drawProp(c, prop));
     drawCharacter(c, preview);
-    drawOutlinedText(c, state.phrase.text, Object.assign({ enabled: true }, state.phrase), false);
+    drawOutlinedText(c, state.phrase.text, snapLayerXYForExport(Object.assign({ enabled: true }, state.phrase), textSnapScale), false);
     state.props.filter(prop => prop.front).forEach(prop => drawProp(c, prop));
   }
 
@@ -6180,26 +6428,39 @@
     };
   }
 
-  function drawProfiledNumber(c, source, profile, pivotX, pivotY, size, mapPoint = point => point) {
+  function drawProfiledNumber(c, source, profile, pivotX, pivotY, size, mapPoint = point => point, textSnapScale = 0) {
     if (!source.enabled || !String(source.text || "").trim()) return;
     const base = mapPoint({ x: source.x, y: source.y });
     const point = profiledPoint(base.x, base.y, profile, pivotX, pivotY);
-    drawOutlinedText(c, source.text, Object.assign({}, source, { x: point.x, y: point.y, size }), true);
+    // 최종 좌표에서 스냅 — 보정(이동/축소)까지 끝난 값이라 출력 픽셀 격자와 일치한다.
+    const snapped = snapLayerXYForExport(point, textSnapScale);
+    drawOutlinedText(c, source.text, Object.assign({}, source, { x: snapped.x, y: snapped.y, size }), true);
   }
 
   function makeProfiledMobileCanvas(profile) {
+    /* 모바일 보정 경로도 identity 경로와 똑같이 2× 작업면(위플랩 방식)에 렌더한 뒤
+       한 번만 고품질 축소한다. 최종 치수는 그대로 293×248. */
+    const work = document.createElement("canvas");
+    work.width = W * SOOP_RENDER_SCALE;
+    work.height = H * SOOP_RENDER_SCALE;
+    const workCtx = work.getContext("2d", { alpha: true });
+    workCtx.setTransform(SOOP_RENDER_SCALE, 0, 0, SOOP_RENDER_SCALE, 0, 0);
+    workCtx.clearRect(0, 0, W, H);
+    drawBackground(workCtx, state.background, true);
+    workCtx.save();
+    applyContentProfileTransform(workCtx, profile, W / 2, H);
+    drawContentWithoutNumbers(workCtx, false, SOOP_RENDER_SCALE);
+    workCtx.restore();
+    drawProfiledNumber(workCtx, state.num1, profile, W / 2, H, MOBILE_NUMBER_SIZE, undefined, SOOP_RENDER_SCALE);
+    drawProfiledNumber(workCtx, state.num2, profile, W / 2, H, MOBILE_NUMBER_SIZE, undefined, SOOP_RENDER_SCALE);
     const out = document.createElement("canvas");
     out.width = W;
     out.height = H;
     const outCtx = out.getContext("2d", { alpha: true });
-    outCtx.clearRect(0, 0, W, H);
-    drawBackground(outCtx, state.background, true);
-    outCtx.save();
-    applyContentProfileTransform(outCtx, profile, W / 2, H);
-    drawContentWithoutNumbers(outCtx, false);
-    outCtx.restore();
-    drawProfiledNumber(outCtx, state.num1, profile, W / 2, H, MOBILE_NUMBER_SIZE);
-    drawProfiledNumber(outCtx, state.num2, profile, W / 2, H, MOBILE_NUMBER_SIZE);
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = "high";
+    outCtx.drawImage(work, 0, 0, W, H);
+    // 상단 84px 투명 규칙은 다운샘플 경계 번짐까지 확실히 지우도록 최종 1× 캔버스에서 비운다.
     outCtx.clearRect(0, 0, W, H - CONTENT_H);
     return out;
   }
@@ -6207,12 +6468,24 @@
   function makeMasterCanvas() {
     const profile = outputProfile("mobile");
     if (!outputProfileIsIdentity(profile)) return makeProfiledMobileCanvas(profile);
+    /* 2× 슈퍼샘플링(위플랩 방식 이식): 1× 직접 렌더는 수천 px 캐릭터 PNG를 저품질
+       리샘플로 한 방에 축소해 재기 에지가 생겼다. 2× 작업면에 렌더 후 고품질 1회
+       축소 — 화면 프리뷰(DPR=2)와 같은 품질이 저장본에도 남는다. 치수 불변. */
+    const work = document.createElement("canvas");
+    work.width = W * SOOP_RENDER_SCALE;
+    work.height = H * SOOP_RENDER_SCALE;
+    const workCtx = work.getContext("2d", { alpha: true });
+    workCtx.setTransform(SOOP_RENDER_SCALE, 0, 0, SOOP_RENDER_SCALE, 0, 0);
+    renderTo(workCtx, { preview: false, showSelection: false, textSnapScale: SOOP_RENDER_SCALE });
     const out = document.createElement("canvas");
     out.width = W;
     out.height = H;
     const outCtx = out.getContext("2d", { alpha: true });
-    renderTo(outCtx, { preview: false, showSelection: false });
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = "high";
+    outCtx.drawImage(work, 0, 0, W, H);
     // SOOP 모바일 가이드의 수정 불가 상단 84px은 어떤 레이어를 올려도 저장 때 비운다.
+    // (2×→1× 다운샘플 번짐까지 지우기 위해 반드시 최종 캔버스에서 비운다)
     outCtx.clearRect(0, 0, W, H - CONTENT_H);
     return out;
   }
@@ -6258,27 +6531,36 @@
       outCtx.imageSmoothingQuality = "high";
       drawPcBubble(outCtx);
 
-      // Identity 출력처럼 배경도 먼저 293×248 논리 작업면에 렌더한 뒤 같은 비율로
-      // 축소한다(내용부만 잘라 아트 영역 0~109px 에). 출력별 내용 보정은 별도
-      // 투명 레이어에만 적용해 배경 픽셀을 고정한다.
-      const backgroundOnly = createLogicalCanvas();
-      drawBackground(backgroundOnly.getContext("2d", { alpha: true }), state.background, true);
-      outCtx.drawImage(backgroundOnly, 0, H - CONTENT_H, W, CONTENT_H, offsetX, offsetY, drawW, drawH);
+      // Identity 출력처럼 배경도 먼저 논리 작업면에 렌더한 뒤 같은 비율로 축소한다
+      // (내용부만 잘라 아트 영역 0~109px 에). 작업면은 2× 슈퍼샘플 — 1×를 거치지
+      // 않고 2×에서 목표 크기로 한 번만 축소해 이중 리샘플 손실을 없앤다.
+      // 출력별 내용 보정은 별도 투명 레이어에만 적용해 배경 픽셀을 고정한다.
+      const backgroundOnly = document.createElement("canvas");
+      backgroundOnly.width = W * SOOP_RENDER_SCALE;
+      backgroundOnly.height = H * SOOP_RENDER_SCALE;
+      const backgroundCtx = backgroundOnly.getContext("2d", { alpha: true });
+      backgroundCtx.setTransform(SOOP_RENDER_SCALE, 0, 0, SOOP_RENDER_SCALE, 0, 0);
+      drawBackground(backgroundCtx, state.background, true);
+      outCtx.drawImage(backgroundOnly, 0, (H - CONTENT_H) * SOOP_RENDER_SCALE, W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, offsetX, offsetY, drawW, drawH);
 
-      const contentOnly = createLogicalCanvas();
+      const contentOnly = document.createElement("canvas");
+      contentOnly.width = W * SOOP_RENDER_SCALE;
+      contentOnly.height = H * SOOP_RENDER_SCALE;
       const contentCtx = contentOnly.getContext("2d", { alpha: true });
+      contentCtx.setTransform(SOOP_RENDER_SCALE, 0, 0, SOOP_RENDER_SCALE, 0, 0);
       contentCtx.save();
       applyContentProfileTransform(contentCtx, profile, W / 2, H, 1 / baseScale);
-      drawContentWithoutNumbers(contentCtx, false);
+      drawContentWithoutNumbers(contentCtx, false, SOOP_RENDER_SCALE);
       contentCtx.restore();
-      outCtx.drawImage(contentOnly, 0, H - CONTENT_H, W, CONTENT_H, offsetX, offsetY, drawW, drawH);
+      outCtx.drawImage(contentOnly, 0, (H - CONTENT_H) * SOOP_RENDER_SCALE, W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, offsetX, offsetY, drawW, drawH);
       const mapPcPoint = point => ({
         x: offsetX + point.x * baseScale,
         /* 숫자(중앙 앵커)는 아트 영역 안으로 — 말풍선 칸은 항상 비워 둔다(심사 기준) */
         y: Math.min(offsetY + (point.y - (H - CONTENT_H)) * baseScale, PC_ART_H - PC_NUMBER_SIZE * 0.65)
       });
-      drawProfiledNumber(outCtx, state.num1, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint);
-      drawProfiledNumber(outCtx, state.num2, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint);
+      // 숫자는 지금처럼 최종 크기(38pt)에서 재드로잉 — 좌표만 정수 픽셀에 스냅.
+      drawProfiledNumber(outCtx, state.num1, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint, 1);
+      drawProfiledNumber(outCtx, state.num2, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint, 1);
       return out;
     }
     const out = document.createElement("canvas");
@@ -6289,13 +6571,18 @@
 
     // 배경·캐릭터·문구는 같은 구성으로 축소하되, 숫자는 PC 공식 38pt로 다시 그린다.
     // 모바일 완성본을 통째로 줄이면 55pt 숫자가 약 32pt가 되어 공식 규격을 벗어난다.
+    // 예전엔 1× 렌더를 다시 0.664배로 줄여 이중 손실이 났다 → 2× 작업면에 렌더한 뒤
+    // 목표 크기로 딱 한 번 고품질 축소한다.
     const withoutNumbers = document.createElement("canvas");
-    withoutNumbers.width = W;
-    withoutNumbers.height = H;
-    renderTo(withoutNumbers.getContext("2d", { alpha: true }), {
+    withoutNumbers.width = W * SOOP_RENDER_SCALE;
+    withoutNumbers.height = H * SOOP_RENDER_SCALE;
+    const withoutNumbersCtx = withoutNumbers.getContext("2d", { alpha: true });
+    withoutNumbersCtx.setTransform(SOOP_RENDER_SCALE, 0, 0, SOOP_RENDER_SCALE, 0, 0);
+    renderTo(withoutNumbersCtx, {
       preview: false,
       showSelection: false,
-      skipNumbers: true
+      skipNumbers: true,
+      textSnapScale: SOOP_RENDER_SCALE
     });
     // 마스터의 내용부(상단 84px 여백 아래 CONTENT_H)를 아트 영역(0~109px)에
     // contain으로 넣고 밑변을 말풍선 위에 붙인다. 말풍선을 먼저 깔아 아트가 위에 온다.
@@ -6307,12 +6594,13 @@
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
     drawPcBubble(outCtx);
-    outCtx.drawImage(withoutNumbers, 0, H - CONTENT_H, W, CONTENT_H, offsetX, offsetY, drawW, drawH);
+    outCtx.drawImage(withoutNumbers, 0, (H - CONTENT_H) * SOOP_RENDER_SCALE, W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, offsetX, offsetY, drawW, drawH);
 
     const pcLayer = layer => Object.assign({}, layer, {
-      x: offsetX + layer.x * scale,
+      /* 재드로잉 숫자는 최종(195×145) 좌표에서 정수 픽셀로 스냅 — 스트로크 선명도 */
+      x: Math.round(offsetX + layer.x * scale),
       /* 숫자(중앙 앵커)는 아트 영역 안으로 — 말풍선 칸은 항상 비워 둔다(심사 기준) */
-      y: Math.min(offsetY + (layer.y - (H - CONTENT_H)) * scale, PC_ART_H - PC_NUMBER_SIZE * 0.65),
+      y: Math.round(Math.min(offsetY + (layer.y - (H - CONTENT_H)) * scale, PC_ART_H - PC_NUMBER_SIZE * 0.65)),
       size: PC_NUMBER_SIZE,
       rot: 0
     });
@@ -6640,10 +6928,48 @@
       const tg = curG; curG = nxtG; nxtG = tg;
       const tb = curB; curB = nxtB; nxtB = tb;
     }
+    /* PNG 행 필터 — 예전엔 전 행 필터 0(None) 고정이라 deflate가 잘 안 먹혀 50KB를
+       맞추려 색·디더를 더 깎아야 했다. 행마다 None/Sub/Up/Paeth 4종을 만들어 보고
+       "부호 있는 바이트 절대합 최소"를 고르는 표준 휴리스틱을 쓴다. 필터는 완전
+       무손실(디코더가 그대로 복원 — 픽셀 동일)이고 순수 산술이라 결정성도 그대로.
+       인덱스 8비트 팔레트라 bpp=1 기준. Average(3)는 이득이 미미해 생략. */
+    const paethPredict = (left, up, upLeft) => {
+      const p = left + up - upLeft;
+      const pa = Math.abs(p - left), pb = Math.abs(p - up), pc = Math.abs(p - upLeft);
+      return pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
+    };
+    const signedAbsSum = buf => {
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const v = buf[i];
+        sum += v < 128 ? v : 256 - v;
+      }
+      return sum;
+    };
+    const filterCandidates = [new Uint8Array(w), new Uint8Array(w), new Uint8Array(w), new Uint8Array(w)];
+    const filterIds = [0, 1, 2, 4]; /* None · Sub · Up · Paeth */
     const raw = new Uint8Array(h * (w + 1));
     for (let y = 0; y < h; y++) {
-      raw[y * (w + 1)] = 0;
-      raw.set(idxBuf.subarray(y * w, y * w + w), y * (w + 1) + 1);
+      const row = idxBuf.subarray(y * w, y * w + w);
+      const above = y ? idxBuf.subarray((y - 1) * w, y * w) : null;
+      for (let x = 0; x < w; x++) {
+        const cur = row[x];
+        const left = x ? row[x - 1] : 0;
+        const up = above ? above[x] : 0;
+        const upLeft = above && x ? above[x - 1] : 0;
+        filterCandidates[0][x] = cur;
+        filterCandidates[1][x] = (cur - left) & 255;
+        filterCandidates[2][x] = (cur - up) & 255;
+        filterCandidates[3][x] = (cur - paethPredict(left, up, upLeft)) & 255;
+      }
+      let best = 0;
+      let bestSum = Infinity;
+      for (let f = 0; f < filterCandidates.length; f++) {
+        const sum = signedAbsSum(filterCandidates[f]);
+        if (sum < bestSum) { bestSum = sum; best = f; }
+      }
+      raw[y * (w + 1)] = filterIds[best];
+      raw.set(filterCandidates[best], y * (w + 1) + 1);
     }
     const idat = await deflateZlib(raw);
     const ihdr = new Uint8Array(13);
@@ -7170,9 +7496,11 @@
     mainHistoryReady = true;
     currentProjectPath = String(path || "");
     setProjectDirty(false);
+    activeTemplateIndex = -1; /* 불러온 프로젝트가 템플릿 그대로라는 보장이 없다 */
     syncControls();
     renderLayerList();
     highlightPreset();
+    highlightTemplate();
     requestRender();
   }
 
@@ -7439,8 +7767,10 @@
     const qa = {
       state,
       presets,
+      templatePresets,
       render: requestRender,
       applyPreset,
+      applyTemplate,
       makeMasterCanvas,
       makePcCanvas,
       makeWeflabCanvas,
@@ -7751,6 +8081,7 @@
     exposeQa();
     await loadImages();
     renderPresetGrid();
+    renderTemplateGrid();
     requestRender();
     resetMainHistory();
     mainHistoryReady = true;
@@ -7758,7 +8089,10 @@
     syncProjectStatus();
     exposeQa();
     if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(requestRender).catch(() => {});
+      document.fonts.ready.then(() => {
+        requestRender();
+        renderTemplateGrid(); /* 썸네일 문구·숫자를 실제 폰트로 다시 그린다 */
+      }).catch(() => {});
     }
     window.addEventListener("beforeunload", event => {
       if (!projectDirty && !maskStudioDirty()) return;

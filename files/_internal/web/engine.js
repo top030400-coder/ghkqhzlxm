@@ -184,6 +184,28 @@ window.PBK = (function () {
       if (v.slice(-1) === '.') v = v.slice(0, -1);
       return c.f(k, esc(v) + '<span>.</span>');
     };
+    /* 무드 필터(p.flt 프리셋 키) + ✨자동보정(p.fab/fac/fas %) → CSS filter.
+       ⚠ editor.html 의 BN_FLT_PRE 와 키·값 동기 유지. 저장(SVG foreignObject)에 그대로 구워짐. */
+    var FLT_PRE = {
+      film:  'contrast(1.06) saturate(.9) sepia(.14) brightness(1.02)',
+      pastel:'saturate(.8) brightness(1.07) contrast(.94)',
+      cine:  'contrast(1.13) saturate(1.06) sepia(.07) brightness(.97)',
+      mono:  'grayscale(1) contrast(1.08)',
+      warm:  'sepia(.2) saturate(1.04) brightness(1.03)',
+      cool:  'hue-rotate(-8deg) saturate(.94) brightness(1.02) contrast(1.05)',
+      vivid: 'saturate(1.28) contrast(1.09)',
+      soft:  'contrast(.9) brightness(1.06) saturate(.88)'
+    };
+    function fltSt(p) {
+      var parts = [];
+      if (p && p.flt && FLT_PRE[p.flt]) parts.push(FLT_PRE[p.flt]);
+      /* 자동보정 수치 — 숫자만 허용(속성 주입 차단), 100 = 무보정 */
+      var br = parseFloat(p && p.fab), ct = parseFloat(p && p.fac), sa = parseFloat(p && p.fas);
+      if (isFinite(br) && br > 0 && br !== 100) parts.push('brightness(' + Math.max(30, Math.min(300, br)) / 100 + ')');
+      if (isFinite(ct) && ct > 0 && ct !== 100) parts.push('contrast(' + Math.max(30, Math.min(300, ct)) / 100 + ')');
+      if (isFinite(sa) && sa > 0 && sa !== 100) parts.push('saturate(' + Math.max(0, Math.min(300, sa)) / 100 + ')');
+      return parts.length ? ';filter:' + parts.join(' ') : '';
+    }
     c.img = function (i, extra) {
       var p = (page.photos && page.photos[i]) || null;
       var src = p ? srcOf(p, i) : null;
@@ -225,7 +247,7 @@ window.PBK = (function () {
         var wcq = (p.iw / PAGE_W * 100) * fsc;   /* cqw = 페이지 폭의 1% */
         return '<img src="' + esc(src) + '" alt="" draggable="false" data-pi="' + i + '" class="phFree"' +
           ' style="--pw:' + wcq.toFixed(3) + 'cqw;--px:' + fpx.toFixed(3) + 'cqw;--py:' + fpy.toFixed(3) +
-          'cqw;--prot:' + frot.toFixed(2) + 'deg' + feSt + (extra ? ';' + extra : '') + '">';
+          'cqw;--prot:' + frot.toFixed(2) + 'deg' + feSt + fltSt(p) + (extra ? ';' + extra : '') + '">';
       }
       /* ox/oy는 숫자만 허용(조작된 프로젝트 파일의 속성 주입 차단) */
       var ox = parseFloat(p.ox), oy = parseFloat(p.oy);
@@ -234,7 +256,7 @@ window.PBK = (function () {
       ox = Math.max(0, Math.min(100, ox));
       oy = Math.max(0, Math.min(100, oy));
       return '<img src="' + esc(src) + '" alt="" draggable="false" data-pi="' + i + '"' +
-        ' style="object-position:' + ox + '% ' + oy + '%' + feSt + (extra ? ';' + extra : '') + '">';
+        ' style="object-position:' + ox + '% ' + oy + '%' + feSt + fltSt(p) + (extra ? ';' + extra : '') + '">';
     };
     c.mast = function (k) {
       var v = c.raw(k).trim() || 'BOOK';
