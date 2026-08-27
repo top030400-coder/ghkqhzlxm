@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v8</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v9</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -25270,7 +25270,9 @@ window.gifenc=exports;})();
         ? '프로그램을 껐다가 다시 켜 주세요.<br>그래도 안 되면 판매자에게 문의해 주세요.'
         : '처음 켤 때는 조금 걸릴 수 있어요.<br>잠시만 기다려 주세요…') + '</p>' +
       (retry ? '<button id="licBtn">다시 시도</button>' : '<div class="licSpin"></div>') +
-      (retry ? '<div class="licFoot">백신 검사나 첫 실행 때는 더 걸릴 수 있어요 —<br>이 화면이 떠 있어도 준비가 끝나면 자동으로 열려요.</div>' : '') +
+      (retry ? '<div class="licFoot">백신 검사나 첫 실행 때는 더 걸릴 수 있어요 —<br>이 화면이 떠 있어도 준비가 끝나면 자동으로 열려요.<br><br>' +
+        '💡 계속 이 화면이면: 프로그램 폴더를 <b>C드라이브의 일반 폴더</b>(예: C:\\PhotobookKit)로<br>' +
+        '옮겨서 실행해 보세요. 외장하드·D드라이브·USB에서는 안 열리는 컴퓨터가 있어요.</div>' : '') +
       /* 문의 대응용 진단 한 줄 — 어느 단계에서 다리가 멈췄는지 알 수 있다(43차) */
       (retry ? '<div class="licFoot" style="opacity:.55;font-size:10px">진단: ' + bridgeDiag() + '</div>' : '') +
       '</div>';
