@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v5</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v6</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -25117,17 +25117,31 @@ window.gifenc=exports;})();
     return (a && typeof a.license_status === 'function') ? a : null;
   }
 
-  var waited = 0;
   var WAIT_MSG_AT = 6000;      /* 이만큼 지나면 '준비 중' 이라고 알려준다 */
   var WAIT_RETRY_AT = 25000;   /* 이만큼 지나면 다시 시도 버튼을 준다 */
+  /* ⚠ 43차 수정 — '준비가 오래 걸려요' 가 며칠씩 반복되던 실고객 사고의 원인 2개:
+     ① 부팅 진입점이 3곳(즉시·pywebviewready·setTimeout 300)이라 boot 루프가 겹치면
+        가산식 시계(waited += 120)가 실제 시간보다 2~3배 빨리 가서 8~12초 만에
+        '다시 시도' 화면이 떴다. → 벽시계(Date.now) 하나로 잰다(루프가 몇 개든 정확).
+     ② 25초가 지나면 폴링을 아예 멈춰서, 백신 검사·첫 실행·느린 디스크로 다리가
+        늦게 붙는 컴에선 그 뒤에 다리가 붙어도 영영 안 열렸다.
+        → 화면은 그대로 두고 뒤에서 계속(0.5초 간격) 기다리다 붙는 즉시 자동 진행. */
+  var bootT0 = 0, bootTimer = null, waitStage = 0;
   function boot() {
     if (passed) return;
+    if (!bootT0) bootT0 = Date.now();
+    if (bootTimer) { clearTimeout(bootTimer); bootTimer = null; }
     if (!bridgeUp()) {
       /* 다리가 아직 안 붙었다 — 통과시키지 않는다. 계속 기다린다. */
-      waited += 120;
-      if (waited === WAIT_MSG_AT) renderWait(false);
-      if (waited >= WAIT_RETRY_AT) { renderWait(true); return; }
-      return setTimeout(boot, 120);
+      var el = Date.now() - bootT0;
+      if (el >= WAIT_RETRY_AT) {
+        if (waitStage < 2) { waitStage = 2; renderWait(true); }
+        bootTimer = setTimeout(boot, 500);   /* 다시 시도 화면 뒤에서도 계속 대기 */
+        return;
+      }
+      if (el >= WAIT_MSG_AT && waitStage < 1) { waitStage = 1; renderWait(false); }
+      bootTimer = setTimeout(boot, 120);
+      return;
     }
     var a = api();
     if (!a) { pass(); return; }   /* 다리는 붙었는데 인증 기능이 없다 = 진짜 무인증판 */
@@ -25235,9 +25249,10 @@ window.gifenc=exports;})();
         ? '프로그램을 껐다가 다시 켜 주세요.<br>그래도 안 되면 판매자에게 문의해 주세요.'
         : '처음 켤 때는 조금 걸릴 수 있어요.<br>잠시만 기다려 주세요…') + '</p>' +
       (retry ? '<button id="licBtn">다시 시도</button>' : '<div class="licSpin"></div>') +
+      (retry ? '<div class="licFoot">백신 검사나 첫 실행 때는 더 걸릴 수 있어요 —<br>이 화면이 떠 있어도 준비가 끝나면 자동으로 열려요.</div>' : '') +
       '</div>';
     var b = document.getElementById('licBtn');
-    if (b) b.onclick = function () { waited = 0; gate.innerHTML = '<div class="licSpin"></div>'; boot(); };
+    if (b) b.onclick = function () { bootT0 = Date.now(); waitStage = 0; gate.innerHTML = '<div class="licSpin"></div>'; boot(); };
   }
 
   function reasonMsg(r) {
