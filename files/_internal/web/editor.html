@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v7</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v8</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -25132,13 +25132,19 @@ window.gifenc=exports;})();
   /* 문의 대응용 — pywebview 단계별 상태를 한 줄로 (P=코어, A=api 함수 수, C=_createApi, H=자가복구, M=흉내) */
   function bridgeDiag() {
     try {
+      /* W = WebView2 호스트 통신로(chrome.webview) · Edg/버전 = 런타임 판.
+         P무+W무 = 런타임/호스트 배선 자체가 죽음(런타임 복구·백신 의심),
+         P무+W유 = 런타임은 사는데 pywebview 주입만 실패(백신/정책 의심). */
+      var wv = (window.chrome && window.chrome.webview) ? 'W유' : 'W무';
+      var ua = (navigator.userAgent.match(/Edg[A-Za-z]*\/([\d.]+)/) || [])[1] || '?';
       var w = window.pywebview;
-      if (!w) return 'P무';
+      if (!w) return 'P무 ' + wv + ' Edg' + ua + ' ' + Math.round((Date.now() - bootT0) / 1000) + 's';
       var a = w.api, n = 0;
       for (var k in a) { if (typeof a[k] === 'function') n++; }
       return 'P유' + (w.__mock ? '(M)' : '') + ' A' + n +
         ' C' + (typeof w._createApi === 'function' ? '유' : '무') +
         ' H' + (w.__pbkHealed ? '유' : '무') +
+        ' ' + wv + ' Edg' + ua +
         ' ' + Math.round((Date.now() - bootT0) / 1000) + 's';
     } catch (e) { return '진단 실패'; }
   }
