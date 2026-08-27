@@ -3962,8 +3962,16 @@
         }
         drawExpandedMask(c, mask, bg.maskStrokeColor, bg.maskStrokeWidth);
       }
-      const paint = createMaskCanvas();
+      /* 매 렌더 프레임 새 캔버스를 만들던 것(드래그 60fps × 586×496 churn — 장수
+         페이지가 느려지는 기여 요인)을 재사용 스크래치로. 내용은 매번 전부 다시
+         칠하므로 픽셀 결과는 동일하다. */
+      if (!drawBackground.__paint || drawBackground.__paint.width !== MASK_W || drawBackground.__paint.height !== MASK_H) {
+        drawBackground.__paint = createMaskCanvas();
+      }
+      const paint = drawBackground.__paint;
       const paintCtx = paint.getContext("2d", { alpha: true });
+      paintCtx.setTransform(1, 0, 0, 1, 0, 0);
+      paintCtx.clearRect(0, 0, paint.width, paint.height);
       withMaskLogicalTransform(paintCtx, logicalCtx => drawBackgroundPaint(logicalCtx, bg));
       paintCtx.globalCompositeOperation = "destination-in";
       paintCtx.drawImage(mask, 0, 0, mask.width, mask.height, 0, 0, MASK_W, MASK_H);
@@ -5103,7 +5111,9 @@
     setLayerLocked(ref, !layerLocked(ref));
   }
 
-  function syncPropControls() {
+  function syncPropControls(light) {
+    /* light=드래그 중 경량 경로 — 잠금 상태는 드래그 중 불변이라 전역 스캔
+       (querySelectorAll ×2 + 버튼 20여 개 갱신)을 이벤트마다 돌 이유가 없다 */
     const prop = selectedProp();
     const wrap = document.getElementById("sigPropControls");
     if (!wrap) return;
@@ -5121,7 +5131,7 @@
     document.getElementById("sigPropColor1").value = prop.color1;
     document.getElementById("sigPropColor2").value = prop.color2;
     document.getElementById("sigPropFront").checked = prop.front;
-    syncLayerLockControls();
+    if (!light) syncLayerLockControls();
   }
 
   const propLabels = {
@@ -6035,12 +6045,12 @@
         if (dragging.ref.kind === "character") target.scale = Math.round(clamp(dragging.startScale * ratio, .15, 2.2) * 100) / 100;
         else if (dragging.ref.kind === "prop") target.scale = Math.round(clamp(dragging.startScale * ratio, .2, 2.5) * 100) / 100;
         else if (dragging.ref.kind === "phrase") target.size = Math.round(clamp(dragging.startSize * ratio, 12, 64));
-        syncResizedTarget(dragging.ref);
+        syncResizedTarget(dragging.ref, true);
       } else {
         target.x = Math.round((dragging.startX + point.x - dragging.point.x) * 10) / 10;
         target.y = Math.round((dragging.startY + point.y - dragging.point.y) * 10) / 10;
         snapMovedLayer(dragging.ref, event.altKey);
-        syncMovedTarget(dragging.ref);
+        syncMovedTarget(dragging.ref, true);
       }
       requestRender();
     });
@@ -6053,6 +6063,8 @@
       canvas.style.cursor = "grab";
       requestRender();
       commitMainChange(completed.historyBefore);
+      /* 드래그 종료 — 경량 경로가 미뤄둔 잠금 UI 동기화를 1회 수행 */
+      if (completed.ref && completed.ref.kind === "prop") syncPropControls();
     };
     canvas.addEventListener("pointerup", stop);
     canvas.addEventListener("pointercancel", stop);
@@ -6124,7 +6136,7 @@
     });
   }
 
-  function syncMovedTarget(sel = state.selected) {
+  function syncMovedTarget(sel = state.selected, light) {
     const cap = value => Math.round(value * 10) / 10;
     if (sel.kind === "character") {
       document.getElementById("sigCharX").value = cap(state.character.x);
@@ -6137,14 +6149,14 @@
       document.getElementById(prefix + "X").value = cap(state[sel.kind].x);
       document.getElementById(prefix + "Y").value = cap(state[sel.kind].y);
     } else if (sel.kind === "prop") {
-      syncPropControls();
+      syncPropControls(light);
     }
   }
 
-  function syncResizedTarget(sel = state.selected) {
+  function syncResizedTarget(sel = state.selected, light) {
     if (sel.kind === "character") document.getElementById("sigCharScale").value = state.character.scale;
     else if (sel.kind === "phrase") document.getElementById("sigPhraseSize").value = state.phrase.size;
-    else if (sel.kind === "prop") syncPropControls();
+    else if (sel.kind === "prop") syncPropControls(light);
   }
 
   function drawContentWithoutNumbers(c, preview = false) {
