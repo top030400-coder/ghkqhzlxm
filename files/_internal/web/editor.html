@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v3</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v4</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -2343,19 +2343,30 @@ window.gifenc=exports;})();
     var batches = [];
     for (var i = 0; i < ids.length; i += 64) batches.push(ids.slice(i, i + 64)); /* API가 64개 제한 */
     var lost = [];
+    /* ⚠ 배치 안 '한 장'의 예외로 응답 전체가 err 가 된다(옛 본체 고정 동작).
+       통째로 포기하면 그 배치의 소실 사진들이 복구를 영영 못 받는다(실사고:
+       업데이트 후에도 "19장 저장 안 됨"이 계속 뜸). err 배치는 반으로 쪼개
+       다시 물어 '예외 유발 사진'만 판단불가로 남기고 나머지는 정상 판정한다.
+       멀쩡한 고화질 원본은 여전히 절대 안 덮는다(없다고 확인된 것만 복구). */
+    function probe(part) {
+      var split = function () {
+        if (part.length <= 1) return Promise.resolve(); /* 예외 유발 1장 — 판단불가 제외 */
+        var mid = part.length >> 1;
+        return probe(part.slice(0, mid)).then(function () { return probe(part.slice(mid)); });
+      };
+      return api.get_photos_hi(JSON.stringify(part)).then(function (r) {
+        r = typeof r === 'string' ? JSON.parse(r) : r;
+        if (r && r.ok) {
+          var got = r.photos || {};
+          part.forEach(function (pid) { if (!got[pid] && thumbs[pid]) lost.push(pid); });
+          return;
+        }
+        return split();
+      }, split);
+    }
     var chain = Promise.resolve();
     batches.forEach(function (b) {
-      chain = chain.then(function () {
-        return api.get_photos_hi(JSON.stringify(b)).then(function (r) {
-          r = typeof r === 'string' ? JSON.parse(r) : r;
-          /* ⚠ 배치 안 한 장의 예외로 응답 전체가 err 가 될 수 있다(옛 본체 고정 동작).
-             그 경우 이 배치는 '판단불가' — 멀쩡한 고화질 원본을 1400px 사본으로
-             덮어쓰지 않도록 복구 대상에서 통째로 제외한다(확실히 없는 것만 살린다). */
-          if (!r || !r.ok) return;
-          var got = r.photos || {};
-          b.forEach(function (pid) { if (!got[pid] && thumbs[pid]) lost.push(pid); });
-        }, function () {});
-      });
+      chain = chain.then(function () { return probe(b); });
     });
     return chain.then(function () {
       var put = Promise.resolve();
