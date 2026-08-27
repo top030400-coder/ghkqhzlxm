@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-27 v2</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -20347,6 +20347,10 @@ window.gifenc=exports;})();
       GIF_FIRST_RICH = keepFirst;
       sampledFrames.length = 0;
     }
+    return gifBottom6MakeCandidate(tileIndex, baseName, ld, rank, attempts, bytes, sampleIndices, sampledDelays);
+  }
+  /* 후보 객체 조립 — 동기 경로와 워커 경로가 같은 필드를 갖도록 한 곳에서 만든다 */
+  function gifBottom6MakeCandidate(tileIndex, baseName, ld, rank, attempts, bytes, sampleIndices, sampledDelays) {
     if (attempts) attempts.push({ rank: rank, frames: ld.frames, fps: ld.fps, colors: ld.colors,
       fuzz: ld.fuzz, fs: ld.fs, od: ld.od || 0, bytes: bytes.length });
     var renderProfileIndex = Math.max(0, Math.min(GIF_BOTTOM_RENDER_PROFILES.length - 1,
@@ -20463,6 +20467,178 @@ window.gifenc=exports;})();
     }
     GIF.out6 = out;
     return out;
+  }
+  /* ══════════ 6칸 워커 인코드(성능 2차) ══════════
+     인코드는 순수 데이터 계산이라 별도 스레드로 옮긴다. rank 사다리 루프와
+     all-fit 판정은 메인에 그대로 두고(채택 결과 불변), 각 rank의 6타일 인코드만
+     워커 풀에 동시에 맡긴다. 워커 준비 실패·중도 사망 시엔 기존 동기 경로 폴백.
+     같은 V8 엔진에서 같은 함수 소스(toString 추출)로 돌므로 바이트가 동일하다.
+     실기 검증: exe(pywebview)도 내장 HTTP(127.0.0.1) 서빙이라 importScripts 동작 확인. */
+  var GIF_W_POOL = null;
+  var GIF_W_SESSION = 0;
+  function gifWorkerSrc() {
+    var fns = [gifOk2Rgb, gifRgb2Ok, gifNearIdx, gifDitherCopy, gifNearLut, gifFsDither,
+      gifRefinePalette, gifGlobalPalette, gifCropTransparentFrame, gifPixelsEqual,
+      gifFramesFullyOpaque, gifEncode];
+    return [
+      'self.window = self;',
+      'importScripts(' + JSON.stringify(new URL('gifenc.js', location.href).href) + ');',
+      'var GIF_BAYER = ' + JSON.stringify(GIF_BAYER) + ';',
+      'var GIF_KMEANS = ' + JSON.stringify(GIF_KMEANS) + ';',
+      'var GIF_OK_S2L = ' + JSON.stringify(GIF_OK_S2L) + ';',
+      'var GIF_FS = 0, GIF_DITHER = 0, GIF_FIRST_RICH = 0;',
+      'var __profile = null;',
+      /* gifGlobalPalette가 paletteSamples/paletteKmeans를 읽는 유일한 상태 고리 — 스텁으로 끊는다 */
+      'function gifBottomRenderProfile() { return __profile; }',
+      fns.map(function (f) { return f.toString(); }).join('\n'),
+      'var __frames = {}, __session = -1;',
+      'self.onmessage = function (ev) {',
+      '  var m = ev.data;',
+      '  if (m.type === "ping") { postMessage({ id: m.id, pong: true }); return; }',
+      '  if (m.type === "frames") {',
+      '    if (m.session !== __session) { __frames = {}; __session = m.session; }',
+      '    __frames[m.tile] = m.frames; return;',
+      '  }',
+      '  if (m.type === "clear") { if (m.session === __session) __frames = {}; return; }',
+      '  if (m.type !== "encode") return;',
+      '  if (m.session !== __session || !__frames[m.tile]) { postMessage({ id: m.id, err: "stale-session" }); return; }',
+      '  try {',
+      '    GIF_FS = m.fs; GIF_DITHER = m.od; GIF_FIRST_RICH = m.first; __profile = m.profile;',
+      '    var tf = __frames[m.tile];',
+      '    var sampled = m.sampleIndices.map(function (fi) { return tf[fi]; });',
+      '    var out = gifEncode(sampled, m.W, m.H, sampled.length / m.len, m.colors, 1, true,',
+      '      m.fuzz, m.delays, m.byteLimit);',
+      '    if (out && out.__oversize) postMessage({ id: m.id, oversize: true, size: out.length });',
+      '    else postMessage({ id: m.id, size: out.length, bytes: out }, [out.buffer]);',
+      '  } catch (e) { postMessage({ id: m.id, err: String(e && e.message || e).slice(0, 200) }); }',
+      '};'
+    ].join('\n');
+  }
+  function gifW_request(pool, wi, msg) {
+    return new Promise(function (resolve, reject) {
+      var id = pool.next++;
+      msg.id = id;
+      pool.pending[id] = resolve;
+      try { pool.workers[wi].postMessage(msg); }
+      catch (e) { delete pool.pending[id]; reject(e); }
+    });
+  }
+  function gifWorkerPool() {
+    if (GIF_W_POOL) return GIF_W_POOL;
+    try {
+      var url = URL.createObjectURL(new Blob([gifWorkerSrc()], { type: 'application/javascript' }));
+      var n = Math.max(2, Math.min(6, (navigator.hardwareConcurrency || 4) - 1));
+      var ws = [];
+      for (var i = 0; i < n; i++) ws.push(new Worker(url));
+      GIF_W_POOL = { workers: ws, url: url, next: 1, pending: {}, dead: false, ready: null };
+      ws.forEach(function (w) {
+        w.onmessage = function (ev) {
+          var cb = GIF_W_POOL.pending[ev.data.id];
+          if (cb) { delete GIF_W_POOL.pending[ev.data.id]; cb(ev.data); }
+        };
+        w.onerror = function () {
+          /* 워커 사망 — 대기 중 요청을 오류로 풀어 폴백이 이어지게 */
+          GIF_W_POOL.dead = true;
+          var p = GIF_W_POOL.pending; GIF_W_POOL.pending = {};
+          Object.keys(p).forEach(function (k) { p[k]({ err: 'worker-error' }); });
+        };
+      });
+      GIF_W_POOL.ready = Promise.race([
+        Promise.all(ws.map(function (_, i) { return gifW_request(GIF_W_POOL, i, { type: 'ping' }); }))
+          .then(function () { return true; }),
+        new Promise(function (res) { setTimeout(function () { res(false); }, 3000); })
+      ]).then(function (ok) { if (!ok) GIF_W_POOL.dead = true; return ok && !GIF_W_POOL.dead; });
+    } catch (e) { GIF_W_POOL = { dead: true, ready: Promise.resolve(false) }; }
+    try { window.__gifWPool = GIF_W_POOL; } catch (e2) {} /* 검수·문의 대응용 상태 노출(무해) */
+    return GIF_W_POOL;
+  }
+  function gifBottom6EncodeAllW(masterFrames, baseName) {
+    if (!masterFrames || masterFrames.length !== GIF_BOTTOM_SPEC.frames) {
+      return Promise.reject(new Error('bottom6 master must contain exactly ' + GIF_BOTTOM_SPEC.frames + ' frames'));
+    }
+    var pool = gifWorkerPool();
+    if (!pool || pool.dead) return Promise.resolve().then(function () { return gifBottom6EncodeAll(masterFrames, baseName); });
+    return pool.ready.then(function (ok) {
+      if (!ok || pool.dead) return gifBottom6EncodeAll(masterFrames, baseName);
+      return gifBottom6RunParallel(pool, masterFrames, baseName);
+    });
+  }
+  function gifBottom6RunParallel(pool, masterFrames, baseName) {
+    var TILES = GIF_BOTTOM6_SPEC.tiles;
+    var wantLen = GIF_BOTTOM6_SPEC.tileW * GIF_BOTTOM6_SPEC.tileH * 4;
+    var session = ++GIF_W_SESSION;
+    for (var i = 0; i < TILES; i++) {
+      var tf = gifBottom6SliceOne(masterFrames, GIF_BOTTOM6_SPEC.order[i], null);
+      if (!tf[0] || tf[0].length !== wantLen) {
+        return Promise.reject(new Error('프레임 버퍼(' + (tf[0] ? tf[0].length : 0) + ')와 저장 크기(' +
+          GIF_BOTTOM6_SPEC.tileW + '×' + GIF_BOTTOM6_SPEC.tileH + ')가 어긋나 저장을 중단했어요. 다시 만들어 주세요.'));
+      }
+      pool.workers[i % pool.workers.length].postMessage(
+        { type: 'frames', session: session, tile: i, frames: tf },
+        tf.map(function (f) { return f.buffer; }));
+    }
+    var profile = gifBottomRenderProfile(), ladder = gifBottomProfileLadder(profile);
+    /* ⚠ null을 넣으면 Number(null)=0 이 되어 kmeans 반복이 기본값 대신 0으로 바뀐다
+       (팔레트가 달라짐). 원본과 똑같이 '없으면 undefined(NaN 경로)'를 유지한다. */
+    var stub = {};
+    if (isFinite(Number(profile.paletteSamples))) stub.paletteSamples = Number(profile.paletteSamples);
+    if (isFinite(Number(profile.paletteKmeans))) stub.paletteKmeans = Number(profile.paletteKmeans);
+    var logs = Array.from({ length: TILES }, function () { return []; });
+    function encodeTile(i, ld, rank) {
+      var sampleIndices = gifBottom6SampleIndices(ld.frames);
+      var delays = gifBottom6SampleDelays(sampleIndices);
+      return gifW_request(pool, i % pool.workers.length, {
+        type: 'encode', session: session, tile: i,
+        W: GIF_BOTTOM6_SPEC.tileW, H: GIF_BOTTOM6_SPEC.tileH, len: GIF_BOTTOM_SPEC.len,
+        colors: ld.colors, fuzz: ld.fuzz, fs: ld.fs, od: ld.od || 0, first: ld.first || 0,
+        profile: stub, sampleIndices: sampleIndices, delays: delays,
+        byteLimit: GIF_BOTTOM6_SPEC.limitBytes
+      }).then(function (r) {
+        if (r.err) throw new Error(r.err);
+        var bytes = r.oversize ? { __oversize: true, length: r.size } : r.bytes;
+        return gifBottom6MakeCandidate(i + 1, baseName, ld, rank, logs[i], bytes, sampleIndices, delays);
+      });
+    }
+    function clearWorkers() {
+      try { pool.workers.forEach(function (w) { w.postMessage({ type: 'clear', session: session }); }); } catch (e) {}
+    }
+    var out = [], lastFail = -1, rank = 0;
+    function finishFail() {
+      GIF.out6 = null;
+      var last = logs.map(function (a) { return a.length ? a[a.length - 1].bytes : 0; });
+      throw new Error('6개 모두 200KiB와 최소 품질(36프레임/12fps · 64색)을 같은 타이밍으로 맞추지 못했습니다. (' + last.join(', ') + ' bytes)');
+    }
+    function nextRank() {
+      if (rank >= ladder.length) { clearWorkers(); return Promise.resolve().then(finishFail); }
+      var ld = ladder[rank];
+      /* 직전 실패(=제일 무거운) 타일 선검사 — 동기판과 같은 지름길 */
+      var pre = (lastFail >= 0) ? encodeTile(lastFail, ld, rank) : Promise.resolve(null);
+      return pre.then(function (probe) {
+        if (probe && probe.sizeBytes > GIF_BOTTOM6_SPEC.limitBytes) { rank++; return nextRank(); }
+        var jobs = [];
+        for (var i = 0; i < TILES; i++) {
+          jobs.push((probe && i === lastFail) ? Promise.resolve(probe) : encodeTile(i, ld, rank));
+        }
+        return Promise.all(jobs).then(function (cands) {
+          out.length = 0;
+          for (var i = 0; i < TILES; i++) {
+            if (cands[i].sizeBytes > GIF_BOTTOM6_SPEC.limitBytes) { lastFail = i; rank++; return nextRank(); }
+            out.push(cands[i]);
+          }
+          clearWorkers();
+          /* 동기판과 동일한 최종 검증 — 부분 세트가 새어나가지 않게 fail-closed */
+          if (out.length !== TILES || out.some(function (t) { return t.sizeBytes > GIF_BOTTOM6_SPEC.limitBytes; }) ||
+              out.some(function (t) { return t.ladderRank !== out[0].ladderRank || t.frames !== out[0].frames ||
+                t.fps !== out[0].fps || t.renderProfileIndex !== out[0].renderProfileIndex ||
+                t.sampleIndices.join(',') !== out[0].sampleIndices.join(','); })) {
+            return finishFail();
+          }
+          GIF.out6 = out;
+          return out;
+        });
+      });
+    }
+    return nextRank().catch(function (e) { GIF.out6 = null; clearWorkers(); throw e; });
   }
   var gifSliceScratch = null; /* 반투명 폴백 전용 재사용 캔버스 — 호출마다 생성 금지(노화 원인) */
   function gifBottom6SliceOne(masterFrames, tile, reuseFrames) {
@@ -20920,8 +21096,22 @@ window.gifenc=exports;})();
             gifSetProg(kindLabel + ' 프레임 우선 자동 맞춤 중… ' + (at + 1) + '/' + profileIndices.length +
               ' · ' + profile.label);
             gifStep(function () {
+              /* 워커 경로(6칸)는 encodeNow가 Promise를 준다 — 동기/비동기 둘 다 수용.
+                 판정·베스트 갱신·다음 프로필 진행 로직은 아래 afterResult 그대로. */
+              var stepNext = function () {
+                at++;
+                if (at >= profileIndices.length) return publishBest();
+                attempt();
+              };
+              var onEncodeError = function (e) {
+                lastError = e;
+                tried.push('· ' + profile.label + ' → 실패: ' +
+                  String((e && e.message) || e).slice(0, 90));
+                stepNext();
+              };
+              var afterResult = function (result) {
               try {
-                var result = encodeNow(), quality = gifBottomResultQuality(result, profileIndex);
+                var quality = gifBottomResultQuality(result, profileIndex);
                 var motionQuality = portrait ? gifBottomPortraitMotionQuality(result, profileIndex) : { passed: true };
                 if (!motionQuality.passed) {
                   lastError = new Error(motionQuality.reason || '저장할 움직임 품질선을 통과하지 못했습니다.');
@@ -20959,9 +21149,12 @@ window.gifenc=exports;})();
                 tried.push('· ' + profile.label + ' → 실패: ' +
                   String((e && e.message) || e).slice(0, 90));
               }
-              at++;
-              if (at >= profileIndices.length) return publishBest();
-              attempt();
+              stepNext();
+              }; /* afterResult 끝 */
+              var __r;
+              try { __r = encodeNow(); } catch (e) { return onEncodeError(e); }
+              if (__r && typeof __r.then === 'function') { __r.then(afterResult, onEncodeError); return; }
+              afterResult(__r);
             }, 20);
           }
           if (!portrait || profileIndex === 0) return runEncoder();
@@ -20978,7 +21171,7 @@ window.gifenc=exports;})();
       }
       if (bottom6) {
         return tryBottomRenderProfiles(gifBannerLabel() + ' 6개 타일', function () {
-            return gifBottom6EncodeAll(frames, (GIF.outName || (gifBannerLabel() + '배너.gif')).replace(/\.gif$/i, '') + '_' + gifBannerLabel() + GIF_BOTTOM6_SPEC.w + 'x' + GIF_BOTTOM6_SPEC.h);
+            return gifBottom6EncodeAllW(frames, (GIF.outName || (gifBannerLabel() + '배너.gif')).replace(/\.gif$/i, '') + '_' + gifBannerLabel() + GIF_BOTTOM6_SPEC.w + 'x' + GIF_BOTTOM6_SPEC.h);
           }, function (set6, profileIndex) {
             GIF.out = null;
             GIF.out6 = set6;

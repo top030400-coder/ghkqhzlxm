@@ -832,4 +832,5 @@ function colorTableSize(length) {
 var src_default = GIFEncoder;
 //# sourceMappingURL=gifenc.js.map
 
-window.gifenc=exports;})();
+/* 워커에는 window가 없다 — self 폴백으로 어디서든 등록되게 (출력 무관) */
+(typeof self !== 'undefined' ? self : window).gifenc = exports;})();
