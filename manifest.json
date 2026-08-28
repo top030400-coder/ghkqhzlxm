@@ -1,6 +1,6 @@
 {
- "version": "2026-08-27_v9",
- "date": "2026-08-27",
+ "version": "2026-08-28_v1",
+ "date": "2026-08-28",
  "notes": "■ 2026-08-27 (43차) — 🚑 \"준비가 오래 걸려요\" 무한 대기 수정\n\n【 🔑 실행/인증 】\n- 느린 컴퓨터(백신 검사·첫 실행·오래된 디스크)에서 \"준비가 오래 걸려요\" 화면이\n  뜨면 그 뒤로 영영 안 열리던 문제를 고쳤습니다. 이제 그 화면이 떠 있어도\n  준비가 끝나는 즉시 자동으로 열립니다.\n- 내부 대기 시계가 실제보다 2~3배 빨리 가서 화면이 너무 일찍 뜨던 것도 수정.\n- 화면 하단에 작은 진단 정보가 표시됩니다 — 문의하실 때 그 한 줄을 함께\n  보내 주시면 바로 원인을 알 수 있습니다.",
  "page": "https://github.com/top030400-coder/ghkqhzlxm",
  "files": [
@@ -41,18 +41,18 @@
   },
   {
    "p": "_internal/web/editor.html",
-   "h": "6b5acba0147b92235279dca39491f80feb81d2c7605457679ba6f3e115b4bbef",
-   "s": 1390805
+   "h": "a451005f8e9574c70ced7bf5b772f4054f10af44870413b98b625a95fd3f9bb6",
+   "s": 1392075
   },
   {
    "p": "_internal/web/engine.css",
-   "h": "b5d63335464b1716422f2c98c6cfcbb33529bff319abc5fea186ebdd215d7d8c",
-   "s": 146721
+   "h": "0022c8ec752b6b8dbf2905ed37cbd44ff4a22d59c3a3d1cb35a6e673227c6e63",
+   "s": 148686
   },
   {
    "p": "_internal/web/engine.js",
-   "h": "cb26b7767616daa405de695fee3995854c640a9dd4481356cc30133b4f6883be",
-   "s": 160857
+   "h": "2e8bfe2953ed7e23920b9783d820592e06a3f57d3dc9484c1d36e9e82519f4b1",
+   "s": 162924
   },
   {
    "p": "_internal/web/fonts_embed.css",
@@ -623,6 +623,106 @@
    "p": "_internal/web/art/patch_fr_sea.png",
    "h": "c460a323f477f7b650ee6dc8dd574d46763aba3de1ff3cdca6fa868556afddc1",
    "s": 29264
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_cherry.png",
+   "h": "6c9145a99e50bffe8f0f59a5d129715ecf1673d22db22892dddb1f15e2e97aa4",
+   "s": 124894
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_dark.png",
+   "h": "3e417fbdab02931ab3c74a137fd2c5606f2b12e6166476920b9780bffec4807a",
+   "s": 157247
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_drgn.png",
+   "h": "3ae665053640baa7bf1c13c1021de32cf46061b6942ed123077e96689f6bba2b",
+   "s": 142402
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_egg.png",
+   "h": "311195655187c70751f6f7935a73481164f343293e07780cfeba6c6d39581848",
+   "s": 126084
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_fairy.png",
+   "h": "29edcbc58f5f955e280283a84443ee8dbfc5f390e481d44827fb43e04edc01df",
+   "s": 68782
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_fire.png",
+   "h": "0d6ec58ded8926ed80af9ce50524909371932a28cfc9ae40ea1d3f8f9f3fa5aa",
+   "s": 171173
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_galaxy.png",
+   "h": "6dba71b27a959a1019ae8b6fccee2f7379e6919aab794bd3855dca28bea78c12",
+   "s": 71078
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_glitter.png",
+   "h": "15bba0002142b08e86340e0f68a9a47eca6d9a2970f8f46e2a45b03f59f95349",
+   "s": 106781
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_gold.png",
+   "h": "1976c2cbed12d9857fefecbcd29797e54196f8628cb63ad863976ed4d17dc9e2",
+   "s": 127009
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_grass.png",
+   "h": "e0ba750fd0dc88b84754454d641421465435edc4abe0c337564b82dabf8a2caf",
+   "s": 161681
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_hallow.png",
+   "h": "1c85db039d221396c179076be6968538820c46c3b1e1ed51e5effb3846486268",
+   "s": 160269
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_holo.png",
+   "h": "453df3e03b14f9944d9e96ba10a9d24eb47c2175f28cebcaa490bc1f7d2e11ee",
+   "s": 57906
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_ice.png",
+   "h": "c1d920d89fed9c2c9cd5172b13e5d70fe7ae68ae792d11c67dc3cd6850fa6b2f",
+   "s": 134925
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_litn.png",
+   "h": "5f2ce0b7586fed26bdef4306801f867b63f74126305bf2ffba3ef304e9aa2c14",
+   "s": 165874
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_metal.png",
+   "h": "074bf921a10052de9cc7110c36fb254bf23fa8950f395b0a236a1b74727c0feb",
+   "s": 136199
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_neon.png",
+   "h": "3e446ca0415be99cc3af83116479618109e5d7ab8df9c8cd35f6518fc1b46358",
+   "s": 119834
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_psy.png",
+   "h": "8c58bc4507533453e8811bd626bcc57096484d63da740eaace0b32a3beb21a21",
+   "s": 171450
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_retro.png",
+   "h": "b56e2b35ed0834109e2cfaf2b6c475d5404a31acd486537c877aa6b0c5935704",
+   "s": 179794
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_water.png",
+   "h": "6e7690661b2f2f39b6bb21328205fd6a7c0bc95f6d9c9d670b717448ae8ee438",
+   "s": 167467
+  },
+  {
+   "p": "_internal/web/art/patch_fr_tcg_xmas.png",
+   "h": "67cc583332524cc2e0e8378dd0f72e70933b5058253ab9d3cc810c88c87967ef",
+   "s": 160765
   },
   {
    "p": "_internal/web/art/patch_fr_victory.png",
@@ -3966,7 +4066,7 @@
   },
   {
    "p": "_internal/web/version.json",
-   "h": "91f69169cb7819234534b6f329855307460856848d4775ac4a84c7ed202fb127",
+   "h": "2fbc4ada2be3c2b2222631841c372451be3e06c98c81c970cd78753f7748cb0d",
    "s": 178
   }
  ],

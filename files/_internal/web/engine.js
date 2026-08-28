@@ -2924,6 +2924,47 @@ window.PBK = (function () {
     }
   });
 
+  /* ── 몬카 카드(몬스터 카드게임풍 패러디) — 2026-08-28.
+     카드 아트(2:3)를 페이지 가운데 놓고, 이름/ATK/DEF/설명을 문구 슬롯으로 얹는다.
+     편집 탭 '몬카' 틀과 같은 그림(art/patch_fr_tcg_*.png)을 공유한다. */
+  function tcgHtml(c) {
+    return '<div class="photo ph">' + c.img(0) + '</div><div class="art" aria-hidden="true"></div>' +
+      '<span class="tnm">' + c.t('nm') + '</span>' +
+      '<span class="tatk">' + c.t('atk') + '</span>' +
+      '<span class="tdef">' + c.t('def') + '</span>' +
+      '<span class="tdesc">' + c.t('desc') + '</span>';
+  }
+  var TCG_TX = [
+    { k: 'nm', n: '몬스터 이름', d: '쏭이몬' },
+    { k: 'atk', n: 'ATK 수치', d: '9999' },
+    { k: 'def', n: 'DEF 수치', d: '0' },
+    { k: 'desc', n: '카드 설명', d: '물을 자주 마시는 수분 보충형 스트리머몬.' }
+  ];
+  reg({
+    id: 'sf-tcg-glitter', cat: 'selfie', n: '몬카 카드 · 핑크글리터', cls: 'sfgraphic sftcg sftcgglitter', pnum: false,
+    ph: [{ n: '카드 사진' }], tx: TCG_TX, h: tcgHtml
+  });
+  reg({
+    id: 'sf-tcg-holo', cat: 'selfie', n: '몬카 카드 · 홀로레어', cls: 'sfgraphic sftcg sftcgholo', pnum: false,
+    ph: [{ n: '카드 사진' }], tx: TCG_TX, h: tcgHtml
+  });
+  reg({
+    id: 'sf-tcg-gold', cat: 'selfie', n: '몬카 카드 · 골드레전드', cls: 'sfgraphic sftcg sftcggold', pnum: false,
+    ph: [{ n: '카드 사진' }], tx: TCG_TX, h: tcgHtml
+  });
+  reg({
+    id: 'sf-tcg-water', cat: 'selfie', n: '몬카 카드 · 물', cls: 'sfgraphic sftcg sftcgwater', pnum: false,
+    ph: [{ n: '카드 사진' }], tx: TCG_TX, h: tcgHtml
+  });
+  reg({
+    id: 'sf-tcg-galaxy', cat: 'selfie', n: '몬카 카드 · 갤럭시', cls: 'sfgraphic sftcg sftcggalaxy', dark: true, pnum: false,
+    ph: [{ n: '카드 사진' }], tx: TCG_TX, h: tcgHtml
+  });
+  reg({
+    id: 'sf-tcg-cherry', cat: 'selfie', n: '몬카 카드 · 벚꽃', cls: 'sfgraphic sftcg sftcgcherry', pnum: false,
+    ph: [{ n: '카드 사진' }], tx: TCG_TX, h: tcgHtml
+  });
+
   reg({
     id: 'sf-single-ticket', cat: 'selfie', n: '그래픽 · 인디 티켓 포스터', cls: 'sfgraphic sfsingle sfsingleticket', dark: true, pnum: false,
     ph: [{ n: '가로 사진 한 장' }], tx: [],

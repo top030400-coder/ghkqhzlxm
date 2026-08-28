@@ -2091,3 +2091,31 @@
   box-shadow:inset 0 0 0 1px rgba(16,18,17,.05)}
 /* 자유배치(contain) 사진 칸은 먹색 레터박스 대신 페이지 배경을 비치게 */
 .ph:has(>img.phFree){background:transparent}
+
+/* ── 몬카 카드(몬스터 카드게임풍) — 자체 제작 틀이라 전 테마 좌표 동일 ── */
+.sftcg{background:#201d27}
+.sftcg .art{inset:5.2cqw 9cqw auto 9cqw;height:123cqw;background-size:100% 100%}
+.sftcg .photo{overflow:hidden;background:#101211}
+/* 사진 창: 카드(1024×1536) 기준 (72,190,880,726) → 페이지 cqw */
+.sftcg .photo{left:14.77cqw;top:20.41cqw;width:70.47cqw;height:58.14cqw}
+.sftcg .tnm,.sftcg .tatk,.sftcg .tdef,.sftcg .tdesc{position:absolute;z-index:4;pointer-events:none;
+  font-family:var(--sans);color:#33302c;font-weight:800}
+/* 이름판(160,80,704,76) — 판 세로중앙 정렬 */
+.sftcg .tnm{left:23.4cqw;top:12.9cqw;font-size:3.4cqw;line-height:1;letter-spacing:.04em;
+  max-width:40cqw;white-space:nowrap;overflow:hidden}
+/* 스탯 알약(112,1046,800,84): ATK 라벨 뒤 · DEF 라벨 뒤 */
+.sftcg .tatk,.sftcg .tdef{font-size:3cqw;line-height:1;font-variant-numeric:tabular-nums;width:15cqw}
+.sftcg .tatk{left:33.5cqw;top:91.1cqw}
+.sftcg .tdef{left:64.8cqw;top:91.1cqw}
+/* 설명 패널(112,1170,800,236): 괘선(1232/1290/1348px) 사이에 앉게 */
+.sftcg .tdesc{left:21cqw;top:101.2cqw;width:58cqw;font-weight:600;font-size:2.55cqw;line-height:4.64cqw;
+  white-space:normal;text-align:center}
+.sftcgglitter .art{background-image:url("art/patch_fr_tcg_glitter.png")}
+.sftcgholo .art{background-image:url("art/patch_fr_tcg_holo.png")}
+.sftcggold .art{background-image:url("art/patch_fr_tcg_gold.png")}
+.sftcgwater .art{background-image:url("art/patch_fr_tcg_water.png")}
+.sftcggalaxy .art{background-image:url("art/patch_fr_tcg_galaxy.png")}
+.sftcgcherry .art{background-image:url("art/patch_fr_tcg_cherry.png")}
+/* 갤럭시: 어두운 판 — 글자 밝게 */
+.sftcggalaxy .tnm,.sftcggalaxy .tatk,.sftcggalaxy .tdef,.sftcggalaxy .tdesc{color:#eae6f6}
+.sftcggalaxy .tatk,.sftcggalaxy .tdef{color:#33302c} /* 스탯 알약은 은색판이라 어두운 글자 유지 */
