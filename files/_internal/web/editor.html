@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-28_v5 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-08-31_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-28 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-31 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -21757,7 +21757,7 @@ window.gifenc=exports;})();
         gifEl('gifMeta').innerHTML = W + '×' + H + ' · ' + actualFrames + '프레임/' + actualFps + 'fps → <b>' +
           (kb >= 1024 ? (kb / 1024).toFixed(2) + 'MB' : Math.round(kb) + 'KB') + '</b>' +
           (av ? (over ? ' — ⚠ 2MB를 못 맞췄어요. 길이나 fps를 줄여보세요.' : ' — ✅ 프사 규격 OK (' + W + '×' + H + ' · 2MB 미만)') : '') +
-          (bottom ? ' — ✅ ' + gifBannerLabel() + ' 배너 ' + GIF_BOTTOM_SPEC.w + '×' + GIF_BOTTOM_SPEC.h + ' · 정확히 ' + GIF_BOTTOM_SPEC.len.toFixed(2) + '초 · ' + bytes.length.toLocaleString() + '/204,800 bytes' : '') +
+          (bottom ? ' — ✅ ' + gifBannerLabel() + ' 배너 ' + GIF_BOTTOM_SPEC.w + '×' + GIF_BOTTOM_SPEC.h + ' · 정확히 ' + GIF_BOTTOM_SPEC.len.toFixed(2) + '초 · ' + bytes.length.toLocaleString() + '/' + GIF_BOTTOM6_SPEC.limitBytes.toLocaleString() + ' bytes' : '') +
           (bottom && used.renderProfileIndex ? '<br><span style="color:#8b887c">' +
             PBK.esc(gifBottomProfileMetaLine(used.renderProfileIndex, used.renderProfileScalePct)) + '</span>' : '') +
           ((used.c < 256 || used.step > 1 || used.f > 0) ? '<br><span style="color:#8b887c">자동 맞춤: ' + used.c + '색' + (used.f ? ' · 미세압축 ±' + used.f : '') + (used.step > 1 ? ' · 프레임 ½' : '') + (used.od ? ' · 배경 결 고르게(디더)' : '') + (used.first ? ' · 정지 배경 ' + used.first + '색 화질 유지' : '') + '</span>' : '') +

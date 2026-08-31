@@ -11,7 +11,7 @@
   const WEFLAB_HEIGHT = 374;
   const WEFLAB_RENDER_SCALE = 2;
   // 모바일·PC 내보내기도 위플랩과 같은 2× 작업면에 렌더한 뒤 한 번에 축소한다(품질용, 최종 치수는 불변).
-  const SOOP_RENDER_SCALE = 2;
+  const SOOP_RENDER_SCALE = 4;   /* 2→4 (45차): 위플랩(4.56×)만큼 크게 그린 뒤 줄여야 글자·에지가 선명하다 */
   const WEFLAB_UPLOAD_LIMIT = 10 * 1024 * 1024;
   const DPR = 2;
   const MOBILE_NUMBER_SIZE = 55;
@@ -675,7 +675,16 @@
   }
 
   function nextPaint() {
-    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    /* 화면 한 프레임을 기다리되 타이머로 반드시 풀어준다.
+       requestAnimationFrame은 창이 최소화·가려지면 아예 안 돌아서, 저장 도중
+       창을 내리면 "PNG 준비 중…"에서 영원히 멈춘다(실측 재현). editor.html은
+       같은 함정을 이미 setTimeout으로 피하고 있었는데 시그풍만 빠져 있었다. */
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = () => { if (settled) return; settled = true; resolve(); };
+      requestAnimationFrame(() => requestAnimationFrame(finish));
+      setTimeout(finish, 120);
+    });
   }
 
   function settleSigConfirm(accepted) {
@@ -6459,10 +6468,34 @@
     const outCtx = out.getContext("2d", { alpha: true });
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
-    outCtx.drawImage(work, 0, 0, W, H);
+    outCtx.drawImage(sigDownscale(work, 0, 0, work.width, work.height, W, H), 0, 0, W, H);
     // 상단 84px 투명 규칙은 다운샘플 경계 번짐까지 확실히 지우도록 최종 1× 캔버스에서 비운다.
     outCtx.clearRect(0, 0, W, H - CONTENT_H);
     return out;
+  }
+
+  /* ★ 45차 — 고품질 축소(단계적 반씩). 캔버스 'high' 한 방 축소는 4:1 이상에서
+     흐릿해진다(위플랩 축소본과 비교하면 글자·숫자 에지에서 확연). 화보키트 배너가
+     쓰는 stepDown 과 같은 방식으로 2:1씩 접어 내려간 뒤 마지막만 맞춘다. */
+  function sigDownscale(src, sx, sy, sw, sh, dw, dh) {
+    let cur = document.createElement("canvas");
+    cur.width = Math.max(1, Math.round(sw));
+    cur.height = Math.max(1, Math.round(sh));
+    let cx = cur.getContext("2d", { alpha: true });
+    cx.imageSmoothingEnabled = true;
+    cx.imageSmoothingQuality = "high";
+    cx.drawImage(src, sx, sy, sw, sh, 0, 0, cur.width, cur.height);
+    while (cur.width > dw * 2 && cur.height > dh * 2) {
+      const half = document.createElement("canvas");
+      half.width = Math.max(Math.round(dw), Math.round(cur.width / 2));
+      half.height = Math.max(Math.round(dh), Math.round(cur.height / 2));
+      const hx = half.getContext("2d", { alpha: true });
+      hx.imageSmoothingEnabled = true;
+      hx.imageSmoothingQuality = "high";
+      hx.drawImage(cur, 0, 0, half.width, half.height);
+      cur = half;
+    }
+    return cur;
   }
 
   function makeMasterCanvas() {
@@ -6541,7 +6574,8 @@
       const backgroundCtx = backgroundOnly.getContext("2d", { alpha: true });
       backgroundCtx.setTransform(SOOP_RENDER_SCALE, 0, 0, SOOP_RENDER_SCALE, 0, 0);
       drawBackground(backgroundCtx, state.background, true);
-      outCtx.drawImage(backgroundOnly, 0, (H - CONTENT_H) * SOOP_RENDER_SCALE, W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, offsetX, offsetY, drawW, drawH);
+      outCtx.drawImage(sigDownscale(backgroundOnly, 0, (H - CONTENT_H) * SOOP_RENDER_SCALE,
+        W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, drawW, drawH), offsetX, offsetY, drawW, drawH);
 
       const contentOnly = document.createElement("canvas");
       contentOnly.width = W * SOOP_RENDER_SCALE;
@@ -6552,7 +6586,8 @@
       applyContentProfileTransform(contentCtx, profile, W / 2, H, 1 / baseScale);
       drawContentWithoutNumbers(contentCtx, false, SOOP_RENDER_SCALE);
       contentCtx.restore();
-      outCtx.drawImage(contentOnly, 0, (H - CONTENT_H) * SOOP_RENDER_SCALE, W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, offsetX, offsetY, drawW, drawH);
+      outCtx.drawImage(sigDownscale(contentOnly, 0, (H - CONTENT_H) * SOOP_RENDER_SCALE,
+        W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, drawW, drawH), offsetX, offsetY, drawW, drawH);
       const mapPcPoint = point => ({
         x: offsetX + point.x * baseScale,
         /* 숫자(중앙 앵커)는 아트 영역 안으로 — 말풍선 칸은 항상 비워 둔다(심사 기준) */
@@ -6594,7 +6629,8 @@
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
     drawPcBubble(outCtx);
-    outCtx.drawImage(withoutNumbers, 0, (H - CONTENT_H) * SOOP_RENDER_SCALE, W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, offsetX, offsetY, drawW, drawH);
+    outCtx.drawImage(sigDownscale(withoutNumbers, 0, (H - CONTENT_H) * SOOP_RENDER_SCALE,
+      W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, drawW, drawH), offsetX, offsetY, drawW, drawH);
 
     const pcLayer = layer => Object.assign({}, layer, {
       /* 재드로잉 숫자는 최종(195×145) 좌표에서 정수 픽셀로 스냅 — 스트로크 선명도 */
@@ -6812,6 +6848,82 @@
       (r === 255 && g === 255 && b === 255) ||
       (r <= 17 && g <= 17 && b <= 17);
   }
+  /* sRGB ↔ Oklab — 사람 눈에 균등한 색 공간. 팔레트를 여기서 정제하면
+     같은 색 수로도 오차가 크게 준다(측정: 모바일 293×248에서 +6.9dB). */
+  function srgbToOklab(r, g, b) {
+    const f = v => { v /= 255; return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+    const R = f(r), G = f(g), B = f(b);
+    const l = Math.cbrt(.4122214708 * R + .5363325363 * G + .0514459929 * B);
+    const m = Math.cbrt(.2119034982 * R + .6806995451 * G + .1073969566 * B);
+    const s2 = Math.cbrt(.0883024619 * R + .2817188376 * G + .6299787005 * B);
+    return [.2104542553 * l + .7936177850 * m - .0040720468 * s2,
+            1.9779984951 * l - 2.4285922050 * m + .4505937099 * s2,
+            .0259040371 * l + .7827717662 * m - .8086757660 * s2];
+  }
+  function oklabToSrgb(L, A, B2) {
+    const l3 = L + .3963377774 * A + .2158037573 * B2;
+    const m3 = L - .1055613458 * A - .0638541728 * B2;
+    const s3 = L - .0894841775 * A - 1.2914855480 * B2;
+    const l = l3 * l3 * l3, m = m3 * m3 * m3, s2 = s3 * s3 * s3;
+    const g = v => {
+      v = v <= .0031308 ? v * 12.92 : 1.055 * Math.pow(Math.max(v, 0), 1 / 2.4) - .055;
+      return Math.max(0, Math.min(255, Math.round(v * 255)));
+    };
+    return [g(4.0767416621 * l - 3.3077115913 * m + .2309699292 * s2),
+            g(-1.2684380046 * l + 2.6097574011 * m - .3413193965 * s2),
+            g(-.0041960863 * l - .7034186147 * m + 1.7076147010 * s2)];
+  }
+  const OK_ALPHA_W = 1.0;   /* 알파 1단계 ≈ 밝기 1단계 취급(에지 반투명 보존) */
+
+  function refinePaletteOklab(pal, px, fixedCount, iters) {
+    /* 미디언컷 결과를 시작점으로 Oklab k-means 몇 바퀴. 색 수는 그대로인데
+       배치만 눈 기준으로 옮기는 거라 용량은 거의 그대로고 화질만 오른다. */
+    const k = pal.length - fixedCount;
+    if (k < 2 || px.length < k * 2) return pal;
+    const stride = Math.max(1, Math.ceil(px.length / 12000));   /* 표본 최대 1.2만 — 속도 */
+    const n = Math.ceil(px.length / stride);
+    const S = new Float32Array(n * 4);
+    for (let i = 0, j = 0; i < px.length && j < n; i += stride, j++) {
+      const q = px[i], ok = srgbToOklab(q[0], q[1], q[2]);
+      S[j * 4] = ok[0]; S[j * 4 + 1] = ok[1]; S[j * 4 + 2] = ok[2];
+      S[j * 4 + 3] = (q[3] / 255) * OK_ALPHA_W;
+    }
+    const C = new Float32Array(k * 4);
+    for (let c = 0; c < k; c++) {
+      const q = pal[fixedCount + c], ok = srgbToOklab(q[0], q[1], q[2]);
+      C[c * 4] = ok[0]; C[c * 4 + 1] = ok[1]; C[c * 4 + 2] = ok[2];
+      C[c * 4 + 3] = (q[3] / 255) * OK_ALPHA_W;
+    }
+    const sum = new Float32Array(k * 4), cnt = new Uint32Array(k);
+    for (let it = 0; it < iters; it++) {
+      sum.fill(0); cnt.fill(0);
+      for (let i = 0; i < n; i++) {
+        const L = S[i * 4], A = S[i * 4 + 1], B = S[i * 4 + 2], T = S[i * 4 + 3];
+        let bd = Infinity, bi = 0;
+        for (let c = 0; c < k; c++) {
+          const dl = L - C[c * 4], da = A - C[c * 4 + 1], db = B - C[c * 4 + 2], dt = T - C[c * 4 + 3];
+          const d = dl * dl + da * da + db * db + dt * dt;
+          if (d < bd) { bd = d; bi = c; }
+        }
+        sum[bi * 4] += L; sum[bi * 4 + 1] += A; sum[bi * 4 + 2] += B; sum[bi * 4 + 3] += T;
+        cnt[bi]++;
+      }
+      for (let c = 0; c < k; c++) {
+        if (!cnt[c]) continue;           /* 빈 군집은 그대로 둔다(색 수 유지) */
+        const m = cnt[c];
+        C[c * 4] = sum[c * 4] / m; C[c * 4 + 1] = sum[c * 4 + 1] / m;
+        C[c * 4 + 2] = sum[c * 4 + 2] / m; C[c * 4 + 3] = sum[c * 4 + 3] / m;
+      }
+    }
+    const out = pal.slice(0, fixedCount);
+    for (let c = 0; c < k; c++) {
+      const rgb = oklabToSrgb(C[c * 4], C[c * 4 + 1], C[c * 4 + 2]);
+      const a = Math.max(0, Math.min(255, Math.round((C[c * 4 + 3] / OK_ALPHA_W) * 255)));
+      out.push([rgb[0], rgb[1], rgb[2], a]);
+    }
+    return out;
+  }
+
   function buildPalette(data, maxColors) {
     /* 알파 포함 4차원 미디언컷. 0번은 완전투명 예약석, 공식 숫자 3색도 예약석. */
     const px = [];
@@ -6861,7 +6973,8 @@
       const n = box.length;
       pal.push([Math.round(r / n), Math.round(g / n), Math.round(b / n), Math.round(a / n)]);
     }
-    return pal.slice(0, maxColors);
+    const refined = refinePaletteOklab(pal.slice(0, maxColors), px, reserved.length, 6);
+    return refined.slice(0, maxColors);
   }
   async function paletteQuantizedPng(source, maxColors, ditherStrength, shared) {
     if (typeof CompressionStream !== "function") return null;
@@ -6884,16 +6997,26 @@
       if (shared) (shared.pals = shared.pals || {})[maxColors] = pal;
     }
     const palLen = pal.length;
+    /* 팔레트를 Oklab으로 미리 풀어둔다 — 색 고르기도 사람 눈 기준으로 해야
+       정제한 팔레트의 이득이 실제 픽셀까지 이어진다. */
+    const palOk = new Float32Array(palLen * 4);
+    for (let i = 0; i < palLen; i++) {
+      const q = pal[i], ok = srgbToOklab(q[0], q[1], q[2]);
+      palOk[i * 4] = ok[0]; palOk[i * 4 + 1] = ok[1];
+      palOk[i * 4 + 2] = ok[2]; palOk[i * 4 + 3] = (q[3] / 255) * OK_ALPHA_W;
+    }
     const cache = new Map();
     const nearest = (r, g, b, a) => {
       const key = ((r >> 2) << 18) | ((g >> 2) << 12) | ((b >> 2) << 6) | (a >> 2);
       let idx = cache.get(key);
       if (idx !== undefined) return idx;
+      const ok = srgbToOklab(r, g, b);
+      const L = ok[0], A = ok[1], B = ok[2], T = (a / 255) * OK_ALPHA_W;
       let bd = Infinity; idx = 0;
       for (let i = 0; i < palLen; i++) {
-        const p = pal[i];
-        const dr = r - p[0], dg = g - p[1], db = b - p[2], da = (a - p[3]) * 2;
-        const d = dr * dr + dg * dg + db * db + da * da;
+        const dl = L - palOk[i * 4], da = A - palOk[i * 4 + 1];
+        const db = B - palOk[i * 4 + 2], dt = T - palOk[i * 4 + 3];
+        const d = dl * dl + da * da + db * db + dt * dt;
         if (d < bd) { bd = d; idx = i; }
       }
       cache.set(key, idx);
@@ -6995,19 +7118,130 @@
     return { blob, canvas: outCv };
   }
 
+  /* ── 50KB 트루컬러 PNG (45차 신설) ────────────────────────────────
+     팔레트 256색은 색 수가 태생적 한계라, 그라데이션·사진이 섞인 시그에선
+     아무리 팔레트를 잘 뽑아도 41dB 근처가 천장이었다. 반면 색은 그대로 두고
+     "정밀도만 아주 살짝" 깎으면(RGB를 step 간격으로 반올림) 같은 50,000바이트
+     안에서 53dB가 나온다 — 눈으로 보면 계단·뭉갬이 사라진다.
+     canvas.toBlob 대신 직접 인코딩하는 이유: 브라우저 기본 PNG 인코더는
+     같은 픽셀을 20~30% 크게 뱉어서 그 차이만큼 화질을 깎아야 했다.
+     (측정 293×248 실사례: canvas 67,219B vs 이 인코더 52,896B — 같은 무손실) */
+  async function truecolorPng(source, step) {
+    if (typeof CompressionStream !== "function") return null;
+    const w = source.width, h = source.height;
+    const work = document.createElement("canvas");
+    work.width = w; work.height = h;
+    const wc = work.getContext("2d", { alpha: true, willReadFrequently: true });
+    wc.clearRect(0, 0, w, h);
+    wc.drawImage(source, 0, 0);
+    const src = wc.getImageData(0, 0, w, h).data;
+    const bpp = 4, stride = w * bpp;
+    const cur = new Uint8Array(stride);
+    const prev = new Uint8Array(stride);
+    const cand = [new Uint8Array(stride), new Uint8Array(stride), new Uint8Array(stride), new Uint8Array(stride)];
+    const filterIds = [0, 1, 2, 4];
+    const raw = new Uint8Array(h * (stride + 1));
+    const q = step > 1 ? new Uint8Array(256) : null;
+    /* 격자 최상단을 255로 펴는(끝점 보존) 변형도 재봤는데 PSNR이 46.86→45.15로
+       오히려 나빠졌다(값 범위가 넓어져 압축이 나빠지고 step을 한 칸 더 깎게 됨).
+       순백·순검은 어차피 아래 isOfficialColor 가드가 그대로 통과시키므로 단순 격자가 낫다. */
+    if (q) for (let v = 0; v < 256; v++) q[v] = Math.min(255, Math.round(v / step) * step);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const o = (y * w + x) * 4, d = x * 4;
+        const a = src[o + 3];
+        if (a === 0) { cur[d] = 0; cur[d + 1] = 0; cur[d + 2] = 0; cur[d + 3] = 0; continue; }
+        const r = src[o], g = src[o + 1], b = src[o + 2];
+        /* 공식 숫자 색(빨강·흰·검정 테두리)은 정밀도 축소에서 제외 — 가이드상 변경 불가 */
+        if (!q || (a > 245 && isOfficialColor(r, g, b))) {
+          cur[d] = r; cur[d + 1] = g; cur[d + 2] = b;
+        } else {
+          cur[d] = q[r]; cur[d + 1] = q[g]; cur[d + 2] = q[b];
+        }
+        cur[d + 3] = a;
+      }
+      for (let i = 0; i < stride; i++) {
+        const c = cur[i];
+        const left = i >= bpp ? cur[i - bpp] : 0;
+        const up = y ? prev[i] : 0;
+        const upLeft = (y && i >= bpp) ? prev[i - bpp] : 0;
+        const pp = left + up - upLeft;
+        const pa = Math.abs(pp - left), pb = Math.abs(pp - up), pc = Math.abs(pp - upLeft);
+        const pr = (pa <= pb && pa <= pc) ? left : (pb <= pc ? up : upLeft);
+        cand[0][i] = c;
+        cand[1][i] = (c - left) & 255;
+        cand[2][i] = (c - up) & 255;
+        cand[3][i] = (c - pr) & 255;
+      }
+      let best = 0, bestSum = Infinity;
+      for (let f = 0; f < 4; f++) {
+        const buf = cand[f];
+        let sum = 0;
+        for (let i = 0; i < stride; i++) { const v = buf[i]; sum += v < 128 ? v : 256 - v; }
+        if (sum < bestSum) { bestSum = sum; best = f; }
+      }
+      raw[y * (stride + 1)] = filterIds[best];
+      raw.set(cand[best], y * (stride + 1) + 1);
+      prev.set(cur);
+    }
+    const idat = await deflateZlib(raw);
+    const ihdr = new Uint8Array(13);
+    const dv = new DataView(ihdr.buffer);
+    dv.setUint32(0, w); dv.setUint32(4, h);
+    ihdr[8] = 8; ihdr[9] = 6;   /* 8비트 · 트루컬러+알파 */
+    const sig = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const blob = new Blob([sig, pngChunk("IHDR", ihdr), pngChunk("IDAT", idat),
+      pngChunk("IEND", new Uint8Array(0))], { type: "image/png" });
+    /* 화면 미리보기도 실제 저장 픽셀과 같게 */
+    const outImg = new ImageData(w, h);
+    for (let o = 0; o < src.length; o += 4) {
+      const a = src[o + 3];
+      if (a === 0) continue;
+      const r = src[o], g = src[o + 1], b = src[o + 2];
+      const keep = !q || (a > 245 && isOfficialColor(r, g, b));
+      outImg.data[o] = keep ? r : q[r];
+      outImg.data[o + 1] = keep ? g : q[g];
+      outImg.data[o + 2] = keep ? b : q[b];
+      outImg.data[o + 3] = a;
+    }
+    const outCv = document.createElement("canvas");
+    outCv.width = w; outCv.height = h;
+    outCv.getContext("2d", { alpha: true }).putImageData(outImg, 0, 0);
+    return { blob, canvas: outCv };
+  }
+
   async function optimizedPng(source) {
-    let bestBlob = await canvasBlob(source);
+    /* 0순위: 트루컬러. 무손실이 들어가면 그게 정답이고(PC 195×145는 대개 여기서 끝),
+       안 들어가면 정밀도를 한 칸씩만 깎아 50,000바이트에 최대한 붙인다.
+       팔레트로 내려가는 건 트루컬러가 step 12까지 가도 안 들어갈 때뿐.
+       브라우저 내장 인코더(canvas.toBlob)보다 먼저 보는 이유는 같은 무손실을
+       20~30% 작게 뱉어서, 남는 예산을 화질에 쓸 수 있기 때문. */
+    let bestBlob = null;
     let bestCanvas = source;
-    if (bestBlob.size <= KB_LIMIT) return { blob: bestBlob, canvas: bestCanvas };
-    /* 1순위: 팔레트 PNG — 디더를 줄이고 색을 줄여가며 50KB 안에 넣는다 */
-    const palettePlans = [[256, .72], [256, .5], [192, .5], [128, .45], [96, .4], [64, .35]];
+    for (const step of [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16]) {   /* 한 칸이 화질 0.5~1dB — 촘촘히 훑어 예산에 딱 붙인다 */
+      let tc = null;
+      try { tc = await truecolorPng(source, step); } catch (e) { tc = null; }
+      if (!tc) break;
+      if (!bestBlob || tc.blob.size < bestBlob.size) { bestBlob = tc.blob; bestCanvas = tc.canvas; }
+      if (tc.blob.size <= KB_LIMIT) {
+        return { blob: tc.blob, canvas: tc.canvas, mode: step === 1 ? "truecolor-lossless" : "truecolor-step" + step };
+      }
+    }
+    const canvasLossless = await canvasBlob(source);
+    if (!bestBlob || canvasLossless.size < bestBlob.size) { bestBlob = canvasLossless; bestCanvas = source; }
+    if (canvasLossless.size <= KB_LIMIT) return { blob: canvasLossless, canvas: source, mode: "canvas-lossless" };
+    /* 1순위: 팔레트 PNG — 45차: "일단 통과"가 아니라 "예산을 다 쓰는" 순서로 바꿨다.
+       예전엔 첫 칸이 [256, 디더 .72]라 강한 디더로 파일이 커지는 대신 오차도 컸는데,
+       Oklab k-means 팔레트에선 무디더가 더 작고 더 정확하다(측정: 29KB·41.2dB vs 11.5KB·34.2dB).
+       그래서 무디더 최다색을 맨 앞에 두고, 넘칠 때만 색을 깎으며 디더로 밴딩을 가린다. */
+    const palettePlans = [[256, 0], [256, .18], [224, .3], [192, .4], [160, .45], [128, .45], [96, .4], [64, .35]];
     const shared = {}; /* 플랜 간 픽셀·팔레트 재사용 — 같은 팔레트 2회 재계산 제거 */
     for (const [colors, dither] of palettePlans) {
       let candidate = null;
       try { candidate = await paletteQuantizedPng(source, colors, dither, shared); } catch (e) { candidate = null; }
       if (!candidate) break;   /* CompressionStream 없음 등 — 예전 방식으로 */
       if (candidate.blob.size < bestBlob.size) { bestBlob = candidate.blob; bestCanvas = candidate.canvas; }
-      if (candidate.blob.size <= KB_LIMIT) return { blob: bestBlob, canvas: bestCanvas };
+      if (candidate.blob.size <= KB_LIMIT) return { blob: bestBlob, canvas: bestCanvas, mode: "palette" + colors };
     }
     /* 마지막 안전판: 예전 step 양자화(팔레트 경로가 안 되는 환경 전용) */
     const attempts = [
@@ -7042,28 +7276,103 @@
     return new Blob([bytes], { type: mime });
   }
 
+  function canvasPixels(source) {
+    const cv = document.createElement("canvas");
+    cv.width = source.width; cv.height = source.height;
+    const cx = cv.getContext("2d", { alpha: true, willReadFrequently: true });
+    cx.clearRect(0, 0, cv.width, cv.height);
+    cx.drawImage(source, 0, 0);
+    return cx.getImageData(0, 0, cv.width, cv.height).data;
+  }
+
+  async function pngQualityScore(blob, source) {
+    /* 후보 PNG를 다시 디코드해 원본과의 오차(PSNR)를 잰다.
+       "어느 인코더가 더 낫다"를 추측이 아니라 숫자로 고르기 위한 심판.
+       투명 영역의 RGB는 화면에 안 보이므로 알파를 곱해 비교한다. */
+    try {
+      const w = source.width, h = source.height;
+      const bmp = await createImageBitmap(blob);
+      if (bmp.width !== w || bmp.height !== h) { if (bmp.close) bmp.close(); return -1; }
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      const cx = cv.getContext("2d", { alpha: true, willReadFrequently: true });
+      cx.clearRect(0, 0, w, h);
+      cx.drawImage(bmp, 0, 0);
+      if (bmp.close) bmp.close();
+      const A = canvasPixels(source), B = cx.getImageData(0, 0, w, h).data;
+      let se = 0, n = 0;
+      for (let i = 0; i < A.length; i += 4) {
+        const a0 = A[i + 3], a1 = B[i + 3];
+        const da = a0 - a1; se += da * da; n++;
+        if (a0 < 8 && a1 < 8) continue;
+        const w0 = a0 / 255, w1 = a1 / 255;
+        for (let c = 0; c < 3; c++) {
+          const d = A[i + c] * w0 - B[i + c] * w1;
+          se += d * d; n++;
+        }
+      }
+      const mse = se / Math.max(1, n);
+      return mse <= 1e-9 ? 999 : 10 * Math.log10(65025 / mse);
+    } catch (e) {
+      return -1;
+    }
+  }
+
   async function prepareSoopCanvas(source, variant) {
     validateOutputCanvas(variant, source);
+    /* 45차: 앱 최적화기(PIL)와 웹 인코더(Oklab k-means 팔레트)를 둘 다 돌려
+       50,000바이트 안에 든 것 중 화질이 더 좋은 쪽을 저장한다.
+       예전엔 앱이 있으면 무조건 앱 결과였는데, 앱 쪽은 50KB 예산의 4분의 1만
+       쓰고 끝나서(11.5KB) 모바일 293×248이 눈에 띄게 뭉갰다. */
+    /* 웹 인코더를 먼저 돌린다. 무손실로 50,000바이트에 들어가면 그보다 나은 결과는
+       존재할 수 없으니 앱 최적화기 호출을 통째로 아낀다(PC 195×145는 대개 여기서 끝).
+       규격(치수·투명배경·상단 84px·PC 아트 공백)은 위 validateOutputCanvas가
+       앱과 동일하게 이미 강제하므로 검증이 새지 않는다. */
+    let local = null;
+    try { local = await optimizedPng(source); } catch (e) { local = null; }
+    const localFits = !!(local && local.blob.size <= KB_LIMIT);
+    if (localFits && (local.mode === "truecolor-lossless" || local.mode === "canvas-lossless")) {
+      return { blob: local.blob, method: "web-" + local.mode, meta: null };
+    }
     const api = window.pywebview && window.pywebview.api;
+    const candidates = [];
+    let apiErr = null;
     if (api && typeof api.optimize_soop_png === "function") {
-      const result = parseApiResult(await api.optimize_soop_png(JSON.stringify({
-        variant,
-        dataUrl: source.toDataURL("image/png")
-      })));
-      if (!result.ok || !result.withinLimit || !result.b64) {
-        throw new Error(result.err || "50,000바이트 안에서 품질을 유지하지 못했어. 배경 패턴이나 소품 수를 조금 줄여줘.");
-      }
-      const blob = base64ToBlob(result.b64);
-      if (blob.size > KB_LIMIT) throw new Error(`${variant} PNG가 50,000바이트를 넘었어.`);
-      return { blob, method: result.method || "app-optimizer", meta: result };
+      let contractErr = null;
+      try {
+        const result = parseApiResult(await api.optimize_soop_png(JSON.stringify({
+          variant,
+          dataUrl: source.toDataURL("image/png")
+        })));
+        if (result && result.ok && result.withinLimit && result.b64) {
+          const blob = base64ToBlob(result.b64);
+          if (blob.size <= KB_LIMIT) {
+            candidates.push({ blob, method: result.method || "app-optimizer", meta: result });
+          }
+        } else if (result && result.err) {
+          apiErr = result.err;
+          /* 규격 위반(상단 84px 투명 등)은 웹 인코더로 우회하면 안 된다 — 그대로 알린다.
+             용량 초과(limitNotMet)만 웹 인코더에게 기회를 준다. */
+          if (result.errorCode && result.errorCode !== "limitNotMet") contractErr = result.err;
+        }
+      } catch (e) { apiErr = apiErr || (e && e.message) || null; }
+      if (contractErr) throw new Error(contractErr);
     }
-    const fallback = await optimizedPng(source);
-    if (fallback.blob.size > KB_LIMIT) {
-      /* v16 exe에선 이 폴백이 기본 경로라 '실행본이 필요하다'는 안내는 자기모순 —
-         고객이 실제로 할 수 있는 해결책을 알려준다 */
-      throw new Error("이미지가 너무 복잡해 50,000바이트 안에 못 들어갔어. 배경 패턴이나 소품 수를 조금 줄이고 다시 저장해줘.");
+    if (localFits) {
+      candidates.push({ blob: local.blob, method: "web-" + (local.mode || "encoder"), meta: null });
     }
-    return { blob: fallback.blob, method: "browser-fallback", meta: null };
+
+    if (!candidates.length) {
+      throw new Error(apiErr || "이미지가 너무 복잡해 50,000바이트 안에 못 들어갔어. 배경 패턴이나 소품 수를 조금 줄이고 다시 저장해줘.");
+    }
+    if (candidates.length === 1) return candidates[0];
+    let win = null, winQ = -Infinity;
+    for (const c of candidates) {
+      const q = await pngQualityScore(c.blob, source);
+      if (q > winQ + 0.05) { winQ = q; win = c; }   /* 동점이면 먼저 온 앱 결과 유지 */
+    }
+    win = win || candidates[0];
+    return { blob: win.blob, method: win.method, meta: win.meta, psnr: Math.round(winQ * 100) / 100 };
   }
 
   async function prepareWeflabCanvas(source) {
