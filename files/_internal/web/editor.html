@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-08-31_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-04_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -716,7 +716,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-08-31 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-04 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -21201,8 +21201,16 @@ window.gifenc=exports;})();
     if (GIF.busy || !GIF.url) return;
     /* 출력 크기 자동 구제 플래그 — 자동 재시도로 되돌아온 호출이면 유지하고,
        사용자가 새로 누른 호출이면 초기화한다(재시도는 회차당 한 번만). */
+    /* 이 실행이 '자동 구제 재시도'로 시작된 거면 앞선 구제 이력을 그대로 이어받고,
+       사용자가 직접 누른 새 실행이면 전부 초기화한다.
+       ⚠ 예전엔 출력 크기 재시도만 이 깃발을 세워서, 뒤이은 움직임 세기 재시도가
+       여기서 출력 크기 구제 이력을 지워 버렸다 — 그 바람에 저장은 됐는데 안내가
+       사라지고 '출력 크기' 선택이 50%인 채로 굳었다(실측). */
     if (GIF.__scaleRetryPending) { GIF.__scaleRetryPending = false; }
-    else { GIF.__scaleAutoRetried = false; GIF.__scaleRetryNote = ''; GIF.__scaleRetryPrev = null; }
+    else {
+      GIF.__scaleAutoRetried = false; GIF.__scaleRetryNote = ''; GIF.__scaleRetryPrev = null;
+      GIF.__amtRetryNote = ''; GIF.__amtRetryPrev = null;
+    }
     GIF.out6 = null;
     gifEl('gifSave').textContent = '💾 GIF 저장';
     if (!window.gifenc) return alert('GIF 인코더(gifenc.js)를 못 읽었어요.');
@@ -21485,6 +21493,11 @@ window.gifenc=exports;})();
               scaleSel.value = '0.5';
               delete scaleSel.dataset.was85;
               try { gifBfxScaleHintSync(); } catch (e2) {}
+              /* ⚠ 값만 바꾸면 스펙이 안 따라오는 경우가 있어(모드가 bottom/bottom6 이 아닌
+                 순간에 시작하면 시작 지점의 applyScale 가 건너뛰어진다) 여기서 바로 맞춘다.
+                 멱등이라 두 번 불려도 결과가 같다. 실측: 이걸 빼면 '50% 재시도'가
+                 1차와 완전히 같은 바이트로 또 실패했다(162335…210725 그대로). */
+              try { gifBannerApplyScale(); } catch (e9) {}
               GIF.out = null; GIF.out6 = null; gifBottomSetRenderProfile(0);
               GIF.busy = false;
               gifEl('gifGo').disabled = false;
@@ -21492,7 +21505,41 @@ window.gifenc=exports;})();
               setTimeout(function () { gifEl('gifGo').onclick(); }, 30);
               return;
             }
-            /* 재시도까지 실패 — 오류창을 띄우기 전에 출력 크기 선택값을 원복 */
+            /* ★ 움직임 세기 자동 감쇄 — 인물 2D 가 아닌 움직임(확대/축소/흐르기)은
+               화면 전체가 매 프레임 바뀌어 델타 압축이 통째로 무력화된다. 이 경로엔
+               구제 프로필이 '원래 효과' 하나뿐이라, 예전엔 여기서 그냥 실패로 끝났다
+               (기본값 zoomin·1.5초·85% 조합이 그대로 실패 — 실고객 리포트).
+               실측: 세기 12%→3% 로만 낮춰도 통과한다(64색·24프레임·202,829B).
+               크기를 반으로 줄이는 것보다 또렷함이 살아 있어 두 번째 구제로 둔다. */
+            var amtSel = gifEl('giPhAmt');
+            var curAmt = amtSel ? Number(amtSel.value) : 0;
+            if (amtSel && isFinite(curAmt) && curAmt > 3 && !gifPortraitChosen() &&
+                (GIF.mode === 'bottom' || GIF.mode === 'bottom6')) {
+              var nextAmt = curAmt > 6 ? 6 : 3;
+              if (!GIF.__amtRetryPrev) GIF.__amtRetryPrev = amtSel.value;
+              amtSel.value = String(nextAmt);
+              try { amtSel.dispatchEvent(new Event('input', { bubbles: true })); } catch (e7) {}
+              GIF.__amtRetryNote = '⚠ 용량(칸당 200KiB)을 넘어 <b>움직임 세기를 ' + nextAmt +
+                '%로 자동 조정</b>해 저장했어요 — 움직임 폭만 줄었고 <b>또렷함·색은 그대로</b>입니다. ' +
+                '더 크게 움직이려면 출력 크기를 50%로 낮춰 주세요.';
+              GIF.__scaleRetryPending = true; /* 자동 구제 재시도 — 앞선 구제 이력 보존 */
+              GIF.out = null; GIF.out6 = null; gifBottomSetRenderProfile(0);
+              GIF.busy = false;
+              gifEl('gifGo').disabled = false;
+              gifSetProg('용량이 넘쳐 움직임 세기 ' + nextAmt + '%로 자동 재시도 중…');
+              setTimeout(function () { gifEl('gifGo').onclick(); }, 30);
+              return;
+            }
+            /* 재시도까지 실패 — 오류창을 띄우기 전에 움직임 세기·출력 크기를 원복 */
+            if (GIF.__amtRetryPrev) {
+              var amtBack = gifEl('giPhAmt');
+              if (amtBack) {
+                amtBack.value = GIF.__amtRetryPrev;
+                try { amtBack.dispatchEvent(new Event('input', { bubbles: true })); } catch (e8) {}
+              }
+              GIF.__amtRetryPrev = null;
+              GIF.__amtRetryNote = '';
+            }
             if (GIF.__scaleRetryPrev) {
               var prevSel = gifEl('giBfxScale');
               if (prevSel) {
@@ -21504,29 +21551,55 @@ window.gifenc=exports;})();
             }
             GIF.out = null; GIF.out6 = null; gifBottomSetRenderProfile(0);
             return encFail((lastError && lastError.message ? lastError.message : lastError) +
-              '\n현재 이미지에서는 인물 전체를 부드럽게 움직이면서 200KiB·최소 64색을 동시에 지킬 수 없습니다. ' +
-              '머리 흔들기에서 머리 영역을 칠하거나, 인물 크기/배경 효과를 줄인 뒤 다시 만드세요. ' +
+              /* ⚠ 예전엔 어떤 움직임을 골랐든 '머리 흔들기에서 머리 영역을 칠하거나' 라는
+                 인물 2D 전용 안내가 나갔다 — 확대/흐르기를 쓰는 사람에겐 없는 기능을
+                 가리키는 셈이라 엉뚱한 문의가 돌았다. 고른 움직임에 맞는 해결책만 알려준다. */
+              '\n현재 이미지·설정으로는 칸당 200KiB와 최소 품질(64색)을 동시에 지킬 수 없습니다. ' +
+              (gifPortraitChosen() ?
+                '머리 흔들기에서 머리 영역을 칠하거나, 인물 크기/배경 효과를 줄인 뒤 다시 만드세요. ' :
+                ('움직임 세기를 더 낮추거나(지금 ' + (gifEl('giPhAmt') ? gifEl('giPhAmt').value : '?') +
+                 '%), 출력 크기를 50%로 바꾸거나, 반복 길이를 1.5초로 줄여 보세요. ' +
+                 '움직임을 "— 움직임 없음"으로 두면 가장 확실히 들어갑니다. ')) +
               '끊기거나 정지한 GIF는 저장하지 않았습니다.' +
               (tried.length ? ('\n\n[등급별 결과 — 문의할 때 이 부분을 그대로 보내주세요]\n' +
                 tried.join('\n')) : ''));
           }
           try {
             onSuccess(best.result, best.profileIndex, best.profile);
-            /* 자동 구제로 저장된 회차엔 결과 카드 맨 위에 그 사실을 알린다 */
-            if (GIF.__scaleRetryNote) {
-              var noteEl = gifEl('gifMeta');
-              if (noteEl) noteEl.innerHTML = GIF.__scaleRetryNote + '<br>' + noteEl.innerHTML;
-              GIF.__scaleRetryNote = '';
-              /* 파일은 50%로 저장됐지만 '출력 크기' 선택은 사용자 원래 값으로 되돌린다 */
-              if (GIF.__scaleRetryPrev) {
-                var backSel = gifEl('giBfxScale');
-                if (backSel) {
-                  backSel.value = GIF.__scaleRetryPrev.value;
-                  if (GIF.__scaleRetryPrev.was85) backSel.dataset.was85 = GIF.__scaleRetryPrev.was85;
-                  try { gifBfxScaleHintSync(); } catch (e2) {}
-                }
-                GIF.__scaleRetryPrev = null;
+            /* 자동 구제로 저장된 회차엔 결과 카드 맨 위에 그 사실을 알린다.
+               ⚠ 예전엔 '안내 문구가 남아 있으면' 을 조건으로 복원까지 같이 했는데,
+               구제가 두 번 이상 겹치면(50% → 세기 6% → 세기 3%) 재시도 도중 문구가
+               날아가 안내도 안 뜨고 '출력 크기' 선택이 50%인 채로 굳었다(실측).
+               문구가 아니라 '되돌릴 원래 값이 남아 있는지' 로 판단해, 몇 단계를
+               거쳤든 사용자가 고른 값으로 확실히 돌려놓는다. */
+            var rescued = [];
+            if (GIF.__amtRetryPrev) {
+              var amtBack2 = gifEl('giPhAmt');
+              rescued.push('움직임 세기 ' + (amtBack2 ? amtBack2.value : '?') + '%');
+              if (amtBack2) {
+                amtBack2.value = GIF.__amtRetryPrev;
+                try { amtBack2.dispatchEvent(new Event('input', { bubbles: true })); } catch (e6) {}
               }
+              GIF.__amtRetryPrev = null;
+            }
+            if (GIF.__scaleRetryPrev) {
+              rescued.push('출력 크기 50%');
+              var backSel = gifEl('giBfxScale');
+              if (backSel) {
+                backSel.value = GIF.__scaleRetryPrev.value;
+                if (GIF.__scaleRetryPrev.was85) backSel.dataset.was85 = GIF.__scaleRetryPrev.was85;
+                try { gifBfxScaleHintSync(); } catch (e2) {}
+              }
+              GIF.__scaleRetryPrev = null;
+            }
+            GIF.__amtRetryNote = ''; GIF.__scaleRetryNote = '';
+            if (rescued.length) {
+              var noteEl = gifEl('gifMeta');
+              var msg = '⚠ 칸당 200KiB를 넘어 <b>' + rescued.join(' · ') + '</b>로 자동 조정해 저장했어요 — ' +
+                (rescued.indexOf('출력 크기 50%') >= 0 ?
+                  '방송국에 올리면 <b>꽉 차게 늘어나 그대로 정상 등록</b>됩니다. ' : '') +
+                '설정은 원래 값으로 돌려놨습니다.';
+              if (noteEl) noteEl.innerHTML = msg + '<br>' + noteEl.innerHTML;
             }
           }
           catch (e) {
