@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-10_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-10_v2 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -74,6 +74,19 @@
   #pvR{border-radius:0 0 8px 0}
   /* 사진 크기·회전 핸들 레이어 — 페이지 위에 떠 있고, 핸들만 클릭을 받는다 */
   #bookHandles{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:6}
+  /* ── 화보집 안내선 — 펼침면이 아니라 '페이지 한 장' 기준으로 중앙을 잡는다.
+     가운데 접힘선을 중앙으로 착각하지 않게 좌·우 페이지에 따로 깐다. */
+  #bookGuideGrid{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:5}
+  #bookGuideGrid .bgHalf{position:absolute;top:0;height:100%;width:50%}
+  #bookGuideGrid .bgHalf.R{left:50%}
+  #bookGuideGrid .gl{position:absolute;background:rgba(52,62,84,.24)}
+  #bookGuideGrid .gl.v{top:0;bottom:0;width:1px}
+  #bookGuideGrid .gl.h{left:0;right:0;height:1px}
+  #bookGuideGrid .gl.mid{background:#ff4fa3;opacity:.85;box-shadow:0 0 0 .5px rgba(255,255,255,.7)}
+  #bookGuideGrid .gl.v.mid{width:1.5px}
+  #bookGuideGrid .gl.h.mid{height:1.5px}
+  #bookGuideGrid .gx{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;
+    border:1.5px solid #ff4fa3;border-radius:50%;box-shadow:0 0 0 .5px rgba(255,255,255,.7)}
   /* 잠깐 뜨는 알림 */
   #toastBox{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(12px);
     background:#2b2f2a;color:#fff;font-size:13px;line-height:1.5;padding:10px 16px;border-radius:8px;
@@ -729,7 +742,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-10 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-10 v2</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -786,10 +799,12 @@
       <div class="pv" id="pvR"></div>
       <!-- 사진 크기·회전 핸들. .pv 는 overflow:hidden 이라 그 안에 넣으면
            핸들이 잘린다 → #spread 위에 따로 얹는다. -->
+      <div id="bookGuideGrid" hidden></div>
       <div id="bookHandles"></div>
     </div>
     <div id="spreadNav">
       <button id="spPrev">‹</button><span id="spLabel"></span><button id="spNext">›</button>
+      <button id="bookGuideBtn" title="안내선 — 페이지마다 한가운데 십자선과 삼분할 격자를 보여줘요.&#10;사진·글자 자리를 눈으로 맞출 때 켜세요 (저장 PNG에는 안 나옵니다).">＃ 안내선</button>
     </div>
     <div class="hint">위 탭에서 왼쪽/오른쪽 페이지를 각각 선택·레이아웃 변경 · 빈 칸 클릭 = 사진 넣기 · 사진 드래그 = 위치 조정 · <b>사진을 누르면 모서리를 끌어 크기 조절 · 위 동그라미로 회전</b></div>
   </main>
@@ -1035,6 +1050,7 @@
     <div class="ckRow" id="gifStartRow">시작 <input type="range" id="gifStart" min="0" max="0" step="0.1" value="0" style="flex:1"><span id="gifStartV">0초</span></div>
     <div class="ckRow" id="gifLenRow">길이 <input type="range" id="gifLen" min="0.5" max="10" step="0.5" value="3" style="flex:1"><span id="gifLenV">3초</span></div>
     <div class="ckRow" id="gifPresetRow" style="display:none">
+      <label class="edChk" style="flex:none" title="켜 두면 길이를 바꿀 때마다 부드러움·카드 시간·전환을 그 길이에 맞는 값으로 자동으로 맞춰요. 직접 바꾼 항목은 건드리지 않습니다."><input type="checkbox" id="giPresetAuto" checked> 자동</label>
       <button id="gifPresetBtn" style="flex:none" title="이 길이에 가장 잘 맞는 부드러움·카드 시간·전환 값으로 한 번에 맞춰요. 직접 바꾼 값도 전부 추천값으로 되돌립니다.">↺ 이 길이 추천값</button>
       <span id="gifPresetV" style="flex:1;min-width:0;font-size:11px;color:#66708a;line-height:1.5"></span>
     </div>
@@ -5781,6 +5797,42 @@ window.gifenc=exports;})();
     refreshList();
     select(Math.min(cur, book.pages.length - 1));
   };
+  /* ── 화보집 안내선 토글 ─────────────────────────────────────
+     배너와 같은 방식·같은 모양. 선은 #spread 위에 얹는 화면 오버레이라
+     저장 PNG(캔버스로 다시 그림)에는 절대 안 섞인다. */
+  var bookGuideOn = false;
+  function bookGuideBuild() {
+    var g = document.getElementById('bookGuideGrid');
+    if (!g || g.childNodes.length) return g;
+    ['L', 'R'].forEach(function (side) {
+      var half = document.createElement('div');
+      half.className = 'bgHalf ' + side;
+      function line(cls, prop, val) {
+        var d = document.createElement('div');
+        d.className = 'gl ' + cls;
+        d.style[prop] = val;
+        half.appendChild(d);
+      }
+      line('v', 'left', '33.333%'); line('v', 'left', '66.667%');
+      line('h', 'top', '33.333%'); line('h', 'top', '66.667%');
+      line('v mid', 'left', '50%'); line('h mid', 'top', '50%');
+      var x = document.createElement('div');
+      x.className = 'gx';
+      half.appendChild(x);
+      g.appendChild(half);
+    });
+    return g;
+  }
+  function bookSetGuide(on) {
+    bookGuideOn = !!on;
+    var g = bookGuideBuild();
+    if (g) g.hidden = !bookGuideOn;
+    var b = document.getElementById('bookGuideBtn');
+    if (b) b.classList.toggle('on', bookGuideOn);
+    try { PREFS.bookGuide = bookGuideOn ? 1 : 0; savePrefs(); } catch (e) {}
+  }
+  $('#bookGuideBtn').onclick = function () { bookSetGuide(!bookGuideOn); };
+  bookSetGuide(!!(PREFS && PREFS.bookGuide));
   $('#spPrev').onclick = function () {
     var sp = Math.max(0, spreadOf(cur) - 1);
     var pr = spreadPages(sp);
@@ -14704,6 +14756,9 @@ window.gifenc=exports;})();
     /* 새 영상을 넣으면 그 길이에 맞는 추천값에서 다시 시작한다 —
        앞 영상에서 손대 둔 값이 길이가 다른 새 영상에 그대로 붙는 걸 막는다. */
     GIF_PRESET_IDS.forEach(function (id) { var el = gifEl(id); if (el) delete el.dataset.uset; });
+    /* 새 영상을 넣으면 '자동'을 다시 켠 상태에서 시작한다 —
+       앞 영상 때 꺼 둔 걸 모르고 엉뚱한 값으로 굽는 일이 없게. */
+    if (gifEl('giPresetAuto')) gifEl('giPresetAuto').checked = true;
     gifApplyLenPreset(true);
     gifEl('gifInfo').style.display = '';
     gifEl('gifInfo').innerHTML = (GIF.kind === 'gif' ? '🖼 ' : (GIF.kind === 'photo' ? '📷 ' : '🎞 ')) + '<b>' + PBK.esc(f.name) + '</b><br>' +
@@ -15725,6 +15780,10 @@ window.gifenc=exports;})();
   /* force=true 면 사용자가 직접 바꾼 값까지 전부 추천값으로 되돌린다(버튼). */
   function gifApplyLenPreset(force) {
     if (GIF.mode !== 'avatar') { gifPresetSync(); return; }
+    /* '자동'을 끄면 길이를 바꿔도 값이 안 따라온다 — 안내줄만 갱신한다.
+       버튼(force)은 자동 여부와 상관없이 항상 먹는다. */
+    var auto = gifEl('giPresetAuto');
+    if (!force && auto && !auto.checked) { gifPresetSync(); return; }
     var pr = gifLenPresetFor(gifEffLen());
     gifPresetApplying = true;
     try {
@@ -15765,10 +15824,18 @@ window.gifenc=exports;})();
       pr.card + '초</b> · 지금은 영상이 <b>' + pct + '%</b> 보이고 총 <b>' + frames + '프레임</b>' +
       (frames > 26 ? ' <span style="color:#c2410c">(2MB를 넘으면 앱이 절반으로 줄여요)</span>' : '') +
       (same ? '' : ' · 직접 바꾼 값 있음') +
+      ((gifEl('giPresetAuto') && !gifEl('giPresetAuto').checked) ? ' · <b>자동 꺼짐</b>' : '') +
       (pr.fps <= 5 ? '<br>' + GIF_LEN_TIP : '');
   }
   gifPresetSync();
   gifEl('gifPresetBtn').onclick = function () { gifApplyLenPreset(true); };
+  gifEl('giPresetAuto').onchange = function () {
+    /* 껐다 다시 켜면 지금 길이 기준으로 한 번 맞춰 준다 — 켠 순간부터 바로 맞는 값이 되게 */
+    if (this.checked) gifApplyLenPreset(false);
+    else gifPresetSync();
+    try { PREFS.gifPresetAuto = this.checked ? 1 : 0; savePrefs(); } catch (e) {}
+  };
+  try { if (PREFS && PREFS.gifPresetAuto === 0) gifEl('giPresetAuto').checked = false; } catch (e) {}
   /* 움짤 탭 — 가운데 영역에 영상·GIF를 그대로 끌어다 놓기 */
   dndZone(gifEl('gifCenter'), 'video', function (files) { gifLoadFile(files[0]); });
   /* 앱에 들어 있는 배경(art:...)을 고르면 그 그림을 읽어 '이미지 파일'과 같은 자리에 쓴다.
