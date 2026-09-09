@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-04_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-10_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -537,6 +537,19 @@
   .fxPop .fxRow .lsv,.fxPop .fxRow .lhv{width:24px}
   .csel.fxb .cx{font-size:9.5px;font-weight:700;letter-spacing:.02em}
   .csel.fxb.on{border-color:#7f9a6a;background:#eef2e4;box-shadow:none}
+  /* ── 상시 안내선(중앙 십자 + 삼분할 격자) — 온·오프 토글 ──
+     드래그할 때만 잠깐 뜨는 스냅선(.bnGuide)과 달리, 켜 두면 계속 보인다.
+     퍼센트 배치라 확대·축소하거나 배너 종류를 바꿔도 자리가 그대로 맞는다. */
+  #bnGuideGrid{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:4}
+  #bnGuideGrid .gl{position:absolute;background:rgba(52,62,84,.26)}
+  #bnGuideGrid .gl.v{top:0;bottom:0;width:1px}
+  #bnGuideGrid .gl.h{left:0;right:0;height:1px}
+  #bnGuideGrid .gl.mid{background:#ff4fa3;opacity:.9;box-shadow:0 0 0 .5px rgba(255,255,255,.75)}
+  #bnGuideGrid .gl.v.mid{width:1.5px}
+  #bnGuideGrid .gl.h.mid{height:1.5px}
+  /* 정중앙 표식 — 선이 겹치는 자리에 작은 십자를 얹어 '여기가 한가운데'를 못 박는다 */
+  #bnGuideGrid .gx{position:absolute;left:50%;top:50%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;
+    border:1.5px solid #ff4fa3;border-radius:50%;box-shadow:0 0 0 .5px rgba(255,255,255,.75)}
   /* ── 스냅 가이드선 ── */
   .bnGuide{position:absolute;pointer-events:none;z-index:6;background:#ff4fa3;box-shadow:0 0 0 .5px rgba(255,255,255,.7)}
   .bnGuide.v{top:0;bottom:0;width:1.5px}
@@ -716,7 +729,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-04 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-10 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -913,7 +926,7 @@
   </aside>
   <div id="bnCenter">
     <div id="bnStageWrap">
-      <div id="bnScale"><div id="bnBox"></div><div id="bnHandles"></div></div>
+      <div id="bnScale"><div id="bnBox"></div><div id="bnGuideGrid" hidden></div><div id="bnHandles"></div></div>
       <div id="bnCaption"></div>
       <div id="bnGuideRow" style="display:none;font-size:12px;color:#6f6c60;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center">
         <span style="font-weight:700">보기:</span>
@@ -973,6 +986,7 @@
     <button id="bnZoomFit" title="창 크기에 맞춤 (Ctrl+0)">⤢ 맞춤</button>
     <button id="bnZoom1" title="실제 크기 100% — 1픽셀을 1픽셀로 (Ctrl+1)">1:1</button>
     <button id="bnHandBtn" title="손바닥 — 캔버스를 끌어서 옮겨요.&#10;Space 를 누른 채 끌거나 마우스 가운데 버튼으로 끌어도 같아요.">✋ 손</button>
+    <button id="bnGuideBtn" title="안내선 — 한가운데 십자선과 삼분할 격자를 계속 보여줘요.&#10;글자·소품 자리를 눈으로 맞출 때 켜세요 (저장 PNG에는 안 나옵니다).">＃ 안내선</button>
   </div>
 </div>
 
@@ -1020,6 +1034,10 @@
     <div class="insSec">구간</div>
     <div class="ckRow" id="gifStartRow">시작 <input type="range" id="gifStart" min="0" max="0" step="0.1" value="0" style="flex:1"><span id="gifStartV">0초</span></div>
     <div class="ckRow" id="gifLenRow">길이 <input type="range" id="gifLen" min="0.5" max="10" step="0.5" value="3" style="flex:1"><span id="gifLenV">3초</span></div>
+    <div class="ckRow" id="gifPresetRow" style="display:none">
+      <button id="gifPresetBtn" style="flex:none" title="이 길이에 가장 잘 맞는 부드러움·카드 시간·전환 값으로 한 번에 맞춰요. 직접 바꾼 값도 전부 추천값으로 되돌립니다.">↺ 이 길이 추천값</button>
+      <span id="gifPresetV" style="flex:1;min-width:0;font-size:11px;color:#66708a;line-height:1.5"></span>
+    </div>
     <!-- 사진을 넣었을 때만 — 정지 사진에 움직임을 입혀 영상처럼 만든다 -->
     <div id="giPhRow" style="display:none">
       <div class="insSec">🖼 사진 움직임</div>
@@ -9787,6 +9805,38 @@ window.gifenc=exports;})();
     if (b) b.classList.toggle('on', bnHandOn);
     document.body.classList.toggle('bnHand', bnHandOn || bnSpaceHeld);
   }
+  /* ── 상시 안내선(＃ 버튼) ─────────────────────────────────────
+     선은 화면 오버레이라 #bnBox 바깥에 있다 — 저장 PNG(캔버스로 다시 그림)엔
+     절대 안 섞인다. 자리는 전부 퍼센트라 확대·축소·배너 종류 변경에 자동으로 따라간다. */
+  var bnGuideOn = false, bnGuideFlashT = null;
+  function bnGuideBuild() {
+    var g = document.getElementById('bnGuideGrid');
+    if (!g || g.childNodes.length) return g;
+    function line(cls, prop, val) {
+      var d = document.createElement('div');
+      d.className = 'gl ' + cls;
+      d.style[prop] = val;
+      g.appendChild(d);
+    }
+    line('v', 'left', '33.333%'); line('v', 'left', '66.667%');
+    line('h', 'top', '33.333%'); line('h', 'top', '66.667%');
+    line('v mid', 'left', '50%'); line('h mid', 'top', '50%');
+    var x = document.createElement('div');
+    x.className = 'gx';
+    g.appendChild(x);
+    return g;
+  }
+  function bnSetGuide(on) {
+    bnGuideOn = !!on;
+    var g = bnGuideBuild();
+    if (g) g.hidden = !bnGuideOn;
+    var b = document.getElementById('bnGuideBtn');
+    if (b) b.classList.toggle('on', bnGuideOn);
+    try {
+      PREFS.bnGuide = bnGuideOn ? 1 : 0;
+      savePrefs();
+    } catch (e) {}
+  }
   /* 캔버스 끌어서 이동 = 스크롤 컨테이너(#bnCenter) 스크롤 이동 */
   function bnPanStart(ev) {
     var cen = $('#bnCenter');
@@ -10679,6 +10729,20 @@ window.gifenc=exports;})();
         refreshBnStage(); renderBnInspector();
       });
       /* 정렬 + 크로마키 누끼 */
+      /* 한 번에 정중앙 — 가로·세로를 따로 두 번 누르던 걸 한 번으로(고객 요청).
+         누르면 안내선을 잠깐 켜 어디가 중앙인지 눈으로 확인시켜 준다. */
+      tbtn('⊹ 정중앙', function () {
+        selP.x = 50; selP.y = 50;
+        refreshBnStage(); renderBnInspector();
+        if (!bnGuideOn) {
+          var g = bnGuideBuild();
+          if (g) {
+            g.hidden = false;
+            clearTimeout(bnGuideFlashT);
+            bnGuideFlashT = setTimeout(function () { if (!bnGuideOn) g.hidden = true; }, 1200);
+          }
+        }
+      });
       tbtn('↔ 가로중앙', function () { selP.x = 50; refreshBnStage(); renderBnInspector(); });
       tbtn('↕ 세로중앙', function () { selP.y = 50; refreshBnStage(); renderBnInspector(); });
       /* 가장자리 맞춤 — 레이어의 실제 폭·높이를 재서 캔버스 안쪽에 딱 붙인다
@@ -14637,6 +14701,10 @@ window.gifenc=exports;})();
     var L = (GIF.kind === 'photo') ? 3 : Math.min(3, Math.max(0.5, GIF.dur));
     gifEl('gifLen').value = L;
     gifEl('gifLenV').textContent = L + '초';
+    /* 새 영상을 넣으면 그 길이에 맞는 추천값에서 다시 시작한다 —
+       앞 영상에서 손대 둔 값이 길이가 다른 새 영상에 그대로 붙는 걸 막는다. */
+    GIF_PRESET_IDS.forEach(function (id) { var el = gifEl(id); if (el) delete el.dataset.uset; });
+    gifApplyLenPreset(true);
     gifEl('gifInfo').style.display = '';
     gifEl('gifInfo').innerHTML = (GIF.kind === 'gif' ? '🖼 ' : (GIF.kind === 'photo' ? '📷 ' : '🎞 ')) + '<b>' + PBK.esc(f.name) + '</b><br>' +
       GIF.vw + '×' + GIF.vh + ' · ' + GIF.dur.toFixed(1) + '초' + (extra ? ' · ' + extra : '');
@@ -15597,6 +15665,110 @@ window.gifenc=exports;})();
   }
   gifTrSyncSpd();
   gifTxtSpdSync();   /* "몇 프레임에 걸쳐 뜨는지" 안내 초기 표시 */
+
+  /* ══════════ 영상 길이별 추천 설정 (프사 전용) ══════════
+     프사 움짤은 넣는 영상이 1초짜리도, 5초짜리도 온다. 그런데 부드러움·카드 시간·
+     전환은 길이와 무관하게 한 값으로 고정돼 있어서, 짧은 영상에 긴 카드가 그대로
+     붙어 "영상은 안 보이고 카드만 도는" 결과가 나왔다(실고객: 1.98초 영상에
+     카드 1.5초 + 전환 0.8초 전 → 영상이 루프의 34%).
+     길이에 맞춰 ① 영상이 루프의 절반 이상 보이고 ② 총 프레임이 2MB 안에 들어오는
+     조합을 미리 잡아 둔다. 값은 전부 각 슬라이더의 step 에 떨어지게 골랐다. */
+  /* ⚠ 숫자는 전부 실측으로 잡았다(420×420 · 고디테일 사진 · 링 애니 + 이름 카드).
+     이 조건에서 2MB 한도는 대략 '총 28프레임' 근처가 경계였다 —
+       23프레임(1.63MB) 통과 / 36프레임 초과 → 앱이 프레임을 반으로 깎아 6fps 로 추락.
+     그래서 '높게 써 놓고 반토막나는 값'이 아니라 '그대로 살아남는 값'을 추천한다.
+     실측 비교: 1초에 20fps 를 주면 결과가 15프레임/10fps(색까지 깎임)인데,
+     처음부터 10fps 를 주면 같은 15프레임이 색 손실 없이 나온다. */
+  var GIF_LEN_PRESETS = [
+    { len: 1,   fps: 15, card: 0.5,  trans: 0.2, spd: 0.2 },
+    { len: 1.5, fps: 12, card: 0.5,  trans: 0.3, spd: 0.3 },
+    { len: 2,   fps: 8,  card: 0.75, trans: 0.3, spd: 0.3 },
+    { len: 3,   fps: 5,  card: 1,    trans: 0.4, spd: 0.4 },
+    { len: 4,   fps: 5,  card: 1,    trans: 0.5, spd: 0.5 },
+    { len: 5,   fps: 5,  card: 1,    trans: 0.5, spd: 0.5 }
+  ];
+  /* 길이가 길수록 fps 가 내려가는 건 인색해서가 아니라 2MB 한도 때문이다.
+     그 사실을 안내에 그대로 적어 "왜 5fps 밖에 안 되냐"는 오해를 없앤다. */
+  var GIF_LEN_TIP = '길수록 2MB 안에 담을 프레임이 줄어요 — 더 부드럽게 하려면 길이를 줄이세요.';
+  var gifPresetApplying = false;   /* 프로그램이 값을 넣는 중 — '사용자가 만졌다' 표시를 안 찍는다 */
+  /* 실효 길이 = 슬라이더 값과 원본에 남은 길이 중 짧은 쪽(원본이 1.98초면 1.98초가 진짜 길이).
+     ⚠ 사진은 원본 길이라는 게 없고 슬라이더 값이 곧 움짤 길이다. 게다가 사진 모드에선
+     GIF.dur 가 슬라이더를 따라 갱신되는데 그 갱신이 이 함수보다 늦게 도는 순간이 있어,
+     클램프를 그대로 두면 '직전 길이'로 추천값을 잡아 버린다(실측: 1초→2초로 옮겨도
+     1초 추천값이 그대로 들어감). 사진일 땐 클램프하지 않는다. */
+  function gifEffLen() {
+    var len = clampN(gifEl('gifLen').value, 3, 0.5, 10);
+    if (GIF.kind === 'photo') return len;
+    var st = parseFloat(gifEl('gifStart').value) || 0;
+    if (GIF.dur) len = Math.min(len, Math.max(0.5, GIF.dur - st));
+    return len;
+  }
+  function gifLenPresetFor(len) {
+    var best = GIF_LEN_PRESETS[0], bd = Infinity;
+    for (var i = 0; i < GIF_LEN_PRESETS.length; i++) {
+      var d = Math.abs(GIF_LEN_PRESETS[i].len - len);
+      if (d < bd) { bd = d; best = GIF_LEN_PRESETS[i]; }
+    }
+    return best;
+  }
+  var GIF_PRESET_IDS = ['gifFps', 'giDur', 'giTransDur', 'giTransSpd'];
+  function gifPresetMarkUser(id) {
+    var el = gifEl(id);
+    if (el && !gifPresetApplying) el.dataset.uset = '1';
+  }
+  GIF_PRESET_IDS.forEach(function (id) {
+    var el = gifEl(id);
+    if (!el) return;
+    el.addEventListener('input', function () { gifPresetMarkUser(id); });
+    el.addEventListener('change', function () { gifPresetMarkUser(id); });
+  });
+  /* force=true 면 사용자가 직접 바꾼 값까지 전부 추천값으로 되돌린다(버튼). */
+  function gifApplyLenPreset(force) {
+    if (GIF.mode !== 'avatar') { gifPresetSync(); return; }
+    var pr = gifLenPresetFor(gifEffLen());
+    gifPresetApplying = true;
+    try {
+      function put(id, val) {
+        var el = gifEl(id);
+        if (!el) return;
+        if (!force && el.dataset.uset) return;   /* 손댄 항목은 그대로 둔다 */
+        el.value = String(val);
+        if (force) delete el.dataset.uset;
+      }
+      put('gifFps', pr.fps);
+      put('giDur', pr.card);
+      put('giTransDur', pr.trans);
+      put('giTransSpd', pr.spd);
+      gifEl('giDurV').textContent = gifEl('giDur').value + '초';
+      gifTrSyncSpd();
+      gifTxtSpdSync();
+    } finally { gifPresetApplying = false; }
+    gifPresetSync();
+    gifStale();
+  }
+  /* 지금 길이의 추천값과 실제 영상이 보이는 비율을 한 줄로 알려준다 */
+  function gifPresetSync() {
+    var row = gifEl('gifPresetRow');
+    if (!row) return;
+    if (GIF.mode !== 'avatar') { row.style.display = 'none'; return; }
+    row.style.display = '';
+    var len = gifEffLen(), pr = gifLenPresetFor(len);
+    var card = clampN(gifEl('giDur').value, 1.5, 0.5, 3);
+    var eff = gifTrEffN();
+    var seen = Math.max(0, len - eff.eff);            /* 카드가 안 덮은 = 영상만 보이는 시간 */
+    var loop = len + card;
+    var pct = loop > 0 ? Math.round(seen / loop * 100) : 0;
+    var same = GIF_PRESET_IDS.every(function (id) { return !gifEl(id).dataset.uset; });
+    var fpsNow = parseInt(gifEl('gifFps').value, 10) || 10;
+    var frames = Math.max(2, Math.round(loop * fpsNow));
+    gifEl('gifPresetV').innerHTML = len.toFixed(1) + '초 추천 = <b>' + pr.fps + 'fps · 카드 ' +
+      pr.card + '초</b> · 지금은 영상이 <b>' + pct + '%</b> 보이고 총 <b>' + frames + '프레임</b>' +
+      (frames > 26 ? ' <span style="color:#c2410c">(2MB를 넘으면 앱이 절반으로 줄여요)</span>' : '') +
+      (same ? '' : ' · 직접 바꾼 값 있음') +
+      (pr.fps <= 5 ? '<br>' + GIF_LEN_TIP : '');
+  }
+  gifPresetSync();
+  gifEl('gifPresetBtn').onclick = function () { gifApplyLenPreset(true); };
   /* 움짤 탭 — 가운데 영역에 영상·GIF를 그대로 끌어다 놓기 */
   dndZone(gifEl('gifCenter'), 'video', function (files) { gifLoadFile(files[0]); });
   /* 앱에 들어 있는 배경(art:...)을 고르면 그 그림을 읽어 '이미지 파일'과 같은 자리에 쓴다.
@@ -19361,6 +19533,7 @@ window.gifenc=exports;})();
       gifEl('gifBottom6Hint').style.display = bottom6 ? '' : 'none';
       gifEl('gifRingSec').style.display = av ? '' : 'none';
       gifEl('gifIntroSec').style.display = av ? '' : 'none'; /* 인트로(이름 카드)는 프사 전용 */
+      gifPresetSync();   /* 길이별 추천줄도 프사에서만 */
       gifEl('gifAvSizeRow').style.display = av ? '' : 'none';
       gifEl('gifLenRow').style.display = (bottom || bottom6) ? 'none' : '';
       gifEl('gifFpsRow').style.display = (bottom || bottom6) ? 'none' : '';
@@ -19416,6 +19589,7 @@ window.gifenc=exports;})();
   };
   gifEl('gifLen').oninput = function () {
     gifStale(); gifEl('gifLenV').textContent = this.value + '초'; gifTrSyncSpd();
+    gifApplyLenPreset(false);   /* 길이가 바뀌면 추천값도 따라온다 — 손댄 항목은 유지 */
     /* 사진은 소스 길이가 없으므로 길이 슬라이더가 곧 소스 길이 — 시계가 그 안에서 돌게 맞춘다 */
     if (GIF.kind === 'photo') { GIF.dur = clampN(this.value, 3, 0.5, 10); gifPhotoShim.currentTime = 0; }
   };
@@ -24472,6 +24646,8 @@ window.gifenc=exports;})();
   $('#bnZoom1').onclick = function () { bnZoom100(); };
   $('#bnZoomVal').onclick = function () { bnZoomFit(); };
   $('#bnHandBtn').onclick = function () { bnSetHand(!bnHandOn); };
+  $('#bnGuideBtn').onclick = function () { bnSetGuide(!bnGuideOn); };
+  bnSetGuide(!!(PREFS && PREFS.bnGuide));   /* 지난번에 켜 뒀으면 그대로 켠 채로 */
   document.addEventListener('keydown', function (ev) {
     if (!document.body.classList.contains('bannerOn')) return;
     var tg = (ev.target.tagName || '').toLowerCase();
