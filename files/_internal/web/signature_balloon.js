@@ -1682,42 +1682,6 @@
     highlightTemplate();
   }
 
-  /* 템플릿 썸네일 속 캐릭터 자리 목업 — 실제 캐릭터 대신 위치·크기를 보여주는 실루엣 */
-  function drawTemplateThumbCharacter(c, tpl) {
-    const char = tpl.layout.char;
-    const s = char.scale || 1;
-    c.save();
-    c.translate(char.x, char.y);
-    c.scale(s, s);
-    c.globalAlpha = .92;
-    c.lineWidth = 3;
-    c.strokeStyle = tpl.theme.accent;
-    c.fillStyle = "#ffffff";
-    c.beginPath();
-    c.moveTo(-30, 62);
-    c.quadraticCurveTo(-34, -6, 0, -10);
-    c.quadraticCurveTo(34, -6, 30, 62);
-    c.closePath();
-    c.fill();
-    c.stroke();
-    c.beginPath();
-    c.arc(0, -44, 33, 0, Math.PI * 2);
-    c.fill();
-    c.stroke();
-    c.fillStyle = tpl.theme.accent;
-    c.beginPath();
-    c.arc(-11, -46, 3.2, 0, Math.PI * 2);
-    c.fill();
-    c.beginPath();
-    c.arc(11, -46, 3.2, 0, Math.PI * 2);
-    c.fill();
-    c.beginPath();
-    c.arc(0, -40, 7, .18 * Math.PI, .82 * Math.PI);
-    c.lineWidth = 2.4;
-    c.stroke();
-    c.restore();
-  }
-
   /* 완성 템플릿 썸네일 — 배경만 그리던 기존 썸네일과 달리 배경판 모양+소품+문구+
      숫자 목업까지 그려 "완성본"처럼 보여준다(미리보기 전용, 출력 경로와 무관). */
   function drawTemplateThumb(target, tpl) {
@@ -1762,7 +1726,9 @@
     drawBackground(c, bgMock, true);
     const props = buildPropsForPreset(tpl);
     props.filter(prop => !prop.front).forEach(prop => drawProp(c, prop));
-    drawTemplateThumbCharacter(c, tpl);
+    /* 캐릭터 자리 목업(흰 얼굴에 눈·입) 은 뺐다 — 템플릿 고르는 화면에 정체불명의
+       사람 아이콘이 8칸 늘어서니 조잡해 보인다는 지적. 배경·배경판·소품·문구·숫자만으로
+       배치는 충분히 보인다(내 캐릭터는 어차피 적용 후 그대로 남는다). */
     drawOutlinedText(c, "사랑해", Object.assign({}, tpl.layout.phrase, {
       enabled: true,
       fontKey: "sig-jua",
