@@ -657,6 +657,8 @@
   let outputProfileHistoryBefore = null;
   let maskHistory = [];
   let maskHistoryIndex = -1;
+  // [Q19-①] 방금 지운 보관함 칸을 한 번 되살리기 위한 1회용 스냅샷 { index, item }
+  let maskLibraryUndo = null;
   let maskGesture = null;
   let maskEditorTool = "brush";
   let maskEditorZoom = 1;
@@ -884,7 +886,8 @@
               <button type="button" class="sig-btn" id="sigDark">어두운 화면</button>
               <button type="button" class="sig-btn" id="sigGuides">가이드 숨김</button>
               <label class="sig-snap-toggle" title="레이어를 중앙선·안전선·캔버스 가장자리에 붙여줘. 드래그 중 Alt를 누르면 잠시 꺼져."><input id="sigSnapEnabled" type="checkbox" checked> 위치 스냅 <small>Alt 우회</small></label>
-              <button type="button" class="sig-btn" id="sigAutoFit">내용에 맞춰 자르기</button>
+              <!-- [Q22-③] 실제 동작은 배경판 자르기가 아니라 일자 시작선 이동뿐 → 이름을 동작(툴팁 문구)과 맞춘다 -->
+              <button type="button" class="sig-btn" id="sigAutoFit">내용에 맞춰 시작선 조정</button>
               <button type="button" class="sig-btn" id="sigJumpLayers">레이어·잠금</button>
               <button type="button" class="sig-btn" id="sigJumpOutput">출력별 보정</button>
             </div>
@@ -998,7 +1001,8 @@
                 <div class="sig-field compact"><label>Y</label><input id="sigNum1Y" type="number" min="-100" max="348"></div>
               </div>
               <div class="sig-field"><label>크기 · 공식 고정 55pt</label><input id="sigNum1Size" type="range" min="55" max="55" step="1" value="55" disabled></div>
-              <button type="button" class="sig-btn sig-text-prop-button" id="sigNum1ToProp">숫자 1을 장식 PNG로 복제</button>
+              <!-- [A9 규격] 숫자 → PNG 소품 복제 버튼 제거 — 복제본이 일반 소품이 되면 55pt·회전 0 잠금이 풀리고 PC 출력이 38pt 재드로잉을 못 탄다 -->
+              <div class="sig-upload-note">숫자는 공식 규격(모바일 55pt · PC 38pt) 고정이라 PNG 소품으로 복제할 수 없어.</div>
               <label class="sig-check"><input id="sigNum2Enable" type="checkbox"> 두 번째 숫자 사용</label>
               <div id="sigNum2Fields">
                 <div class="sig-field"><label>두 번째</label><input id="sigNum2Text" type="text" inputmode="numeric" value="46"></div>
@@ -1007,7 +1011,7 @@
                   <div class="sig-field compact"><label>Y</label><input id="sigNum2Y" type="number" min="-100" max="348"></div>
                 </div>
                 <div class="sig-field"><label>크기 · 공식 고정 55pt</label><input id="sigNum2Size" type="range" min="55" max="55" step="1" value="55" disabled></div>
-                <button type="button" class="sig-btn sig-text-prop-button" id="sigNum2ToProp">숫자 2를 장식 PNG로 복제</button>
+                <!-- [A9 규격] 숫자 2도 같은 이유로 PNG 소품 복제를 지원하지 않는다 -->
               </div>
             </section>
 
@@ -1572,7 +1576,11 @@
     });
     Object.assign(state.num1, deepCopy(tpl.layout.num1), { enabled: true, size: MOBILE_NUMBER_SIZE, rot: 0 });
     Object.assign(state.num2, deepCopy(tpl.layout.num2), { size: MOBILE_NUMBER_SIZE, rot: 0 });
-    state.props = buildPropsForPreset(tpl);
+    /* 잠근 소품은 완성 템플릿이 지우지 않는다 — 레이어 목록에서 자물쇠를 건 소품은
+       ×(삭제) 버튼이 막혀 있는데 템플릿만 state.props를 통째로 갈아치워 사라졌다.
+       배치 프리셋(applyPlacement)이 잠근 레이어를 건드리지 않는 규칙과 맞춘다. */
+    const keptProps = state.props.filter(prop => prop.locked);
+    state.props = buildPropsForPreset(tpl).concat(keptProps);
     state.selected = { kind: "character", index: -1 };
     activeTemplateIndex = index;
     syncControls();
@@ -1810,6 +1818,23 @@
   function drawMaskLogical(context, mask, dx = 0, dy = 0, dw = W, dh = H) {
     if (!mask) return;
     context.drawImage(mask, 0, 0, mask.width, mask.height, dx, dy, dw, dh);
+  }
+
+  /* [A10] 알파 배경판을 칠할 스크래치 해상도 = 목표 캔버스의 실제 배율.
+     늘 2×(586×496)에만 칠해 넘기던 탓에 위플랩 작업면(4.56×)에서만 늘어나 흐려졌다.
+     화면 미리보기(DPR 2)·썸네일(1×→하한 2)은 값이 그대로라 결과가 안 바뀐다. */
+  function maskPaintScaleFor(context) {
+    let target = MASK_SCALE;
+    if (context && typeof context.getTransform === "function") {
+      try {
+        const t = context.getTransform();
+        target = Math.max(Math.hypot(t.a, t.b), Math.hypot(t.c, t.d));
+      } catch (err) {
+        target = MASK_SCALE;
+      }
+    }
+    if (!Number.isFinite(target) || target <= 0) target = MASK_SCALE;
+    return clamp(target, MASK_SCALE, 6);
   }
 
   function normalizeStoredMaskCanvas(source) {
@@ -2282,7 +2307,10 @@
     }
     maskHistory.splice(maskHistoryIndex + 1);
     maskHistory.push(next);
-    if (maskHistory.length > MASK_HISTORY_LIMIT) maskHistory.shift();
+    /* [Q19-③] 예전엔 shift()로 맨 앞(= 스튜디오를 연 순간의 원본)을 버려서, 편집이 상한(50)을 넘는
+       순간부터 maskStudioDirty()의 "취소" 경고가 엉뚱한 중간 상태와 비교되고 되돌리기도 원본까지
+       못 갔다. 원본은 0번에 고정해 두고, 그 다음으로 오래된 편집 단계를 대신 버린다. */
+    if (maskHistory.length > MASK_HISTORY_LIMIT) maskHistory.splice(1, 1);
     maskHistoryIndex = maskHistory.length - 1;
     updateMaskHistoryButtons();
     return true;
@@ -2599,6 +2627,15 @@
     });
     const title = document.getElementById("sigMaskShapeTitle");
     if (title) title.textContent = family === "dome" ? "돔 곡선 세부 조절" : "하트 곡선 세부 조절";
+    /* [Q22-①] 어깨 내려감은 normalizedMaskShapeValues 에서 0~sideDrop 으로 잘리는데 슬라이더 max 는
+       100 고정이라, sideDrop 위로 밀면 손잡이만 되돌아오는 거짓 범위였다 → 실제 상한과 맞춘다.
+       값을 쓰기 전에 max 를 올려야 옛 max 에 value 가 잘려 상태와 어긋나지 않는다. */
+    if (family === "dome") {
+      const shoulderMax = formatMaskShapeValue(clamp(Number(maskShapeSession.values.sideDrop), 8, 100));
+      tuner.querySelectorAll('[data-mask-shape-param="shoulder"], [data-mask-shape-number="shoulder"]').forEach(input => {
+        input.max = shoulderMax;
+      });
+    }
     Object.entries(maskShapeSession.values).forEach(([key, value]) => {
       tuner.querySelectorAll(`[data-mask-shape-param="${key}"], [data-mask-shape-number="${key}"]`).forEach(input => {
         input.value = formatMaskShapeValue(value);
@@ -2961,6 +2998,9 @@
     maskWorkingCanvas = null;
     maskHistory = [];
     maskHistoryIndex = -1;
+    // [Q19-①] 되살리기 스냅샷은 이번 스튜디오 세션 한정 — 안 지우면 빈 칸에 "되살리기" 버튼이
+    // 영영 남고, 지운 모양의 PNG 데이터도 메모리에 계속 들고 있게 된다.
+    maskLibraryUndo = null;
     return true;
   }
 
@@ -3307,8 +3347,13 @@
       const remove = slot.querySelector("[data-mask-library-delete]");
       const canvasThumb = slot.querySelector("canvas");
       const label = load?.querySelector("span");
+      // [Q19-①] 방금 지운 칸은 삭제 버튼이 "되살리기"로 바뀌어 실수로 지운 모양을 한 번 되돌릴 수 있다.
+      const undoable = !item && !!maskLibraryUndo && maskLibraryUndo.index === index;
       if (load) load.disabled = !item;
-      if (remove) remove.disabled = !item;
+      if (remove) {
+        remove.disabled = !item && !undoable;
+        remove.textContent = undoable ? "되살리기" : "삭제";
+      }
       if (label) label.textContent = item ? `${index + 1}번 · 불러오기` : `${index + 1}번 · 비어 있음`;
       if (!canvasThumb) continue;
       const thumbCtx = canvasThumb.getContext("2d", { alpha: true });
@@ -3330,9 +3375,16 @@
     }
   }
 
-  function saveMaskLibrarySlot(index) {
+  // [Q19-①] 이미 모양이 든 칸을 말없이 덮어쓰던 걸 확인창으로 막는다.
+  async function saveMaskLibrarySlot(index) {
     if (!maskWorkingCanvas) return;
     const items = readMaskLibrary();
+    if (items[index] && !(await askSigConfirm(`보관함 ${index + 1}번에 이미 저장된 모양이 있어. 현재 모양으로 덮어쓸까?`, {
+      title: "보관함 덮어쓰기",
+      confirmLabel: "덮어쓰기"
+    }))) return;
+    // 확인창을 기다리는 사이 스튜디오가 닫혔을 수 있어 한 번 더 본다.
+    if (!maskWorkingCanvas) return;
     try {
       items[index] = {
         dataUrl: maskWorkingCanvas.toDataURL("image/png"),
@@ -3342,6 +3394,8 @@
         savedAt: Date.now()
       };
       if (writeMaskLibrary(items)) {
+        // 같은 칸에 새로 저장했으면 그 칸의 되살리기 대상은 더 이상 유효하지 않다.
+        if (maskLibraryUndo && maskLibraryUndo.index === index) maskLibraryUndo = null;
         refreshMaskLibrary();
         const tip = document.getElementById("sigMaskTip");
         if (tip) tip.textContent = `현재 모양을 보관함 ${index + 1}번에 저장했어.`;
@@ -3368,10 +3422,33 @@
     }
   }
 
-  function deleteMaskLibrarySlot(index) {
+  /* [Q19-①] 예전엔 확인창도 되돌리기도 없이 즉시 지워서, 잘못 누르면 그대로 날아갔다.
+     이제 한 번 묻고, 방금 지운 칸은 같은 버튼이 "되살리기"로 바뀐다(1회 스냅샷). */
+  async function deleteMaskLibrarySlot(index) {
+    // 방금 지운 칸을 다시 누른 경우 = 되살리기. 확인창 없이 바로 복구한다.
+    if (maskLibraryUndo && maskLibraryUndo.index === index) {
+      const restored = readMaskLibrary();
+      restored[index] = maskLibraryUndo.item;
+      if (!writeMaskLibrary(restored)) return;
+      maskLibraryUndo = null;
+      refreshMaskLibrary();
+      const tip = document.getElementById("sigMaskTip");
+      if (tip) tip.textContent = `보관함 ${index + 1}번 모양을 되살렸어.`;
+      return;
+    }
     const items = readMaskLibrary();
+    if (!items[index]) return;
+    if (!(await askSigConfirm(`보관함 ${index + 1}번에 저장된 모양을 지울까?`, {
+      title: "보관함 모양 삭제",
+      confirmLabel: "지우기"
+    }))) return;
+    const removed = items[index];
     items[index] = null;
-    if (writeMaskLibrary(items)) refreshMaskLibrary();
+    if (!writeMaskLibrary(items)) return;
+    maskLibraryUndo = { index, item: removed };
+    refreshMaskLibrary();
+    const tip = document.getElementById("sigMaskTip");
+    if (tip) tip.textContent = `보관함 ${index + 1}번을 비웠어. 같은 자리의 "되살리기"를 누르면 다시 불러올 수 있어.`;
   }
 
   function bindMaskStudio() {
@@ -3588,8 +3665,10 @@
       if (!file) return;
       try {
         const img = await imageFromFile(file);
-        maskWorkingCanvas = fitImageToMaskCanvas(img);
-        enforceMaskSafeArea();
+        /* [Q19-②] 직접 대입하면 진행 중인 모양 슬라이더 세션(maskShapeSession)이 살아남아,
+           불러온 직후 곡선 슬라이더를 건드리는 순간 createMaskSeed가 PNG를 통째로 덮어썼다.
+           replaceWorkingMask는 세션을 확정·정리하고 안전선까지 적용해준다(내부에서 enforceMaskSafeArea 호출). */
+        replaceWorkingMask(fitImageToMaskCanvas(img));
         commitMaskHistory();
         renderMaskEditor();
       } catch (error) {
@@ -4164,18 +4243,37 @@
         drawExpandedMask(c, mask, bg.maskStrokeColor, bg.maskStrokeWidth);
       }
       /* 매 렌더 프레임 새 캔버스를 만들던 것(드래그 60fps × 586×496 churn — 장수
-         페이지가 느려지는 기여 요인)을 재사용 스크래치로. 내용은 매번 전부 다시
-         칠하므로 픽셀 결과는 동일하다. */
-      if (!drawBackground.__paint || drawBackground.__paint.width !== MASK_W || drawBackground.__paint.height !== MASK_H) {
-        drawBackground.__paint = createMaskCanvas();
+         페이지가 느려지는 기여 요인)을 재사용 스크래치로. [A10] 여기에 더해 스크래치
+         해상도를 목표 캔버스 배율에 맞춘다 — 늘 586×496(2×)에만 칠해 넘기던 탓에
+         위플랩(4.56×)에서만 배경판 속살이 늘어나 흐려졌다(알파 아닌 배경은 원래 c에
+         직접 그려서 선명했다). 배율별로 따로 캐시해 미리보기 2× ↔ 출력 미리보기 4×가
+         번갈아 와도 6MB 캔버스를 매번 새로 만들지 않는다. */
+      const paintScale = maskPaintScaleFor(c);
+      const paintW = Math.max(1, Math.round(W * paintScale));
+      const paintH = Math.max(1, Math.round(H * paintScale));
+      const paintKey = paintW + "x" + paintH;
+      if (!drawBackground.__paints) drawBackground.__paints = new Map();
+      let paint = drawBackground.__paints.get(paintKey);
+      if (!paint) {
+        if (drawBackground.__paints.size > 3) drawBackground.__paints.clear();
+        paint = document.createElement("canvas");
+        paint.width = paintW;
+        paint.height = paintH;
+        drawBackground.__paints.set(paintKey, paint);
       }
-      const paint = drawBackground.__paint;
       const paintCtx = paint.getContext("2d", { alpha: true });
       paintCtx.setTransform(1, 0, 0, 1, 0, 0);
       paintCtx.clearRect(0, 0, paint.width, paint.height);
-      withMaskLogicalTransform(paintCtx, logicalCtx => drawBackgroundPaint(logicalCtx, bg));
+      paintCtx.save();
+      try {
+        // 반올림한 실제 캔버스 크기로 나눠 오른쪽·아래 끝까지 빠짐없이 칠한다.
+        paintCtx.scale(paint.width / W, paint.height / H);
+        drawBackgroundPaint(paintCtx, bg);
+      } finally {
+        paintCtx.restore();
+      }
       paintCtx.globalCompositeOperation = "destination-in";
-      paintCtx.drawImage(mask, 0, 0, mask.width, mask.height, 0, 0, MASK_W, MASK_H);
+      paintCtx.drawImage(mask, 0, 0, mask.width, mask.height, 0, 0, paint.width, paint.height);
       paintCtx.globalCompositeOperation = "source-over";
       drawMaskLogical(c, paint);
       c.restore();
@@ -5583,8 +5681,7 @@
     bindToggle("sigPhraseOuterEnabled", state.phrase, "outerStrokeEnabled", syncPhraseStyleControls);
     document.getElementById("sigPhraseFontFile").addEventListener("change", loadCustomPhraseFont);
     document.getElementById("sigPhraseToProp").addEventListener("click", event => cloneTextLayerToProp("phrase", event.currentTarget));
-    document.getElementById("sigNum1ToProp").addEventListener("click", event => cloneTextLayerToProp("num1", event.currentTarget));
-    document.getElementById("sigNum2ToProp").addEventListener("click", event => cloneTextLayerToProp("num2", event.currentTarget));
+    /* [A9 규격] 숫자 복제 버튼이 사라져 바인딩도 함께 제거 — 숫자 복제는 cloneTextLayerToProp 안에서도 막는다 */
     bindValue("sigNum1Text", state.num1, "text", value => String(value).replace(/[^\d]/g, "").slice(0, 8));
     bindValue("sigNum1X", state.num1, "x");
     bindValue("sigNum1Y", state.num1, "y");
@@ -5925,6 +6022,13 @@
       status.textContent = message;
       status.classList.toggle("warn", warn);
     };
+    /* [A9 규격] 숫자를 장식 PNG로 복제하면 일반 소품이 되어 55pt·회전 0·색 잠금이 전부 풀리고,
+       PC 출력에선 38pt 재드로잉 경로를 못 타고 내용부와 함께 축소돼 36.5pt로 나간다(SOOP 규격 위반).
+       → 숫자 복제는 차단하고 문구 복제만 허용한다. */
+    if (numberStyle) {
+      setStatus("시그풍 숫자는 공식 규격(모바일 55pt · PC 38pt) 고정이라 PNG 소품으로 복제할 수 없어.", true);
+      return false;
+    }
     if (!source || !String(source.text || "").trim() || numberStyle && !source.enabled) {
       setStatus(numberStyle ? "사용 중인 숫자를 먼저 입력해줘." : "복제할 문구를 먼저 입력해줘.", true);
       return false;
@@ -6188,11 +6292,22 @@
       showExportStatus("맞춰 자를 캐릭터나 문구가 없어.");
       return false;
     }
-    state.background.top = Math.round(clamp(contentTop - 8, 84, 112));
+    /* [Q22-③] 이름은 '자르기'지만 실제로는 일자 시작선만 84~112 로 옮긴다. 내용이 위까지 차
+       있으면 값이 그대로라 눌러도 아무 일도 안 한 것처럼 보였다 → 결과를 상태줄로 알려준다.
+       '84px 안전선이 한계' 는 실제로 안전선에 걸렸을 때만 말한다(안 그러면 그것도 거짓 안내). */
+    const nextTop = Math.round(clamp(contentTop - 8, 84, 112));
+    const prevTop = Math.round(Number(state.background.top));
+    const cappedBySafeLine = contentTop - 8 < 84;
+    state.background.top = nextTop;
     if (state.background.mask === "full") state.background.mask = "wave";
     syncControls();
     requestRender();
     if (recordHistory) commitMainChange(historyBefore);
+    if (recordHistory) {
+      showExportStatus(prevTop !== nextTop
+        ? `일자 시작선을 ${nextTop}px로 맞췄어.`
+        : `이미 내용에 맞춰져 있어 · 일자 시작선 ${nextTop}px${cappedBySafeLine ? " (84px 안전선이 한계라 더는 못 올려)" : ""}`);
+    }
     return true;
   }
 
@@ -6403,10 +6518,12 @@
     };
   }
 
-  function drawProfiledNumber(c, source, profile, pivotX, pivotY, size, mapPoint = point => point, textSnapScale = 0) {
+  function drawProfiledNumber(c, source, profile, pivotX, pivotY, size, mapPoint = point => point, textSnapScale = 0, clampPoint = point => point) {
     if (!source.enabled || !String(source.text || "").trim()) return;
     const base = mapPoint({ x: source.x, y: source.y });
-    const point = profiledPoint(base.x, base.y, profile, pivotX, pivotY);
+    // 침범 제한(clampPoint)은 보정(이동/축소)이 끝난 최종 좌표에 건다 — 보정 전에 걸면
+    // 뒤따르는 이동·축소가 제한값을 그대로 밀어내 제한이 무의미해진다.
+    const point = clampPoint(profiledPoint(base.x, base.y, profile, pivotX, pivotY));
     // 최종 좌표에서 스냅 — 보정(이동/축소)까지 끝난 값이라 출력 픽셀 격자와 일치한다.
     const snapped = snapLayerXYForExport(point, textSnapScale);
     drawOutlinedText(c, source.text, Object.assign({}, source, { x: snapped.x, y: snapped.y, size }), true);
@@ -6467,9 +6584,10 @@
   function makeMasterCanvas() {
     const profile = outputProfile("mobile");
     if (!outputProfileIsIdentity(profile)) return makeProfiledMobileCanvas(profile);
-    /* 2× 슈퍼샘플링(위플랩 방식 이식): 1× 직접 렌더는 수천 px 캐릭터 PNG를 저품질
-       리샘플로 한 방에 축소해 재기 에지가 생겼다. 2× 작업면에 렌더 후 고품질 1회
-       축소 — 화면 프리뷰(DPR=2)와 같은 품질이 저장본에도 남는다. 치수 불변. */
+    /* 4× 슈퍼샘플링(위플랩 방식 이식): 1× 직접 렌더는 수천 px 캐릭터 PNG를 저품질
+       리샘플로 한 방에 축소해 재기 에지가 생겼다. SOOP_RENDER_SCALE(4×) 작업면에
+       렌더한 뒤 sigDownscale 로 2:1씩 단계적 축소 — 화면 프리뷰와 같은 품질이
+       저장본에도 남는다. 치수 불변. */
     const work = document.createElement("canvas");
     work.width = W * SOOP_RENDER_SCALE;
     work.height = H * SOOP_RENDER_SCALE;
@@ -6482,7 +6600,9 @@
     const outCtx = out.getContext("2d", { alpha: true });
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
-    outCtx.drawImage(work, 0, 0, W, H);
+    // 45차에 SOOP_RENDER_SCALE 이 2→4 로 올라간 뒤에도 여기만 4:1 한 방 축소로 남아
+    // 흐렸다 — 보정·PC 경로와 똑같이 sigDownscale(2:1 단계적 축소)을 태운다.
+    outCtx.drawImage(sigDownscale(work, 0, 0, work.width, work.height, W, H), 0, 0, W, H);
     // SOOP 모바일 가이드의 수정 불가 상단 84px은 어떤 레이어를 올려도 저장 때 비운다.
     // (2×→1× 다운샘플 번짐까지 지우기 위해 반드시 최종 캔버스에서 비운다)
     outCtx.clearRect(0, 0, W, H - CONTENT_H);
@@ -6556,12 +6676,21 @@
         W * SOOP_RENDER_SCALE, CONTENT_H * SOOP_RENDER_SCALE, drawW, drawH), offsetX, offsetY, drawW, drawH);
       const mapPcPoint = point => ({
         x: offsetX + point.x * baseScale,
-        /* 숫자(중앙 앵커)는 아트 영역 안으로 — 말풍선 칸은 항상 비워 둔다(심사 기준) */
-        y: Math.min(offsetY + (point.y - (H - CONTENT_H)) * baseScale, PC_ART_H - PC_NUMBER_SIZE * 0.65)
+        y: offsetY + (point.y - (H - CONTENT_H)) * baseScale
       });
+      /* 숫자(중앙 앵커)는 아트 영역 안으로 — 말풍선 칸은 항상 비워 둔다(심사 기준).
+         제한을 보정 전 좌표에서 최종 좌표(clampPcNumber)로 옮겼다 — 예전엔 뒤따르는
+         이동·축소가 이 값을 그대로 말풍선(y109~144) 안으로 밀어 넣었다. */
+      const clampPcNumber = point => ({
+        x: point.x,
+        y: Math.min(point.y, PC_ART_H - PC_NUMBER_SIZE * 0.65)
+      });
+      /* 축소 기준점(pivot)은 내용과 같은 아트 밑변(y=PC_ART_H)이어야 한다. 내용은 논리 (W/2,H)
+         에서 축소돼 출력 y109가 고정점인데, 숫자만 out.height(145)를 기준으로 삼는 바람에
+         축소할수록 36×(1-scale)px 씩 더 내려가 말풍선을 침범했다(확대 땐 반대로 떠올랐다). */
       // 숫자는 지금처럼 최종 크기(38pt)에서 재드로잉 — 좌표만 정수 픽셀에 스냅.
-      drawProfiledNumber(outCtx, state.num1, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint, 1);
-      drawProfiledNumber(outCtx, state.num2, profile, out.width / 2, out.height, PC_NUMBER_SIZE, mapPcPoint, 1);
+      drawProfiledNumber(outCtx, state.num1, profile, out.width / 2, PC_ART_H, PC_NUMBER_SIZE, mapPcPoint, 1, clampPcNumber);
+      drawProfiledNumber(outCtx, state.num2, profile, out.width / 2, PC_ART_H, PC_NUMBER_SIZE, mapPcPoint, 1, clampPcNumber);
       return out;
     }
     const out = document.createElement("canvas");
@@ -8014,6 +8143,12 @@
             path: saved.path || ""
           });
         }
+      } else if (window.pywebview) {
+        /* 앱 창인데 save_png 이 아직 안 붙었다 = 브리지가 늦게 붙는 중.
+           여기서 blob 다운로드로 흘리면 WebView2 가 파일을 조용히 삼켜서
+           실제로는 아무것도 안 남는데 "저장 완료"만 뜬다(2026-08-18 실측,
+           위 프로젝트 저장 주석과 같은 사고). 완료로 처리하지 않고 알린다. */
+        throw new Error("저장 기능이 아직 준비되지 않았어(브리지 연결 중). 잠시 뒤 다시 저장해 줘. 계속 안 되면 프로그램을 다시 켜 줘.");
       } else {
         files.forEach(file => {
           downloadBlob(file.blob, file.name);
@@ -8022,7 +8157,11 @@
       }
       const details = files.map(file => `${file.width}×${file.height} ${(file.blob.size / 1000).toFixed(1)}KB`).join(" · ");
       const actualNames = savedResults.map(saved => `${saved.actualName}${files.length > 1 && saved.renamed ? " (중복 이름 자동 변경)" : ""}`).join(" · ");
-      showExportStatus(`저장 완료 · ${actualNames} · ${details}`, false);
+      /* 브라우저 다운로드는 실제 저장 여부를 확인할 수 없다 — "저장 완료"로 단정하지 않는다 */
+      const viaBrowser = savedResults.some(saved => saved.browser);
+      showExportStatus(viaBrowser
+        ? `브라우저 다운로드로 내보냈어 · ${actualNames} · ${details} · 다운로드 폴더를 확인해 줘.`
+        : `저장 완료 · ${actualNames} · ${details}`, false);
       return { ok: true, saved: savedResults, files: files.map(({ type, name, width, height }) => ({ type, name, width, height })) };
     } catch (error) {
       console.error("[시그풍] PNG 저장 실패", error);

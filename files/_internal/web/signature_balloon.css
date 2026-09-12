@@ -14,6 +14,10 @@ body.sigOn #gifView{
   display:none !important;
 }
 
+/* ↺ 저장 시점(#btnRevert)만 이 목록에서 빠져 있었다 — 시그풍 탭에서 이 버튼을 누르면
+   뒤에 숨어 있던 화보집이 '마지막 저장 시점'으로 통째로 롤백되는데, 시그풍에선
+   Ctrl+Z 가 sigOn 가드에 막혀 있어(editor.html keydown) 되돌릴 방법조차 없었다.
+   #btnUndo·#btnRedo 와 같은 '화보집 되돌리기' 부류이므로 함께 숨긴다. */
 body.sigOn #palGroup,
 body.sigOn #btnPreview,
 body.sigOn #btnPng,
@@ -23,7 +27,8 @@ body.sigOn #btnNew,
 body.sigOn #btnOpen,
 body.sigOn #btnSave,
 body.sigOn #btnUndo,
-body.sigOn #btnRedo{
+body.sigOn #btnRedo,
+body.sigOn #btnRevert{
   display:none !important;
 }
 

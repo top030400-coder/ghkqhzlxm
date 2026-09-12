@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-10_v3 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-12_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -556,7 +556,7 @@
   .csel.fxb .cx{font-size:9.5px;font-weight:700;letter-spacing:.02em}
   .csel.fxb.on{border-color:#7f9a6a;background:#eef2e4;box-shadow:none}
   /* ── 상시 안내선(중앙 십자 + 삼분할 격자) — 온·오프 토글 ──
-     드래그할 때만 잠깐 뜨는 스냅선(.bnGuide)과 달리, 켜 두면 계속 보인다.
+     드래그할 때만 잠깐 뜨는 스냅선(.bnSnapLine)과 달리, 켜 두면 계속 보인다.
      퍼센트 배치라 확대·축소하거나 배너 종류를 바꿔도 자리가 그대로 맞는다. */
   #bnGuideGrid{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:4}
   #bnGuideGrid .gl{position:absolute;background:rgba(52,62,84,.26)}
@@ -568,10 +568,13 @@
   /* 정중앙 표식 — 선이 겹치는 자리에 작은 십자를 얹어 '여기가 한가운데'를 못 박는다 */
   #bnGuideGrid .gx{position:absolute;left:50%;top:50%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;
     border:1.5px solid #ff4fa3;border-radius:50%;box-shadow:0 0 0 .5px rgba(255,255,255,.75)}
-  /* ── 스냅 가이드선 ── */
-  .bnGuide{position:absolute;pointer-events:none;z-index:6;background:#ff4fa3;box-shadow:0 0 0 .5px rgba(255,255,255,.7)}
-  .bnGuide.v{top:0;bottom:0;width:1.5px}
-  .bnGuide.h{left:0;right:0;height:1.5px}
+  /* ── 스냅 가이드선 ──
+     클래스명이 .bnGuide 면 위쪽(약 300행) 상단배너 안전선 규칙과 이름이 겹쳐,
+     나중에 선언된 이 규칙이 이겨서 안전선 박스가 통째로 분홍(#ff4fa3)으로 칠해지고
+     z-index 도 50→6 으로 내려가 배너 그림을 덮었다. 그래서 스냅선만 .bnSnapLine 으로 분리한다. */
+  .bnSnapLine{position:absolute;pointer-events:none;z-index:6;background:#ff4fa3;box-shadow:0 0 0 .5px rgba(255,255,255,.7)}
+  .bnSnapLine.v{top:0;bottom:0;width:1.5px}
+  .bnSnapLine.h{left:0;right:0;height:1.5px}
   /* ── 크로마키(배경 지우기) 모달 ── */
   .ckbox{width:min(940px,94vw);height:min(700px,92vh)}
   .ckBody{flex:1;min-height:0;display:flex;gap:14px;padding:14px 18px}
@@ -747,7 +750,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-10 v3</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-12 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -2408,19 +2411,35 @@ window.gifenc=exports;})();
       chain = chain.then(function () { return probe(b); });
     });
     return chain.then(function () {
-      var put = Promise.resolve();
+      var put = Promise.resolve(), fixed = 0;
       lost.forEach(function (pid) {
         put = put.then(function () {
+          /* ⚠ put_photo 는 실패해도 예외 대신 {err:...} 를 정상으로 돌려준다 —
+             결과를 안 보면 한 장도 못 살렸는데 "N장 복구했어요"가 뜨고,
+             정작 완성본이 깨질 땐 "원본이 옮겨졌거나 지워졌다"고 잘못 안내한다.
+             진짜로 등록된 것만 센다(못 살린 건 파이썬의 res.warn 이 그대로 알려준다). */
           return api.put_photo(JSON.stringify({ id: pid, data: thumbs[pid] }))
-            .then(function () {}, function () {});
+            .then(function (r) {
+              try { r = typeof r === 'string' ? JSON.parse(r) : r; } catch (e) { r = null; }
+              if (r && r.ok) fixed++;
+            }, function () {});
         });
       });
-      return put.then(function () { return lost.length; });
+      return put.then(function () { return fixed; });
     }).catch(function () { return 0; }); /* 복구 실패해도 저장 자체는 기존대로 진행 */
   }
   /* PNG 저장 중에만 채워지는 고화질 사진 캐시(id → dataURL).
      평소엔 비어 있어 화면은 가벼운 썸네일 그대로 쓴다. */
   var hiRes = null;
+  /* [성능] PNG '전체' 저장 한 번 동안만 사는 고화질 캐시(id → dataURL).
+     예전엔 쪽마다 get_photos_hi 를 새로 불러, 여러 쪽에 쓰인 같은 사진을
+     쓰인 횟수만큼 2560px 로 다시 디코드·인코드하고 바로 버렸다.
+     ⚠ 저장이 끝나면(완료·중단·실패 모두) hiKeepEnd() 로 반드시 비운다 —
+        2560px dataURL 은 장당 수 MB(투명 PNG 는 더) 라 남으면 그대로 메모리다.
+     ⚠ 두 쪽 이상에 쓰인 사진만(hiKeepOk) + 용량 상한(HI_KEEP_MAX)까지만 담는다. */
+  var hiKeep = null, hiKeepOk = null, hiKeepLen = 0;
+  var HI_KEEP_MAX = 32 * 1024 * 1024;   /* 담아 둘 dataURL 글자수 합 상한(thumbs 를 이미 들고 있어 넉넉히 잡으면 안 됨) */
+  function hiKeepEnd() { hiKeep = null; hiKeepOk = null; hiKeepLen = 0; }
   function srcOf(p) {
     if (!p || !p.id) return null;
     if (hiRes && hiRes[p.id]) return hiRes[p.id];
@@ -2435,14 +2454,34 @@ window.gifenc=exports;})();
       (pg && pg.photos || []).forEach(function (p) { if (p && p.id) ids[p.id] = 1; });
     });
     var list = Object.keys(ids);
+    /* [성능] 저장 캐시가 켜져 있으면 이미 받아 둔 사진은 다시 안 받는다 */
+    if (hiKeep) list = list.filter(function (id) { return !hiKeep[id]; });
     /* run() 의 반환값을 그대로 흘려보내야 한다 — 저장 결과(res)를 쓰는 쪽이 있다 */
     var ok = function (v) { hiRes = null; return v; };
     var no = function (e) { hiRes = null; throw e; };
+    /* [성능] 새로 받은 것 + 캐시에 있던 것을 합쳐 이번 쪽의 hiRes 로 쓴다.
+       캐시가 꺼져 있으면(hiKeep=null) 예전과 완전히 같은 동작. */
+    var take = function (got) {
+      /* ⚠ got 이 없다 = 파이썬이 {err:…} 를 '정상 반환'했다 → 예전과 똑같이 hiRes=null
+         (그 쪽만 통째로 썸네일 폴백). 캐시 때문에 한 쪽 안에서 몇 장만 선명해지는
+         '반쪽 결과'가 나오면 안 되므로 실패 경로는 종전 동작을 그대로 지킨다. */
+      if (!got || !hiKeep) { hiRes = got || null; return; }
+      var merged = {}, k;
+      for (k in hiKeep) merged[k] = hiKeep[k];
+      for (k in got) {
+        merged[k] = got[k];
+        if (hiKeep[k] || typeof got[k] !== 'string') continue;
+        if (hiKeepOk && !hiKeepOk[k]) continue;                  /* 한 쪽에만 쓰인 사진은 안 담는다 */
+        if (hiKeepLen + got[k].length > HI_KEEP_MAX) continue;   /* 용량 상한 넘으면 안 담는다 */
+        hiKeep[k] = got[k]; hiKeepLen += got[k].length;
+      }
+      hiRes = merged;
+    };
     var prep = (!list.length || !api || !api.get_photos_hi)
-      ? Promise.resolve()
+      ? Promise.resolve().then(function () { if (hiKeep) hiRes = hiKeep; })
       : api.get_photos_hi(JSON.stringify(list)).then(function (res) {
           res = typeof res === 'string' ? JSON.parse(res) : res;
-          hiRes = (res && res.photos) || null;
+          take((res && res.photos) || null);
         }).catch(function () { hiRes = null; });
     return prep.then(run).then(ok, no);
   }
@@ -2752,8 +2791,47 @@ window.gifenc=exports;})();
     inp.value = '';
     inp.click();
   }
-  function fontAddLoad(file) {
+  /* [Q14] 폴더째 불러오기 알림 모으기 — 예전엔 파일 수만큼 모달이 떴다(30개면 30번).
+     파일 읽기·fonts 폴더 복사가 전부 비동기라 "끝"을 직접 알 수 없어서,
+     ① 넣은 개수만큼 결과가 다 모이면 바로 ② 아니면 잠깐 조용해질 때 한 번만 보여준다. */
+  var FONT_BULK = null;
+  function fontBulkStart(n) {
+    if (FONT_BULK) { clearTimeout(FONT_BULK.timer); FONT_BULK.total += n; }   /* 앞 묶음이 안 끝났으면 합침 */
+    else FONT_BULK = { total: n, msgs: [], timer: 0 };
+    FONT_BULK.timer = setTimeout(fontBulkFlush, 15000);   /* 결과가 안 오는 파일이 있어도 알려준다 */
+  }
+  function fontBulkSay(msg) {
+    if (!FONT_BULK) { alert(msg); return; }
+    FONT_BULK.msgs.push(String(msg));
+    clearTimeout(FONT_BULK.timer);
+    /* 넣은 개수만큼 결과가 다 왔으면 바로, 아니면 잠깐 조용해질 때까지 기다렸다 한 번에 */
+    if (FONT_BULK.msgs.length >= FONT_BULK.total) fontBulkFlush();
+    else FONT_BULK.timer = setTimeout(fontBulkFlush, 4000);
+  }
+  function fontBulkFlush() {
+    var b = FONT_BULK; FONT_BULK = null;
+    if (!b) return;
+    clearTimeout(b.timer);
+    var ok = 0, note = [];
+    b.msgs.forEach(function (m) {
+      if (/^폰트를 추가했어요/.test(m)) ok++;
+      /* 완전 정상(바로 쓰고 다음에 켜도 남음)은 넘기고, 나머지만 한 줄로 줄여 모아 보여준다 */
+      if (/다음에 켤 때도 목록에 있어요/.test(m)) return;
+      var one = String(m).split('\n').filter(function (s) { return s.trim(); }).join(' / ');
+      note.push('· ' + (one.length > 120 ? one.slice(0, 120) + '…' : one));
+    });
+    var msg = '글꼴 ' + b.total + '개 중 ' + ok + '개를 불러왔어요.';
+    if (note.length) {
+      msg += '\n\n[확인할 것 ' + note.length + '건]\n' + note.slice(0, 8).join('\n');
+      if (note.length > 8) msg += '\n… 그 밖에 ' + (note.length - 8) + '건';
+    }
+    alert(msg);
+  }
+  function fontAddLoad(file, quiet) {
     if (!file) return;
+    /* [Q14] quiet(폴더째 불러오기)이면 이 함수 안의 알림은 전부 모으기로 보낸다 —
+       아래 알림 자리를 하나씩 고치지 않으려고 이름을 가려 둔다(지역 alert). */
+    var alert = quiet ? fontBulkSay : function (m) { window.alert(m); };
     var base = file.name.replace(/\.[^.]+$/, '');
     var rd = new FileReader();
     rd.onerror = function () { alert('폰트 파일을 읽지 못했어요.'); };
@@ -2816,10 +2894,17 @@ window.gifenc=exports;})();
             '다만 fonts 폴더에 복사하지 못해서, 프로그램을 껐다 켜면 사라져요.' + manual);
           return;
         }
-        /* 진짜로 다시 읽히는지 확인 */
-        return fontFetchTry(file.name).then(function (back) {
-          if (back) {
+        /* 진짜로 다시 읽히는지 확인 —
+           ⚠ 파이썬 save_png 는 같은 이름이 있으면 덮어쓰지 않고 "이름 (2).ttf" 로 저장한다(actualName).
+              요청한 이름으로 확인하면 먼저 있던 다른 파일을 보고 잘못 안내하게 된다. */
+        var savedName = String((res && res.actualName) || file.name);
+        return fontFetchTry(savedName).then(function (back) {
+          if (back && savedName === file.name) {
             alert('폰트를 추가했어요 — ' + fam + '\n바로 쓸 수 있고, 다음에 켤 때도 목록에 있어요.\n\n' + res.path);
+          } else if (back) {
+            alert('폰트를 추가했어요 — ' + fam + '\n지금 바로 쓸 수 있어요.\n\n' +
+              '같은 이름의 파일이 이미 있어 ' + savedName + ' 로 복사됐어요.\n' +
+              '껐다 켜면 먼저 있던 파일이 대신 뜰 수 있어요.' + manual);
           } else {
             alert('폰트를 추가했어요 — ' + fam + '\n지금 바로 쓸 수 있어요.\n\n' +
               '다만 복사된 자리(' + res.path + ')를 프로그램이 다시 못 읽어서,\n' +
@@ -2871,23 +2956,30 @@ window.gifenc=exports;})();
     return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d;
   }
   function fxCol(v, d) { return (typeof v === 'string' && FX_HEX.test(v)) ? v : d; }
-  function fxStyleOf(fx) {
+  /* 굵기 단위 — 화보집 시트는 모든 치수가 cqw(페이지 폭의 1%) 규약인데 fx(외곽선·그림자·글로우)만
+     px라, 같은 값이 편집 화면(약 463px)·PNG(2400px)·완성본(약 696px)에서 제각각으로 보였다.
+     cq=true(화보집 페이지)면 PAGE_W(1200px = PNG 1배 크기) 기준으로 cqw 환산 → 어느 배율에서도 같은 굵기.
+     배너·편집 탭은 캔버스 크기가 고정(컨테이너도 없음)이라 예전대로 px 그대로. */
+  function fxUnit(v, cq) {
+    return cq ? (v * 100 / ((window.PBK && PBK.PAGE_W) || 1200)).toFixed(4) + 'cqw' : v + 'px';
+  }
+  function fxStyleOf(fx, cq) {
     if (!fx) return [];
     var parts = [];
     if (fx.st && fx.st.on) {
-      parts.push('-webkit-text-stroke:' + fxNum(fx.st.w, 2, 0.5, 20) + 'px ' + fxCol(fx.st.c, '#ffffff'));
+      parts.push('-webkit-text-stroke:' + fxUnit(fxNum(fx.st.w, 2, 0.5, 20), cq) + ' ' + fxCol(fx.st.c, '#ffffff'));
       parts.push('paint-order:stroke fill');
     }
     var shadows = [];
     if (fx.sh && fx.sh.on) {
-      shadows.push(fxNum(fx.sh.x, 2, -40, 40) + 'px ' + fxNum(fx.sh.y, 3, -40, 40) + 'px ' +
-        fxNum(fx.sh.b, 4, 0, 60) + 'px ' + fxCol(fx.sh.c, '#000000'));
+      shadows.push(fxUnit(fxNum(fx.sh.x, 2, -40, 40), cq) + ' ' + fxUnit(fxNum(fx.sh.y, 3, -40, 40), cq) + ' ' +
+        fxUnit(fxNum(fx.sh.b, 4, 0, 60), cq) + ' ' + fxCol(fx.sh.c, '#000000'));
     }
     if (fx.gl && fx.gl.on) {
       var gc = fxCol(fx.gl.c, '#ffd76a'), gs = fxNum(fx.gl.s, 12, 2, 60);
-      shadows.push('0 0 ' + Math.round(gs / 3) + 'px ' + gc);
-      shadows.push('0 0 ' + Math.round(gs) + 'px ' + gc);
-      shadows.push('0 0 ' + Math.round(gs * 2) + 'px ' + gc);
+      shadows.push('0 0 ' + fxUnit(Math.round(gs / 3), cq) + ' ' + gc);
+      shadows.push('0 0 ' + fxUnit(Math.round(gs), cq) + ' ' + gc);
+      shadows.push('0 0 ' + fxUnit(Math.round(gs * 2), cq) + ' ' + gc);
     }
     if (shadows.length) parts.push('text-shadow:' + shadows.join(','));
     /* 글자판 — 자막바처럼 글자 뒤 반투명 판(가독성). 여러 줄이면 줄마다 판이 붙게 clone */
@@ -2895,7 +2987,7 @@ window.gifenc=exports;})();
       var bc = FX_HEX6.test(fx.bg.c || '') ? fx.bg.c : '#000000';
       parts.push('background:' + hexA(bc, Math.round(fxNum(fx.bg.a, 55, 0, 100)) / 100));
       parts.push('padding:.12em .38em');
-      parts.push('border-radius:' + fxNum(fx.bg.r, 6, 0, 40) + 'px');
+      parts.push('border-radius:' + fxUnit(fxNum(fx.bg.r, 6, 0, 40), cq));
       parts.push('-webkit-box-decoration-break:clone');
       parts.push('box-decoration-break:clone');
     }
@@ -2935,7 +3027,7 @@ window.gifenc=exports;})();
   function tfxOf(pg) {
     return function (k) { return (pg.tfx && pg.tfx[k]) || null; };
   }
-  function tstyleOf(pg, famResolve) {
+  function tstyleOf(pg, famResolve, cq) {          /* cq=true → fx 굵기를 cqw로(화보집 페이지 전용) */
     return function (k) {
       var parts = [];
       var f = pg.tfonts && pg.tfonts[k];
@@ -2952,7 +3044,7 @@ window.gifenc=exports;})();
       /* 색은 형식 검증(조작된 프로젝트 파일의 스타일 주입 차단) */
       var cv = pg.tcolors && pg.tcolors[k];
       if (cv && COLOR_OK.test(cv)) parts.push('color:' + cv);
-      fxStyleOf(pg.tfx && pg.tfx[k]).forEach(function (p) { parts.push(p); });
+      fxStyleOf(pg.tfx && pg.tfx[k], cq).forEach(function (p) { parts.push(p); });
       return parts.length ? parts.join(';') : null;
     };
   }
@@ -2962,7 +3054,7 @@ window.gifenc=exports;})();
   function bookPnum(i) { return book && book.pnumOff ? null : i + 1; }
   function renderSheet(i, mode) {
     var pg = book.pages[i];
-    return PBK.render(pg, { mode: mode || 'edit', src: srcOf, pnum: bookPnum(i), tstyle: tstyleOf(pg), tfx: tfxOf(pg) });
+    return PBK.render(pg, { mode: mode || 'edit', src: srcOf, pnum: bookPnum(i), tstyle: tstyleOf(pg, null, true), tfx: tfxOf(pg) });
   }
 
   /* ================= 팔레트·폰트 적용 ================= */
@@ -3035,8 +3127,11 @@ window.gifenc=exports;})();
         renderSheet(i) + '</div></div>';
       it.onclick = function () { select(i); };
       wrap.appendChild(it);
-      scaleMini(it);
     });
+    /* 예전엔 append 바로 뒤에서 scaleMini(it) 가 clientWidth 를 읽어, 붙일 때마다
+       레이아웃이 다시 계산됐다(페이지 수만큼 강제 reflow). 다 붙인 뒤 이미 있는
+       일괄 함수로 한 번에 재도록 바꾼다 — 넣는 scale 값 계산식은 그대로다. */
+    rescaleMinis();
     wrap.scrollTop = st;
     histCapture(); /* 페이지 추가·삭제·순서 등 */
   }
@@ -3076,15 +3171,18 @@ window.gifenc=exports;})();
       refreshThumb(_thumbIdx);
     });
   }
-  /* touch(렌더 3종)의 rAF 병합판 — 슬라이더 oninput 전용. 드래그가 끝나면
-     마지막 프레임이 같은 touch를 돌므로 최종 화면·저장 결과는 동일하다. */
+  /* 슬라이더 oninput 전용 rAF 병합판 — 화면·썸네일만 다시 그리고 인스펙터(refreshInspector)는
+     건드리지 않는다. 예전엔 touch 를 통째로 돌려서, refreshInspector 가 #photoSlots 를
+     innerHTML='' 로 비우는 바람에 지금 끌고 있던 range 가 DOM 에서 떨어져 나가
+     드래그가 첫 한 칸에서 끊겼다.
+     ※ 부르는 쪽이 손을 놓을 때(onchange) touch() 를 직접 불러 인스펙터를 맞춘다. */
   var _touchRaf = 0, _touchIdx = -1;
   function touchSoon(i) {
     _touchIdx = i;
     if (_touchRaf) return;
     _touchRaf = requestAnimationFrame(function () {
       _touchRaf = 0;
-      touch(_touchIdx);
+      refreshSpread(); refreshThumb(_touchIdx);
     });
   }
 
@@ -3511,12 +3609,27 @@ window.gifenc=exports;})();
     ci.type = 'color';
     ci.value = cur6 || (pal.paper || '#fbfaf3');
     /* 색을 끄는 동안 히스토리가 수십 개 쌓이지 않게 — 확정될 때만 남긴다 */
+    /* ⚠ input 도중엔 touch() 를 부르면 안 된다 — 그 안의 refreshInspector() 가
+       buildPageBg 를 다시 돌리고, buildPageBg 는 box.innerHTML='' 로 이
+       <input type="color"> 를 지운다. 그러면 열려 있던 색 고르기 창이 강제로 닫힌다
+       (고객 문의: "드래그로 색을 못 고르고 클릭할 때마다 창이 꺼져요 / 스포이드도 안 돼요").
+       배너 인스펙터의 '배경 색 → 직접' 과 같은 병이다.
+       미리보기·썸네일과 스와치 불만 제자리에서 고치고, 인스펙터 재구성은 change 로 미룬다. */
+    function paintPgBgSwatches() {
+      var c6 = (pg.bg && /^#[0-9a-fA-F]{6}$/.test(pg.bg.c || '')) ? pg.bg.c : '';
+      for (var i = 0; i < row.children.length && i < SW.length; i++) {
+        var v = SW[i].v;
+        row.children[i].className = ((v === '' && !c6) || (v && c6 === v)) ? 'on' : '';
+      }
+    }
     ci.oninput = function () {
       pg.bg = pg.bg || {};
       pg.bg.c = ci.value;
       HMUTE = true;
-      touch(cur);
+      refreshSpread();
+      refreshThumb(cur);
       HMUTE = false;
+      paintPgBgSwatches();
     };
     ci.onchange = function () { pg.bg = pg.bg || {}; pg.bg.c = ci.value; histPush(); touch(cur); };
     pick.appendChild(ci);
@@ -3556,7 +3669,13 @@ window.gifenc=exports;})();
       row.querySelector('.sthumb').onclick = function () { pickInto(cur, i); };
       row.querySelector('[data-a=pick]').onclick = function () { pickInto(cur, i); };
       var rs = row.querySelector('[data-a=reset]');
-      if (rs) rs.onclick = function () { p.ox = 50; p.oy = 30; touch(cur); };
+      /* ↺ 위치 초기화 — 요즘 사진(free)은 --px/--py 로 자리를 잡는데 옛 ox/oy 만
+         되돌려서 아무 일도 안 일어났다. free 면 끌어놓은 px/py 도 가운데(0)로. */
+      if (rs) rs.onclick = function () {
+        p.ox = 50; p.oy = 30;
+        if (p.free) { p.px = 0; p.py = 0; }
+        touch(cur);
+      };
       var cl = row.querySelector('[data-a=clear]');
       if (cl) cl.onclick = function () { pg.photos[i] = { id: null, ox: 50, oy: 30 }; touch(cur); };
       /* 사진 크기·기울이기·맞춤 — 칸에 강제로 잘리지 않고 직접 조절 */
@@ -3600,12 +3719,16 @@ window.gifenc=exports;})();
         };
         /* 페더는 free 여부와 무관 — 옛(칸맞춤) 사진에도 그대로 걸린다 */
         var fl = fb.querySelector('.fFe');
+        /* 끄는 동안엔 미리보기만, 놓을 때 확정 — 배너 '레이어 보정'(corRow) 과 같은 방식.
+           예전엔 oninput 이 touch → refreshInspector 로 이 range 를 새로 만들어서
+           드래그가 한 칸 움직이고 끊겼다. */
         fl.oninput = function () {
           var v = parseInt(this.value, 10);
           fb.querySelector('.fFeV').textContent = v + '%';
           if (v > 0) p.fe = v; else delete p.fe;
-          touchSoon(cur); /* 초당 60회 통짜 재구축 → 프레임당 1회 */
+          touchSoon(cur); /* 초당 60회 통짜 재구축 → 프레임당 1회(인스펙터 제외) */
         };
+        fl.onchange = function () { touch(cur); }; /* 놓는 순간 한 번만 인스펙터 갱신 */
         /* 필터 셀렉트 채우기 + 배선 (BN_FLT_PRE_LABELS = 배너와 공용 목록) */
         var fsel = fb.querySelector('.fFlt');
         BN_FLT_PRE_LABELS.forEach(function (o2) {
@@ -4250,7 +4373,9 @@ window.gifenc=exports;})();
     add.className = 'bnBigBtn';
     add.style.cssText = 'font-size:12px;padding:7px;width:100%';
     add.textContent = '＋ 텍스트 추가';
-    add.title = '레이아웃과 상관없이 원하는 자리에 놓는 글자 — 화면에서 끌어서 옮기고, 모서리로 크기를 바꿉니다';
+    /* ⚠ 안내가 틀렸었다 — 자유 텍스트엔 모서리 핸들이 없다(핸들은 사진 전용).
+       실제 조작은 끌기(이동)·마우스 휠(크기)·Delete(지우기)다. */
+    add.title = '레이아웃과 상관없이 원하는 자리에 놓는 글자 — 화면에서 끌어서 옮기고, 마우스 휠로 크기를 바꿔요 (선택 후 Delete = 지우기)';
     add.onclick = function () {
       pg.txts = pg.txts || [];
       if (pg.txts.length >= FREE_MAX) return alert('자유 텍스트는 최대 ' + FREE_MAX + '개까지예요.');
@@ -4321,23 +4446,26 @@ window.gifenc=exports;})();
         im.onload = function () {
           try {
             var m = Math.max(im.naturalWidth, im.naturalHeight);
-            if (!m || m <= DND_MAXPX) return res(durl);
+            /* ⚠ 크기 기준은 "진짜 원본"이어야 한다 — 여기서 잰 원본 naturalWidth/Height 를 축소본과 같이 돌려준다.
+               (안 돌려주면 받는 쪽이 1400px 축소본으로 크기를 재서 큰 사진일수록 배율(%)이 딴판이 된다) */
+            if (!m || m <= DND_MAXPX) return res({ u: durl, w: im.naturalWidth, h: im.naturalHeight });
             var k = DND_MAXPX / m;
             var cv = document.createElement('canvas');
             cv.width = Math.max(1, Math.round(im.naturalWidth * k));
             cv.height = Math.max(1, Math.round(im.naturalHeight * k));
             cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
             /* 투명이 있을 수 있으니 png, 없으면 용량 작은 jpeg */
-            res(cv.toDataURL(/^data:image\/png/.test(durl) ? 'image/png' : 'image/jpeg', 0.92));
-          } catch (e) { res(durl); }
+            res({ u: cv.toDataURL(/^data:image\/png/.test(durl) ? 'image/png' : 'image/jpeg', 0.92),
+                  w: im.naturalWidth, h: im.naturalHeight });
+          } catch (e) { res({ u: durl, w: im.naturalWidth, h: im.naturalHeight }); }
         };
-        im.onerror = function () { res(durl); };
+        im.onerror = function () { res({ u: durl, w: 0, h: 0 }); };
         im.src = durl;
-      } catch (e) { res(durl); }
+      } catch (e) { res({ u: durl, w: 0, h: 0 }); }
     });
   }
   function dndLoadImages(files) {
-    var seq = Promise.resolve(), out = [];
+    var seq = Promise.resolve(), out = [], putFail = [];
     files.forEach(function (f) {
       seq = seq.then(function () {
         return dndRead(f).then(function (durl) {
@@ -4346,9 +4474,12 @@ window.gifenc=exports;})();
              펼침면을 다시 그릴 때마다 그 문자열이 통째로 HTML 에 박혀 수십 배 느려진다.
              (버튼으로 고른 사진은 파이썬이 1400px 로 줄여 준다 — 같은 규격을 맞춘다)
              원본은 아래 put_photo 로 넘겨 저장·완성본에서만 쓴다. */
-          return dndShrink(durl).then(function (small) {
+          return dndShrink(durl).then(function (sm) {
+          /* sm = {u:화면용 축소본, w/h:진짜 원본 크기}. 화면엔 축소본을 쓰되
+             크기 기준(w/h)은 원본을 같이 넘긴다 — 버튼으로 고른 사진도 파이썬이 원본 w/h 를 같이 준다. */
+          var small = sm && sm.u ? sm.u : sm;
           thumbs[id] = small;
-          out.push({ id: id, thumb: small, name: f.name });
+          out.push({ id: id, thumb: small, name: f.name, w: (sm && sm.w) || 0, h: (sm && sm.h) || 0 });
           /* 파이썬 쪽 "사진 등록부"에도 넣어야 한다.
              저장(.pbk)·완성본(EXE/HTML)은 전부 파이썬의 self.photos[id] = 원본경로 를 보는데,
              끌어다 놓은 사진은 브라우저 보안상 경로를 알 수 없어 여기서만 만들어졌다.
@@ -4356,14 +4487,31 @@ window.gifenc=exports;})();
              → 파일 내용을 넘겨 임시파일로 등록시킨다.
              put_photo 가 없는 옛 exe면 조용히 예전 동작(등록 안 됨)으로 남는다. */
           if (api && api.put_photo) {
+            /* ⚠ put_photo 는 실패해도 예외 대신 {err:...} 를 정상으로 돌려준다 —
+               .catch 만 달아 두면 등록이 통째로 실패해도 아무 말이 없고,
+               나중에 저장·완성본이 깨질 때 "원본이 옮겨졌거나 지워졌다"고 엉뚱하게 안내된다.
+               편집은 그대로 계속하되(화면 사본은 살아 있다) 실패한 파일만 모아 마지막에 한 번 알린다. */
             return api.put_photo(JSON.stringify({ id: id, data: durl }))
-              .catch(function () { /* 등록 실패해도 편집은 계속 */ });
+              .then(function (r) {
+                try { r = typeof r === 'string' ? JSON.parse(r) : r; } catch (e) { r = null; }
+                if (!r || !r.ok) putFail.push(f.name || id);
+              }, function () { putFail.push(f.name || id); });
           }
           });
         });
       });
     });
-    return seq.then(function () { return out; });
+    return seq.then(function () {
+      /* 등록 실패는 여기서 한 번만 알린다 — 무음으로 넘어가면 나중에 엉뚱한 안내를 받는다.
+         부른 쪽이 busy(false) 를 하고 나서 뜨도록 한 박자 늦춘다. */
+      if (putFail.length) {
+        var msg = '⚠ 끌어다 놓은 사진 ' + putFail.length + '장을 프로그램에 등록하지 못했어요.\n' +
+          putFail.slice(0, 5).join(', ') + (putFail.length > 5 ? ' 외 ' + (putFail.length - 5) + '장' : '') +
+          '\n\n화면엔 보이지만 저장·완성본에서 빠질 수 있어요. 그 사진은 다시 끌어다 놓아 주세요.';
+        setTimeout(function () { alert(msg); }, 0);
+      }
+      return out;
+    });
   }
   /* 전역 드래그 가드 — 이게 없으면 사진칸이 아닌 곳(여백·페이지 목록·오른쪽 패널)에
      파일을 놓는 순간 웹뷰가 "그 파일로 이동"해서 편집 화면이 사라지고
@@ -4640,6 +4788,11 @@ window.gifenc=exports;})();
         var p = bookNewPhoto(ph.id);
         pg.photos[tgt] = p;
         fitSlots.push(tgt);
+        /* 크기 기준 = "진짜 원본 크기" — 파일 선택(pickInto)과 같은 규칙.
+           화면용 1400px 축소본으로 재면 큰 사진일수록 배율(%)이 작게 잡혀 딴판이 된다.
+           원본 크기를 못 받았을 때만(옛 경로·디코드 실패) 예전처럼 썸네일로 잰다. */
+        var ow = parseFloat(ph.w), oh = parseFloat(ph.h);
+        if (isFinite(ow) && isFinite(oh) && ow > 0 && oh > 0) { p.iw = ow; p.ih = oh; return; }
         pend++;
         measureInto(p, ph.thumb, function () {
           if (--pend === 0 && fin) { touch(pageIdx); bookFitNew(pageIdx, fitSlots); }
@@ -4813,9 +4966,41 @@ window.gifenc=exports;})();
         t.sc = Math.round(Math.max(0.5, Math.min(24, s0 * (ev.deltaY < 0 ? 1.08 : 1 / 1.08))) * 10) / 10;
         el.style.fontSize = t.sc + 'cqw';
         refreshThumb(pageIdx);
+        /* 휠로 바꾼 것도 '저장 안 함' 으로 표시한다 — refreshThumb 경로엔 histCapture 가 없어
+           저장 버튼에 ● 가 안 뜨고, bakSave() 가 !dirty 로 비상 백업을 통째로 건너뛰었다.
+           histCapture 는 350ms 디바운스라 휠 도중엔 스냅샷이 쌓이지 않는다. */
+        histCapture();
       }, { passive: false });
     });
   }
+
+  /* Delete = 선택한 자유 텍스트 빼기 (화보집 화면에서)
+     ⚠ 소품에는 있는데 텍스트에만 빠져 있어서, 화면에서 고른 글자를 지우려면
+     오른쪽 목록에서 같은 번호의 🗑 을 다시 찾아야 했다. 지우는 절차는 그 🗑 과 동일. */
+  document.addEventListener('keydown', function (ev) {
+    /* 소품이 함께 선택돼 있으면(소품 pointerdown 은 freeSel 을 지우지만 그 반대는 아니다)
+       아래 소품 핸들러에 양보한다 — 한 번의 Delete 로 둘이 같이 지워지지 않게. */
+    if (!freeSel || stkSel) return;
+    /* ⚠ 부분 편집 중엔 위쪽 Delete 핸들러가 '부분 숨기기'를 하고 화면 안내도
+       "사진·글자는 잠겨 있어요" 라고 말한다 — 여기서 같이 지우면 한 번의 Delete 로
+       숨기기와 글자 삭제가 동시에 일어난다(잠겼다고 알린 것도 거짓말이 된다). */
+    if (partsMode) return;
+    if (document.body.classList.contains('bannerOn') || document.body.classList.contains('gifOn') ||
+        document.body.classList.contains('sigOn')) return;
+    if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+    var tagF = (ev.target.tagName || '').toLowerCase();
+    if (tagF === 'input' || tagF === 'textarea' || tagF === 'select') return;
+    /* 소품과 같은 이유 — 다른 페이지로 넘어간 뒤 누르면 안 보이는 페이지의 글자가 조용히 지워진다 */
+    if (freeSel.p !== cur) { freeSel = null; return; }
+    var pgF = book.pages[freeSel.p];
+    if (!pgF || !pgF.txts || !pgF.txts[freeSel.i]) { freeSel = null; return; }
+    ev.preventDefault();
+    var fi = freeSel.i, piF = freeSel.p;
+    pgF.txts.splice(fi, 1);
+    freeShiftKeys(pgF, fi);   /* 글꼴·크기·색 키도 같이 당긴다 — 🗑 버튼과 동일 */
+    freeSel = null;
+    touch(piF);
+  });
 
   /* ============ 페이지 소품(스티커) — 드래그·휠·Delete ============ */
   var stkSel = null;   /* {p: 페이지, i: 몇 번째} */
@@ -4884,6 +5069,9 @@ window.gifenc=exports;})();
         el.style.width = s.sc + 'cqw';
         el.style.transform = 'translate(-50%,-50%) rotate(' + (parseFloat(s.rot) || 0) + 'deg)' + (s.flip ? ' scaleX(-1)' : '');
         refreshThumb(pageIdx);
+        /* 위 자유 텍스트 휠과 같은 이유 — 크기·회전을 휠로 바꿔도 ●·비상 백업이 걸리게 한다.
+           touch() 로 통째로 다시 그리면 소품 선택 점선(.stksel)이 사라지므로 기록만 남긴다. */
+        histCapture();
       }, { passive: false });
     });
   }
@@ -5064,7 +5252,16 @@ window.gifenc=exports;})();
       out.gif = {};
       Object.keys(p.gif).forEach(function (k) {
         var v = p.gif[k];
-        if (typeof v === 'string' || typeof v === 'boolean') out.gif[k] = v;
+        if (typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number') out.gif[k] = v;
+        /* 추가 문구(txts 배열)·이름 글자 위치(namePos 객체)는 문자열도 불리언도 아니라
+           여기서 통째로 잘려나갔다 — 이 둘만 모양을 확인해 통과시킨다. */
+        else if (k === 'txts' && Array.isArray(v)) {
+          out.gif.txts = v.filter(function (t) {
+            return t && typeof t === 'object' && !Array.isArray(t);
+          }).slice(0, 4);
+        } else if (k === 'namePos' && v && typeof v === 'object' && !Array.isArray(v)) {
+          out.gif.namePos = { x: +v.x || 0, y: +v.y || 0, rot: +v.rot || 0 };
+        }
       });
     }
     ['propFav', 'propRecent'].forEach(function (k) {
@@ -5087,6 +5284,11 @@ window.gifenc=exports;})();
     if (p && Array.isArray(p.bnOrder)) out.bnOrder = p.bnOrder.filter(function (id) { return !!bnLayoutById(id); });
     /* 배너 인스펙터 아코디언 열림/닫힘 상태 */
     if (p && p.bnAcc && typeof p.bnAcc === 'object' && !Array.isArray(p.bnAcc)) out.bnAcc = p.bnAcc;
+    /* 켬/끔 토글 3종(화보집 안내선·배너 안내선·움짤 프리셋 자동) — 화이트리스트에 없어서
+       불러온 뒤 첫 저장에 조용히 지워졌고, 그래서 늘 초기값으로 돌아갔다. */
+    ['bookGuide', 'bnGuide', 'gifPresetAuto'].forEach(function (k) {
+      if (p && (p[k] === 0 || p[k] === 1)) out[k] = p[k];
+    });
     return out;
   }
   function savePrefs() {
@@ -5098,6 +5300,14 @@ window.gifenc=exports;})();
     return api.load_prefs().then(function (res) {
       res = typeof res === 'string' ? JSON.parse(res) : res;
       PREFS = normPrefs(res);
+      /* 이 토글을 입히는 코드는 스크립트를 읽는 순간(loadPrefs 보다 먼저) 이미 돌아
+         꺼진 기본값이 굳어 버린다 — 값이 도착한 여기서 한 번 더 입힌다. */
+      try { if (PREFS.bookGuide === 1) bookSetGuide(true); } catch (e) {}
+      try { if (PREFS.bnGuide === 1) bnSetGuide(true); } catch (e) {}
+      try {
+        var pAuto = document.getElementById('giPresetAuto');
+        if (pAuto && PREFS.gifPresetAuto === 0) pAuto.checked = false;
+      } catch (e) {}
     }).catch(function () {});
   }
   /* 저장된 순서 우선 + 새로 생긴 레이아웃은 원래 자리대로 뒤에 병합 */
@@ -5283,9 +5493,9 @@ window.gifenc=exports;})();
           var key = 'PBF_' + fhash(fkey(g));
           if (extrasOut) extrasOut[key] = { path: g.path, num: g.num || 0 };
           return "'" + key + "',serif";
-        });
+        }, true);
       } else {
-        tstyle = tstyleOf(pg);
+        tstyle = tstyleOf(pg, null, true);
       }
       return PBK.render(pg, {
         /* 미리보기도 'export' 로 그린다 — 'edit' 로 그리면 사진 없는 칸이
@@ -5409,7 +5619,7 @@ window.gifenc=exports;})();
       if (!ASSETS) return fail('아직 준비 중이에요');
       var pg = book.pages[i];
       var sheetHtml = PBK.render(pg, {
-        mode: 'export', pnum: bookPnum(i), tstyle: tstyleOf(pg), tfx: tfxOf(pg),
+        mode: 'export', pnum: bookPnum(i), tstyle: tstyleOf(pg, null, true), tfx: tfxOf(pg),
         feBake: !!feMap,
         src: (feMap || dsMap) ? function (p) {
           if (p && p.id) {
@@ -5424,7 +5634,15 @@ window.gifenc=exports;})();
       /* 배경 투명(누끼) — 종이/매트 배경만 빼고 내용물은 그대로 */
       if (noBg) css += '\n.sheet,.pg{background:transparent !important}' +
         /* 사진 안 넣은 칸이 베이지 사각형으로 구워지던 것 — 누끼 PNG엔 안 나오게 */
-        '\n.ph .phX{background:transparent !important}';
+        /* ⚠ 속지(.phX)만 뚫으면 부족했다 — 칸 자체인 .ph 가 engine.css 에서
+           background:#101211(거의 검정)이라, 빈 칸이 누끼 PNG에 검은 사각형으로 남았다.
+           배너 쪽(.bnr.bg-trans .bph)처럼 칸 컨테이너까지 같이 뚫는다.
+           사진이 든 칸은 영향 없음 — cover 는 img 가 100% 덮고, 자유배치는
+           engine.css 의 .ph:has(>img.phFree) 로 이미 투명이다.
+           ⚠ 여기서 :has() 로 빈 칸만 좁히면 안 된다 — 특이도가 올라가 레이어 분리의
+           keyCss('#000'/'#fff') 를 이겨서 매팅이 깨진다. 특이도 동률로 둬야 뒤에
+           붙는 extraCss(keyCss) 가 그대로 이긴다. */
+        '\n.ph,.ph .phX{background:transparent !important}';
       /* 부르는 쪽이 CSS를 더 얹을 수 있게 — 편집탭 레이어 분리에서
          "배경만" / "사진 뺀 나머지만" 두 장을 구울 때 쓴다 */
       if (extraCss) css += '\n' + extraCss;
@@ -5460,21 +5678,81 @@ window.gifenc=exports;})();
     return String(i + 1).padStart(2, '0') + '_' + (def ? def.n.replace(/[\\/:*?"<>|]/g, '') : '페이지') +
       (noBg ? '_투명' : '') + '.png';
   }
+  /* PNG 저장 옵션 창 — 범위(전체/이 쪽)와 배경(투명 여부)을 한 창에서 고른다.
+     예전엔 confirm 두 개를 잇달아 물어서, 둘 다 [취소] 해도 '지금 쪽 저장'으로 그냥
+     진행됐다 — 그만둘 길이 없어 OS 파일 대화상자까지 가서야 빠져나갈 수 있었다.
+     cb(null) = 그만두기. (askName 과 같은 .askOv 스타일을 그대로 쓴다) */
+  function askPngOpts(cb) {
+    var ov = document.createElement('div');
+    ov.className = 'askOv';
+    ov.innerHTML = '<div class="askBox"><h3>🖼 PNG 저장</h3>'
+      + '<p class="askHint">어디까지 저장할지 고르세요. (Esc · 바깥 클릭 = 그만두기)</p>'
+      + '<label style="display:flex;gap:7px;align-items:center;font-size:12.5px;cursor:pointer">'
+      /* ⚠ .askOv input 은 width:100% 라 그대로 두면 체크박스가 통째로 늘어난다 — 인라인으로 되돌림 */
+      + '<input type="checkbox" id="pngTrans" style="width:auto;padding:0;margin:0">'
+      + '바깥 배경(종이·매트색)을 뺀 투명 PNG로 저장</label>'
+      /* ⚠ 버튼 글자가 길어(그만두기+지금 보는 N쪽만+전체 N장 (폴더 선택)) 400px 상자를 넘는다 —
+         .askBtns 는 nowrap 이라 그대로 두면 버튼이 짜부라져 두 줄로 깨진다. 이 창에서만 줄바꿈 허용 */
+      + '<div class="askBtns" style="flex-wrap:wrap"><button id="pngNo">그만두기</button>'
+      + '<button id="pngOne"></button><button id="pngAll" class="pri"></button></div></div>';
+    ov.querySelector('#pngOne').textContent = '지금 보는 ' + (cur + 1) + '쪽만';
+    ov.querySelector('#pngAll').textContent = '전체 ' + book.pages.length + '장 (폴더 선택)';
+    document.body.appendChild(ov);
+    /* 툴바의 🖼 버튼을 두 번 누르면 두 번째 클릭이 방금 뜬 덮개 위에 떨어져
+       "바깥 클릭 = 그만두기"로 곧장 닫혀 버린다(버튼은 위, 상자는 가운데) — 잠깐 무시 */
+    var openAt = Date.now();
+    function done(v) {
+      document.removeEventListener('keydown', onKey, true);
+      if (ov.parentNode) ov.parentNode.removeChild(ov);
+      cb(v);
+    }
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); done(null); } }
+    document.addEventListener('keydown', onKey, true);
+    function trans() { return !!ov.querySelector('#pngTrans').checked; }
+    ov.querySelector('#pngNo').onclick = function () { done(null); };
+    ov.querySelector('#pngOne').onclick = function () { done({ all: false, noBg: trans() }); };
+    ov.querySelector('#pngAll').onclick = function () { done({ all: true, noBg: trans() }); };
+    ov.onclick = function (e) { if (e.target === ov && Date.now() - openAt > 400) done(null); };   /* 바깥 클릭 = 그만두기 */
+    setTimeout(function () { ov.querySelector('#pngAll').focus(); }, 30);
+  }
   $('#btnPng').onclick = function () {
     if (!ASSETS) return alert('아직 준비 중이에요. 1~2초 뒤 다시 눌러주세요.');
-    var all = confirm('전체 페이지를 PNG로 저장할까요?\n\n[확인] = 전체 ' + book.pages.length + '장 (폴더 선택)\n[취소] = 지금 보는 ' + (cur + 1) + '쪽 한 장만');
-    var noBg = confirm('바깥 배경(종이·매트색)을 뺀 투명 PNG로 만들까요?\n\n[확인] = 배경 투명 (누끼 PNG)\n[취소] = 보이는 그대로 (배경 포함)');
+    askPngOpts(function (o) { if (o) runPngSave(o.all, o.noBg); });   /* 그만두기 = 아무것도 안 함 */
+  };
+  /* 실제 저장 — 옵션 창에서 고른 값으로 돈다(예전 onclick 본문 그대로) */
+  function runPngSave(all, noBg) {
+    hiKeepEnd();   /* [성능] 앞선 저장이 남긴 캐시가 있으면 먼저 버린다(오래된 값 방지) */
     if (all) {
       busy(true, 'PNG 만드는 중… (0/' + book.pages.length + ')');
       api.pick_dir().then(function (res) {
         res = typeof res === 'string' ? JSON.parse(res) : res;
+        /* 파이썬 pick_dir 은 취소면 {cancel:true}, 실패면 {err:...} 를 돌려준다 —
+           dir 유무만 보면 오류까지 '취소'로 뭉개져 아무 말 없이 끝난다. */
+        if (res && res.err) { busy(false); apiErr('저장할 폴더를 열지 못했어요.', res.err); return; }
         if (!res || !res.dir) { busy(false); return; }
         var dir = res.dir;
-        var i = 0, done = 0;
+        var i = 0, done = 0, renamed = [];   /* 이름이 겹쳐 파이썬이 새 이름으로 저장한 파일들 */
+        /* [성능] 이 저장 동안만 고화질 캐시를 켠다 — 두 쪽 이상에 쓰인 사진만 담아
+           쪽마다 2560px 로 다시 만들던 낭비를 없앤다(아래 끝나는 세 군데에서 반드시 끔). */
+        var hiDup = {}, hiSeen = {};
+        book.pages.forEach(function (pg) {
+          var on = {};
+          (pg.photos || []).forEach(function (p) {
+            if (!p || !p.id || on[p.id]) return;
+            on[p.id] = 1;
+            if (hiSeen[p.id]) hiDup[p.id] = 1; else hiSeen[p.id] = 1;
+          });
+        });
+        hiKeep = {}; hiKeepOk = hiDup; hiKeepLen = 0;
         function next() {
           if (i >= book.pages.length) {
+            hiKeepEnd();   /* [성능] 저장 끝 — 고화질 캐시 비움 */
             busy(false);
-            alert('완료! ' + done + '장 저장했어요.\n' + dir);
+            /* ⚠ 파이썬 save_png 는 같은 이름이 있으면 덮어쓰지 않고 "이름 (2)" 로 저장한다 —
+               실제 이름(actualName)을 안 알려주면 폴더를 열었을 때 화면 안내와 다르다. */
+            alert('완료! ' + done + '장 저장했어요.\n' + dir +
+              (renamed.length ? '\n\n같은 이름이 있어 ' + renamed.length + '장은 새 이름으로 저장했어요(먼저 있던 파일은 그대로).\n' +
+                renamed.slice(0, 6).join('\n') + (renamed.length > 6 ? '\n…' : '') : ''));
             return;
           }
           $('#busyMsg').textContent = 'PNG 만드는 중… (' + (i + 1) + '/' + book.pages.length + ')';
@@ -5487,9 +5765,11 @@ window.gifenc=exports;})();
             /* 파이썬은 실패해도 예외 대신 {err:...} 를 정상으로 돌려준다 —
                결과를 안 보면 0장 떨어졌는데 "완료! N장 저장했어요"가 뜬다. */
             r = typeof r === 'string' ? JSON.parse(r) : r;
-            if (r && r.err) { busy(false); apiErr((i + 1) + '쪽을 저장하지 못해 멈췄어요. (' + done + '장까지 저장됨)', r.err); return; }
+            if (r && r.err) { hiKeepEnd(); busy(false); apiErr((i + 1) + '쪽을 저장하지 못해 멈췄어요. (' + done + '장까지 저장됨)', r.err); return; }
+            /* 같은 이름이 있으면 파이썬이 새 이름으로 저장한다 — 바뀐 이름만 모아 끝에 알려준다 */
+            if (r && r.renamed) renamed.push(String(r.actualName || pngName(i, noBg)));
             done++; i++; next();
-          }).catch(function (e) { busy(false); apiErr((i + 1) + '쪽을 저장하지 못해 멈췄어요. (' + done + '장까지 저장됨)', e); });
+          }).catch(function (e) { hiKeepEnd(); busy(false); apiErr((i + 1) + '쪽을 저장하지 못해 멈췄어요. (' + done + '장까지 저장됨)', e); });
         }
         next();
       }).catch(function (e) { busy(false); apiErr('저장할 폴더를 열지 못했어요.', e); });
@@ -5506,7 +5786,7 @@ window.gifenc=exports;})();
         else if (!res.cancel) apiErr('PNG 를 저장하지 못했어요.', res.err);
       }).catch(function (e) { busy(false); apiErr('PNG 를 저장하지 못했어요.', e); });
     }
-  };
+  }
 
   /* ================= 미리보기 · 내보내기 ================= */
   $('#btnPreview').onclick = function () {
@@ -5618,6 +5898,8 @@ window.gifenc=exports;})();
         그래서 되살리면 사진칸은 비어 있다. 그 사실을 안내에 정직하게 적는다. */
   var BAK_KEY = 'pbkCrashBak';
   var BAK_MAX = 4 * 1024 * 1024;      /* 이보다 크면 아예 안 남긴다(거짓 안심 금지) */
+  var bakWarnAt = 0;                  /* 용량 초과 알림을 마지막으로 띄운 시각 */
+  var BAK_WARN_MS = 5 * 60 * 1000;    /* 토스트는 3.2초면 사라지니 5분마다 다시 알린다 */
   function bakLight() {
     try {
       return JSON.stringify(book, function (k, v) {
@@ -5629,7 +5911,22 @@ window.gifenc=exports;})();
   function bakSave() {
     if (!book || !dirty) return;
     var s = bakLight();
-    if (!s || s.length > BAK_MAX) return;
+    if (!s) return;
+    /* 소품(pg.stk[].d)은 그림을 dataURL 째로 안고 있다. art/ 안 그림이 평균 300KB·큰 건 2.8MB라
+       소품 한 개만 얹어도 여기서 4MB를 넘긴다. 예전엔 조용히 return 해서, 사용자는 60초 백업이
+       도는 줄 알고 몇 시간을 더 썼다. d 를 빼면 되살릴 때 소품 그림이 통째로 사라지므로 빼지 않고,
+       대신 "지금 비상 백업이 멈췄다"를 알린다.
+       ⚠ 한 번만 알리면 안 된다 — 토스트는 3.2초 뒤 사라지고 다른 toast() 가 덮어쓰기도 해서
+          그 순간 화면을 안 보고 있으면 영영 못 본다. 그래서 5분마다 다시 띄운다. */
+    if (s.length > BAK_MAX) {
+      var now = Date.now();
+      if (now - bakWarnAt >= BAK_WARN_MS) {
+        bakWarnAt = now;
+        toast('⚠ 소품·내용이 많아 비상 백업이 멈췄어요 — Ctrl+S 로 직접 저장해 주세요.');
+      }
+      return;
+    }
+    bakWarnAt = 0;   /* 다시 4MB 아래로 내려오면 알림 주기도 처음부터 */
     try {
       localStorage.setItem(BAK_KEY, JSON.stringify({ t: Date.now(), pages: book.pages.length, book: s }));
     } catch (e) {}       /* 저장소가 꽉 차도 편집은 계속 */
@@ -5665,13 +5962,25 @@ window.gifenc=exports;})();
     markDirty(true);       /* 아직 파일로는 저장 안 된 상태다 */
     savedSnap = null;
     bakClear();
-    toast('되살렸어요 — 사진은 다시 넣어주세요.');
+    /* ⚠ 비상 백업은 용량 때문에 b64(사진·그린 그림)를 빼고 담는다 → 되살린 사진칸은
+          id 만 남은 껍데기다. 예전엔 toast 한 줄뿐이라 못 보고 그대로 저장해
+          멀쩡한 .pbk 를 사진 없는 파일로 덮어쓰는 사고가 났다. 몇 칸을 잃었는지 분명히 알린다. */
+    bakRestored = true;
+    var emptyN = bookEmptyPhotoCount();
+    if (emptyN) {
+      alert('되살렸어요 — 다만 사진·그림 ' + emptyN + '칸은 비어 있어요.\n\n' +
+            '비상 백업엔 사진과 그린 그림이 담기지 않아요(용량 때문).\n' +
+            '레이아웃·글·배치·소품은 그대로예요.\n\n' +
+            '⚠ 사진을 다시 넣기 전에는 예전 프로젝트 파일(.pbk) 에 덮어쓰지 마세요.');
+    } else {
+      toast('되살렸어요 — 사진은 다시 넣어주세요.');
+    }
   }
   $('#btnRevert').onclick = function () {
     if (!savedSnap) return;
     if (histNow() === savedSnap) return alert('이미 저장한 상태와 같아요.');
     if (!confirm('마지막으로 저장한 상태로 되돌릴까요?\n그 뒤에 한 작업은 사라져요.')) return;
-    try { book = normBook(JSON.parse(savedSnap)); } catch (e) { return alert('되돌리지 못했어요.'); }
+    try { book = normBook(histParse(savedSnap)); } catch (e) { return alert('되돌리지 못했어요.'); }
     cur = Math.min(cur, book.pages.length - 1);
     bookSel = null; stkSel = null; freeSel = null; partSel = null;
     prevPal = book._prevPal || null;
@@ -5696,6 +6005,24 @@ window.gifenc=exports;})();
     });
     return n;
   }
+  /* 비상 백업(bakLight)은 b64 를 빼고 저장하므로 되살린 책의 사진칸은 id 만 남은
+     껍데기다. 위 bookPhotoCount() 는 그 id 를 그대로 세서 0 이 안 되므로 '사진 0장' 가드가
+     복구 후엔 안 걸렸고, 사진이 통째로 빠진 책으로 멀쩡한 .pbk 를 덮어쓰는 사고가 났다.
+     → 복구했다는 사실을 기억해 두고, 알맹이(thumbs·b64) 없는 칸만 따로 센다.
+        앱 동봉 그림(art)은 restoreArtLayers 가 스스로 되살리니 안 센다. */
+  var bakRestored = false;
+  function bookEmptyPhotoCount() {
+    if (!bakRestored) return 0;      /* 평소 편집엔 기존 동작 그대로 */
+    var n = 0;
+    function chk(o) { if (o && o.id && !o.art && !thumbs[o.id] && !o.b64) n++; }
+    (book.pages || []).forEach(function (pg) { (pg.photos || []).forEach(chk); });
+    Object.keys(book.banners || {}).forEach(function (k) {
+      var b = book.banners[k] || {};
+      (b.photos || []).forEach(chk);
+      (b.chars || []).forEach(chk);
+    });
+    return n;
+  }
   $('#btnSave').onclick = function () {
     /* ⚠ 실제 사고: 크래시 복구("되살릴까요?")로 되살리면 사진은 안 따라온다.
           그 상태로 저장하면 13쪽짜리인데 사진 0장인 파일이 나오고,
@@ -5705,6 +6032,15 @@ window.gifenc=exports;})();
                  '켤 때 "되살릴까요?" 로 복구하셨다면 사진은 따라오지 않습니다.\n' +
                  '사진을 다시 넣은 뒤 저장하시는 게 좋아요.\n\n' +
                  '이대로 사진 없이 저장할까요?')) return;
+    /* ⚠ 복구본은 사진칸 id 가 남아 있어 위 '사진 0장' 가드에 안 걸린다.
+          그대로 저장하면 저장창에서 예전 .pbk 를 고르는 순간 멀쩡하던 사진이
+          통째로 사라진다. 저장창을 열기 전에 잡는다. */
+    var emptyN = bookEmptyPhotoCount();
+    if (emptyN &&
+        !confirm('⚠ 되살린 작업이라 사진·그림 ' + emptyN + '칸이 비어 있습니다.\n\n' +
+                 '이대로 저장하면 그 칸들은 빈 채로 파일에 담깁니다.\n' +
+                 '저장창에서 예전 프로젝트 파일(.pbk) 을 고르면 그 사진은 영영 사라져요.\n\n' +
+                 '사진을 다시 넣은 뒤 저장하시는 게 좋아요. 그래도 저장할까요?')) return;
     busy(true, '프로젝트 저장 중…');
     /* 저장 직전 원본 소실 복구 — 파이썬이 잃은 사진을 화면 사본으로 재등록 */
     rescueLostOriginals().then(function (rescued) {
@@ -5734,7 +6070,12 @@ window.gifenc=exports;})();
       if (!res.ok) return apiErr('프로젝트를 열지 못했어요.', res.err);
       book = normBook(res.book);
       thumbs = res.thumbs || {};
+      bakRestored = false;   /* 다른 프로젝트를 열었으면 '되살린 작업' 경고는 끝 */
       cur = 0;
+      /* 책을 통째로 갈아끼우므로 페이지 번호로 잡힌 선택은 전부 푼다
+         (비상복구 bakOffer·되돌리기 btnRevert 와 같은 처리). 안 풀면 이전 책의 선택이 남아
+         엉뚱한 사진에 핸들이 붙고 Delete 가 그 자리에 먹는다. */
+      bookSel = null; stkSel = null; freeSel = null; partSel = null;
       prevPal = book._prevPal || null;
       $('#autoPalChk').checked = !!book.autoPal;
       bnUidCatchUp();        /* 레이어 일련번호 이어받기 — 안 하면 id 가 겹쳐 그림이 덮어써진다 */
@@ -5748,6 +6089,8 @@ window.gifenc=exports;})();
   $('#btnNew').onclick = function () {
     if (!confirm('지금 작업을 버리고 새 책을 시작할까요?\n(저장 안 한 내용은 사라져요)')) return;
     book = defaultBook(); thumbs = {}; cur = 0;
+    /* 새 책 = 이전 책의 선택은 전부 무효 (비상복구·되돌리기와 같은 처리) */
+    bookSel = null; stkSel = null; freeSel = null; partSel = null;
     markSaved();           /* 새 책 = 되돌릴 기준도 새로 */
     prevPal = null;
     $('#autoPalChk').checked = false;
@@ -5799,6 +6142,11 @@ window.gifenc=exports;})();
        사진 선택(bookSel)도 같은 이유로 푼다. */
     partSel = null;
     bookSel = null;
+    /* 소품(stkSel)·자유 텍스트(freeSel) 선택도 "페이지 번호 + 몇 번째" 경로라 같이 풀어야 한다.
+       select() 는 페이지 번호가 '바뀔 때만' 선택을 푸는데, 마지막이 아닌 페이지를 지우면
+       번호가 그대로(ni === cur)라 안 풀렸다 → 그 상태로 Delete 를 누르면
+       당겨온 다음 페이지의 소품이 지워졌다. */
+    stkSel = null; freeSel = null;
     refreshList();
     select(Math.min(cur, book.pages.length - 1));
   };
@@ -6270,8 +6618,63 @@ window.gifenc=exports;})();
     if (u) u.disabled = HIDX <= 0;
     if (r) r.disabled = HIDX >= HIST.length - 1;
   }
+  /* ── 스냅샷 자산 풀 ──────────────────────────────
+     사진·그린 그림·소품은 dataURL(b64) 째로 book 안에 들어 있어서, 스냅샷 한 벌마다
+     같은 그림이 통째로 한 번 더 복사됐다(소품 하나 얹으면 80벌 × 수 MB). 값이 같은
+     문자열은 풀에 딱 한 벌만 두고 스냅샷엣 짧은 표(HP_TAG+번호)만 담는다. 되돌릴 때
+     histParse 가 그 표를 원래 문자열로 그대로 돌려주므로 복원 결과는 글자 하나까지
+     예전과 같다 — 자산을 버리는 게 아니라 한 벌만 쓰는 것이다.
+     ⚠ 표식·쓸어내기 정규식·복원 판정은 반드시 같은 글자여야 한다. 셈 중 하나라도 따로 적으면
+        (예: 표는 pbkA: 인데 정규식은 pbkA:\d+ ) 살아있는 자산까지 지워져
+        b64 자리에 표 문자열이 남고, 그대로 .pbk 에 저장된다. 그래서 HP_TAG/HP_RE 를
+        바로 붙여 둔다 — 한 쪽만 고치지 말 것.
+     ⚠ 안 지워지는 캐시가 되면 안 된다 — histPoolSweep 이 살아 있는 스냅샷(HIST·savedSnap)에
+        안 쓰이는 항목을 지운다(호출 지점: histPush 예산 초과 시 · histReset).
+     ⚠ 표식 첫 글자는 U+E000(사용자영역) — 실제 데이터엔 안 나오고, NUL 처럼
+        JSON.stringify 가 이스케이프하지도 않아 정규식이 그대로 찾는다. */
+  var HP_TAG = 'pbkA:';                    /* 표식 접두사 */
+  var HP_RE  = /pbkA:\d+/g;                 /* ⚠ HP_TAG 와 반드시 같은 글자 */
+  var HP_MIN = 4096;                              /* 이보다 짧으면 풀에 넣어도 이득이 없다 */
+  var HP_KEYS = { b64: 1, ckFromB64: 1, d: 1 };   /* 무거운 dataURL 을 지니는 칸 */
+  var HP_S2K = new Map();                         /* 값 → 표 */
+  var HP_K2S = Object.create(null);               /* 표 → 값 */
+  var HP_SEQ = 0, HP_BYTES = 0;
+  function hpPut(v) {
+    var k = HP_S2K.get(v);
+    if (k === undefined) {
+      k = HP_TAG + (++HP_SEQ);
+      HP_S2K.set(v, k); HP_K2S[k] = v; HP_BYTES += v.length;
+    }
+    return k;
+  }
+  function histPoolSweep() {
+    var live = Object.create(null), i, m, k;
+    function mark(s) {
+      if (!s) return;
+      HP_RE.lastIndex = 0;
+      while ((m = HP_RE.exec(s))) live[m[0]] = 1;
+    }
+    for (i = 0; i < HIST.length; i++) mark(HIST[i]);
+    mark(savedSnap);   /* '마지막으로 저장한 상태'도 살아 있는 스냅샷이다 */
+    for (k in HP_K2S) {
+      if (!live[k]) { HP_BYTES -= HP_K2S[k].length; HP_S2K.delete(HP_K2S[k]); delete HP_K2S[k]; }
+    }
+  }
   function histNow() {
-    try { return book ? JSON.stringify(book) : null; } catch (e) { return null; }
+    try {
+      return book ? JSON.stringify(book, function (k, v) {
+        if (typeof v === 'string' && v.length >= HP_MIN && HP_KEYS[k] === 1) return hpPut(v);
+        return v;
+      }) : null;
+    } catch (e) { return null; }
+  }
+  /* 스냅샷 → book. histNow 의 짝 — 표를 원래 dataURL 로 되돌린다.
+     (되살린 book 엣 표가 남지 않으므로 저장·내보내기는 예전 그대로 진짜 b64 를 쓴다) */
+  function histParse(s) {
+    return JSON.parse(s, function (k, v) {
+      if (typeof v === 'string' && v.charCodeAt(0) === 0xE000 && HP_K2S[v] !== undefined) return HP_K2S[v];
+      return v;
+    });
   }
   /* 저장 안 한 변경이 있는지 — 저장 버튼에 ● 를 붙여 보여준다.
      예전엔 마지막으로 저장한 게 언제인지 알 방법이 아예 없었다. */
@@ -6296,8 +6699,18 @@ window.gifenc=exports;})();
     if (HIST.length > HMAX) HIST.shift();
     var tot = 0, i;
     for (i = 0; i < HIST.length; i++) tot += HIST[i].length;
-    while (HIST.length > 2 && tot > HBYTES) { tot -= HIST[0].length; HIST.shift(); }
+    /* 풀로 빠진 dataURL 도 결국 메모리라 같은 예산(HBYTES)으로 함께 쟴다.
+       넘치면 먼저 죽은 풀 항목을 쓸어내고(대개 여기서 끝난다), 그래도 넘칠 때만
+       예전처럼 예산 아래로 내려갈 때까지 옷 스냅샷을 버린다.
+       (한 벌씩 줄어들고 HIST.length > 2 에서 멈추므로 반드시 끝난다 — 별도 가드 불필요) */
+    if (tot + HP_BYTES > HBYTES) histPoolSweep();
+    while (HIST.length > 2 && tot + HP_BYTES > HBYTES) {
+      tot -= HIST[0].length; HIST.shift();
+      histPoolSweep();
+    }
     HIDX = HIST.length - 1;
+    /* 스냅샷을 쌓은 뒤 딱 한 번 — 지금 책에 없는 그리기 캔버스를 놓아준다(§edPaintGC) */
+    edPaintGC();
     markDirty(true);
     updateHistBtns();
   }
@@ -6309,6 +6722,7 @@ window.gifenc=exports;})();
     HIST = []; HIDX = -1;
     var s = histNow();
     if (s) { HIST.push(s); HIDX = 0; }
+    histPoolSweep();   /* 캐시 무효화 지점 — 새 책·열기면 옷 책 자산을 풀에서 놓아준다 */
     updateHistBtns();
   }
   function histStep(d) {
@@ -6321,7 +6735,7 @@ window.gifenc=exports;})();
     HMUTE = true;
     try {
       HIDX = ni;
-      book = JSON.parse(HIST[ni]);
+      book = histParse(HIST[ni]);   /* 표로 담긴 dataURL 을 원래 문자열로 되살린다 */
       /* 그리기·지우개·AI누끼 결과는 레이어의 b64 로 되돌아오는데,
          화면이 보는 thumbs[id] 는 '이미 있으면 안 덮는' 규칙이라 옛 그림이 그대로 남았다.
          (업데이트_내역엔 "실행취소 전부 지원"이라 적혀 있었지만 실제로는 화면이 안 바뀌었다)
@@ -6333,6 +6747,9 @@ window.gifenc=exports;})();
         });
       });
       for (var pk in edPaintCvs) { if (Object.prototype.hasOwnProperty.call(edPaintCvs, pk)) delete edPaintCvs[pk]; }
+      /* 프레임·소품 알파 검사 캔버스도 같은 이유로 비운다 — 레이어 id 는 그대로인데
+         thumbs[id] 만 옛 그림으로 되돌아오면 뚫린 자리 판정이 어긋난다 */
+      for (var bnHitK in bnArtHitCvs) { if (Object.prototype.hasOwnProperty.call(bnArtHitCvs, bnHitK)) delete bnArtHitCvs[bnHitK]; }
       prevPal = book._prevPal || null;
       $('#autoPalChk').checked = !!book.autoPal;
       partSel = null; bnSel = null; bnPartSel = null; bnHBox = null; bookSel = null;
@@ -6374,9 +6791,21 @@ window.gifenc=exports;})();
     if (!document.body.classList.contains('editOn')) return;
     var tg = (ev.target || {}).tagName;
     if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT') return;
+    /* ⚠ i 를 i:'pick' 으로 두면 edSetTool('pick') 이 돌아 #edTools 의 도구 불이 전부 꺼지고,
+       그 상태로 드래그하면 edDrawShape 가 'pick' 을 몰라 빈 그리기 레이어만 쌓였다.
+       스포이드는 data-t 도구가 아니라 #edPickCol(EyeDropper) 버튼이라,
+       포토샵처럼 I = 스포이드로 그 버튼을 대신 눌러준다. */
     var K = { v: 'move', b: 'brush', e: 'erase', l: 'lasso', w: 'wand',
-              g: 'fill', m: 'rect', c: 'crop', i: 'pick' };
-    var t2 = K[(ev.key || '').toLowerCase()];
+              g: 'fill', m: 'rect', c: 'crop' };
+    var k2 = (ev.key || '').toLowerCase();
+    if (k2 === 'i') {
+      var pkBtn = document.getElementById('edPickCol');
+      if (!pkBtn) return;
+      ev.preventDefault();
+      pkBtn.click();
+      return;
+    }
+    var t2 = K[k2];
     if (!t2) return;
     if (typeof edSetTool !== 'function') return;
     ev.preventDefault();
@@ -9156,6 +9585,9 @@ window.gifenc=exports;})();
   var bnHandOn = false;   /* ✋ 손바닥 도구 켜짐 */
   var bnSpaceHeld = false;/* Space 를 누르고 있는 동안 임시 손바닥 */
   var BN_ZMIN = 0.05, BN_ZMAX = 8;
+  /* 확대 상한을 배율(8×)로만 잡으면 24×24 퍼스나콘이 192px 에서 멈춘다.
+     작은 캔버스는 "화면에서 이만큼까지는 커진다"는 픽셀 기준으로 상한을 넓힌다. */
+  var BN_ZMAXPX = 1600;
   var bnSel = null;       /* 선택 레이어: {kind:'bg'} | {kind:'char', idx} */
   var bnHBox = null;      /* 현재 핸들 박스 DOM(드래그 중 실시간 갱신용) */
 
@@ -9748,7 +10180,10 @@ window.gifenc=exports;})();
     if (!def || bnType === 'slice') return 1;
     bnFitScale = bnFitOnly();
     /* 너무 크게 늘리면 브라우저가 감당 못 하므로 화면 픽셀로도 한 번 더 제한 */
-    var lim = Math.min(BN_ZMAX, 12000 / Math.max(def.w, def.h));
+    /* 배율 상한(BN_ZMAX)과 픽셀 상한(BN_ZMAXPX) 중 큰 쪽을 상한으로 쓴다 —
+       큰 배너는 예전 그대로 8×, 작은 캔버스(퍼스나콘 24 등)만 더 확대된다. */
+    var bnMx = Math.max(def.w, def.h, 1);
+    var lim = Math.min(12000 / bnMx, Math.max(BN_ZMAX, BN_ZMAXPX / bnMx));
     var sc = Math.max(BN_ZMIN, Math.min(lim, bnFitScale * bnZoom));
     bnZoom = sc / bnFitScale;
     bnStageScale = sc;
@@ -9766,6 +10201,14 @@ window.gifenc=exports;})();
     box.style.height = def.h + 'px';
     box.style.transform = 'scale(' + sc + ')';
     if (vw < def.w) scale.scrollLeft = (def.w - vw) / 2 * sc;
+    /* ＃ 안내선 격자는 #bnScale(잘라 보기 때 스크롤로 미는 칸) 안의 절대배치라,
+       PC/모바일 미리보기 중엔 스크롤된 만큼 왼쪽으로 밀려 중앙선이 실제 한가운데와 어긋났다.
+       → 지금 보이는 폭(vw) 기준으로 자리·너비를 px로 다시 잡는다(전체 보기면 0/전폭 그대로). */
+    var gg = document.getElementById('bnGuideGrid');
+    if (gg) {
+      gg.style.left = (vw < def.w ? (def.w - vw) / 2 * sc : 0) + 'px';
+      gg.style.width = (vw * sc) + 'px';
+    }
     var lab = document.getElementById('bnZoomVal');
     if (lab) lab.textContent = Math.round(sc * 100) + '%';
     return sc;
@@ -9973,10 +10416,61 @@ window.gifenc=exports;})();
       : kind === 'txt' ? { kind: 'txt', idx: parseInt(el.getAttribute('data-ti'), 10) }
       : { kind: 'char', idx: parseInt(el.getAttribute('data-ci'), 10) };
   }
-  function bnPaintClearAt(sel, ev) {
+  /* ── 앱 동봉 그림(프레임·포토카드·소품) 클릭 통과 ──
+     투명 픽셀 통과 검사가 o.paint(그리기)에만 걸려 있어, 가운데가 뻥 뚫린 PNG 프레임도
+     상자 전체가 클릭을 먹었다 → 뚫린 구멍으로 아래 사진을 못 골랐다.
+     화면의 <img> 는 이미 떠 있으니 알파만 볼 축소 캔버스를 한 번 띄워 캐시해 검사한다. */
+  var bnArtHitCvs = {};   /* 레이어 id → 알파 검사용 축소 캔버스(못 뜨면 width 0 으로 표시) */
+  function bnArtHitCanvas(o, el) {
+    var cv = bnArtHitCvs[o.id];
+    if (!cv) {
+      if (!el || el.tagName !== 'IMG' || !el.complete || !el.naturalWidth) return null;
+      cv = bnArtHitCvs[o.id] = document.createElement('canvas');
+      var s2 = Math.min(1, 320 / Math.max(el.naturalWidth, el.naturalHeight));
+      cv.width = Math.max(1, Math.round(el.naturalWidth * s2));
+      cv.height = Math.max(1, Math.round(el.naturalHeight * s2));
+      /* 못 그리면 width 0 으로 남겨 매 클릭 재시도하지 않는다(예전처럼 통짜 클릭) */
+      try { cv.getContext('2d').drawImage(el, 0, 0, cv.width, cv.height); } catch (e) { cv.width = 0; }
+    }
+    return cv.width ? cv : null;
+  }
+  function bnArtClearAt(o, el, ev) {
+    var def = BANNERS[bnType];
+    if (!def || !el) return false;
+    /* 표시 크기는 offsetWidth/Height 로 읽는다 — 소품(bnAddPropData)은 measureInto 를
+       안 불러 iw/ih 가 없고, 그러면 edToBitmap 이 def.w/def.h 로 잘못 떨어진다 */
+    var ow = el.offsetWidth, oh = el.offsetHeight;
+    if (!ow || !oh) return false;
+    var cv = bnArtHitCanvas(o, el);
+    if (!cv) return false;
+    var p = bnPtBanner(ev, $('#bnBox').getBoundingClientRect());
+    var cx = clampN(o.x, 50, -60, 160) / 100 * def.w;
+    var cy = clampN(o.y, 50, -60, 160) / 100 * def.h;
+    var th = -(parseFloat(o.rot) || 0) * Math.PI / 180;   /* 회전·좌우반전 되돌리기 */
+    var dx = p.bx - cx, dy = p.by - cy;
+    var rx = dx * Math.cos(th) - dy * Math.sin(th);
+    var ry = dx * Math.sin(th) + dy * Math.cos(th);
+    if (o.flip) rx = -rx;
+    /* 얇은 테두리도 잡히도록 주변까지 본다(배너 6px 분) — 전부 투명할 때만 통과 */
+    var R = Math.max(2, Math.round(6 * cv.width / ow)), n = R * 2 + 1;
+    var x0 = Math.round((rx / ow + 0.5) * cv.width) - R;
+    var y0 = Math.round((ry / oh + 0.5) * cv.height) - R;
+    if (x0 + n <= 0 || y0 + n <= 0 || x0 >= cv.width || y0 >= cv.height) return true;
+    x0 = Math.max(0, Math.min(cv.width - 1, x0));
+    y0 = Math.max(0, Math.min(cv.height - 1, y0));
+    var w2 = Math.min(n, cv.width - x0), h2 = Math.min(n, cv.height - y0);
+    try {
+      var d2 = cv.getContext('2d').getImageData(x0, y0, w2, h2).data;
+      for (var i2 = 3; i2 < d2.length; i2 += 4) if (d2[i2] >= 12) return false;
+      return true;
+    } catch (e) { return false; }
+  }
+  function bnPaintClearAt(sel, ev, el) {
     if (!sel || sel.kind !== 'char') return false;
     var o = bnLayerObj(sel);
-    if (!o || !o.paint) return false;
+    if (!o) return false;
+    /* 그리기가 아니면 앱 동봉 그림(o.art)만 알파 검사 — 사용자 사진은 예전 그대로 */
+    if (!o.paint) return o.art ? bnArtClearAt(o, el, ev) : false;
     var cv = edPaintCvs[o.id];
     if (!cv || !cv.width) return false;
     var def = BANNERS[bnType];
@@ -9998,14 +10492,16 @@ window.gifenc=exports;})();
   function bnResolveHit(el, ev) {
     var off = [], cur = el, guard = 0, below;
     while (cur && guard++ < 12) {
-      if (!bnPaintClearAt(bnSelOf(cur), ev)) break;
+      if (!bnPaintClearAt(bnSelOf(cur), ev, cur)) break;
       off.push(cur);
       cur.style.pointerEvents = 'none';
       below = document.elementFromPoint(ev.clientX, ev.clientY);
       cur = (below && below.closest) ? below.closest('.lay') : null;
     }
     for (var i = 0; i < off.length; i++) off[i].style.pointerEvents = '';
-    return cur;
+    /* 밑에 아무것도 없으면 원래 레이어를 돌려준다 — 뚫린 프레임 가운데를 눌렀을 때
+       클릭이 허공에서 죽어 "아무 반응도 없다"가 되는 걸 막는다 */
+    return cur || el;
   }
 
   /* ── 스냅 가이드: 배너 중앙·가장자리·다른 레이어 중심에 자석처럼 (Alt = 잠깐 끄기) ── */
@@ -10043,16 +10539,18 @@ window.gifenc=exports;})();
   function bnShowGuides(gx, gy) {
     var wrap = $('#bnHandles');
     if (!wrap) return;
-    wrap.querySelectorAll('.bnGuide').forEach(function (g) { g.remove(); });
+    /* 스냅선 클래스는 .bnSnapLine — 상단배너 안전선(.bnGuide)과 이름이 겹쳐
+       안전선이 분홍 덩어리로 칠해지던 문제 때문에 분리했다. 여기선 스냅선만 지운다. */
+    wrap.querySelectorAll('.bnSnapLine').forEach(function (g) { g.remove(); });
     if (gx != null) {
       var v = document.createElement('div');
-      v.className = 'bnGuide v';
+      v.className = 'bnSnapLine v';
       v.style.left = (gx * bnStageScale) + 'px';
       wrap.appendChild(v);
     }
     if (gy != null) {
       var h = document.createElement('div');
-      h.className = 'bnGuide h';
+      h.className = 'bnSnapLine h';
       h.style.top = (gy * bnStageScale) + 'px';
       wrap.appendChild(h);
     }
@@ -10385,10 +10883,11 @@ window.gifenc=exports;})();
     busy(true, '사진 넣는 중…');
     dndLoadImages(files).then(function (list) {
       var b = ensureBanners()[bnType], n = bnPhDefs(bnType).length;
-      var pending = 0, done = false;
+      var pending = 0, done = false, over = 0;
       list.forEach(function (ph, j) {
         var tgt = slotIdx + j;
-        if (tgt >= n) return;
+        /* 칸보다 많이 놓으면 나머지는 조용히 버려졌다 — 화보집 탭처럼 몇 장이 빠졌는지 알린다. */
+        if (tgt >= n) { over++; return; }
         var p = { id: ph.id, x: 50, y: 50, sc: 1, rot: 0, flip: false };
         b.photos[tgt] = p;
         pending++;
@@ -10399,6 +10898,11 @@ window.gifenc=exports;})();
       bnSel = { kind: 'bg' };
       refreshBnStage();
       renderBnInspector();
+      /* 편집 탭은 사진칸이 배경 1개뿐이라 "사진칸이 1개" 라고만 하면
+         레이어로는 얼마든 얹힐 수 있다는 걸 몰라 오해한다 — 탭에 맞는 안내로 나눠 준다. */
+      if (over) toast(bnType === 'edit'
+        ? '편집 캔버스 배경은 1장만 들어가요 — 나머지 ' + over + '장은 배경이 생긴 뒤 다시 놓으면 레이어로 얹혀요.'
+        : '이 레이아웃은 사진칸이 ' + n + '개라 ' + over + '장은 못 넣었어요.');
     }).catch(function (e) { busy(false); alert('사진을 넣지 못했어요: ' + e); });
   }
   function bnPickInto(slotIdx) {
@@ -10410,10 +10914,11 @@ window.gifenc=exports;})();
       if (res && res.err) { apiErr('사진을 불러오지 못했어요.', res.err); return; }
       if (!res || !res.length) return;
       var b = ensureBanners()[bnType], n = bnPhDefs(bnType).length;
-      var pending = 0, done = false;
+      var pending = 0, done = false, over = 0;
       res.forEach(function (ph, j) {
         var tgt = slotIdx + j;
-        if (tgt >= n) return;
+        /* 위 bnDropInto와 같은 이유 — 칸보다 많이 고른 만큼 세어 두었다가 아래에서 알린다 */
+        if (tgt >= n) { over++; return; }
         thumbs[ph.id] = ph.thumb;
         var p = { id: ph.id, x: 50, y: 50, sc: 1, rot: 0, flip: false };
         b.photos[tgt] = p;
@@ -10424,6 +10929,9 @@ window.gifenc=exports;})();
       bnSel = { kind: 'bg' };
       refreshBnStage();
       renderBnInspector();
+      if (over) toast(bnType === 'edit'
+        ? '편집 캔버스 배경은 1장만 들어가요 — 나머지 ' + over + '장은 배경이 생긴 뒤 다시 놓으면 레이어로 얹혀요.'
+        : '이 레이아웃은 사진칸이 ' + n + '개라 ' + over + '장은 못 넣었어요.');
     }).catch(function (e) { busy(false); alert('사진을 불러오지 못했어요: ' + e); });
   }
 
@@ -11048,7 +11556,23 @@ window.gifenc=exports;})();
       var ci = document.createElement('input');
       ci.type = 'color';
       ci.value = FX_HEX6.test(dc.bg || '') ? dc.bg : '#e7eadb';
-      ci.oninput = function () { dc.bg = ci.value; refreshBnStageSoon(); renderBnInspector(); };
+      /* ⚠ input 도중에 renderBnInspector() 를 부르면 안 된다 — 이 <input type="color">
+         자체가 통째로 새로 만들어지면서, 열려 있던 색 고르기 창이 강제로 닫힌다.
+         고객 문의: "드래그로 색을 못 고르고 클릭할 때마다 창이 꺼져요 / 스포이드도 안 돼요".
+         시그풍에서 드래그가 되는 이유가 바로 이것이다 — 거기 bindValue 는 input 에서
+         캔버스만 다시 그리고 DOM 은 안 건드린다(signature_balloon.js).
+         여기서도 input 중엔 미리보기와 스와치 불만 제자리에서 고치고,
+         인스펙터 재구성은 창이 닫힌 뒤인 change 로 미룬다. */
+      function paintBgSwatches() {
+        var cur = dc.bg || '';
+        for (var i = 0; i < brow.children.length && i < SW.length; i++) {
+          var v = SW[i].v;
+          brow.children[i].className =
+            ((v === '' && !FX_HEX6.test(cur)) || (v && cur === v)) ? 'on' : '';
+        }
+      }
+      ci.oninput = function () { dc.bg = ci.value; paintBgSwatches(); refreshBnStageSoon(); };
+      ci.onchange = function () { dc.bg = ci.value; refreshBnStage(); renderBnInspector(); };
       pickRow.appendChild(ci);
       box.appendChild(pickRow);
     })();
@@ -11766,11 +12290,16 @@ window.gifenc=exports;})();
     box.appendChild(insSec('레이어 (위=앞)'));
     (function () {
       var zoArr = b.zorder || [];
+      /* 목록에 안 보이는 층은 ▲▼ 대상에서 뺀다 — 편집 캔버스의 'L'(레이아웃) 층은 빈 껍데기라
+         아래 목록에서 숨기는데, 그 층과 자리만 바꾸면 보이는 순서가 그대로여서 클릭이 한 번씩 헛돈다. */
+      function zGhost(zk) { return zk === 'L' && bnType === 'edit'; }
       function zMove(key, dir) {   /* dir +1 = 앞(위) */
         /* 매번 새로 읽는다 — 다른 핸들러가 refreshBnStage만 돌린 뒤엔 렌더 시점 배열이 낡을 수 있어서 */
         var zo = ensureBanners()[bnType].zorder || [];
         var i = zo.indexOf(key), j = i + dir;
-        if (i < 0 || j < 0 || j >= zo.length) return;
+        if (i < 0) return;
+        while (j >= 0 && j < zo.length && zGhost(zo[j])) j += dir;   /* 안 보이는 층은 건너뛰고 그 다음 층과 바꾼다 */
+        if (j < 0 || j >= zo.length) return;
         var tmp = zo[i]; zo[i] = zo[j]; zo[j] = tmp;
         refreshBnStage();
         renderBnInspector();
@@ -11817,10 +12346,15 @@ window.gifenc=exports;})();
         }
         if (o.key) {   /* ▲▼ 순서 (배경 뺀 전 레이어) */
           var i = zoArr.indexOf(o.key);
+          /* 끝단 판정도 '보이는 층' 기준 — 위/아래에 안 보이는 층만 남았으면 버튼을 끈다(눌러도 안 움직이는 헛클릭 방지) */
+          var hasNb = function (dir) {
+            for (var j2 = i + dir; j2 >= 0 && j2 < zoArr.length; j2 += dir) if (!zGhost(zoArr[j2])) return true;
+            return false;
+          };
           var upB = lyBtn('▲', '앞으로 (한 층 위로)', function () { zMove(o.key, 1); });
-          upB.disabled = i >= zoArr.length - 1;
+          upB.disabled = i < 0 || !hasNb(1);
           var dnB = lyBtn('▼', '뒤로 (한 층 아래로)', function () { zMove(o.key, -1); });
-          dnB.disabled = i <= 0;
+          dnB.disabled = i < 0 || !hasNb(-1);
           row.appendChild(upB);
           row.appendChild(dnB);
         }
@@ -12017,6 +12551,13 @@ window.gifenc=exports;})();
     bnType = t;
     bnSel = null;
     bnPartSel = null;
+    /* ✂ 부분 편집 토글은 배너 레이아웃 섹션(bnType!=='edit') 안에만 있어서, 켠 채로
+       편집탭에 오면 끌 버튼이 사라진 채 클릭·휠·Delete 가 계속 가로채졌다 — 자동 해제 */
+    if (t === 'edit' && bnPartsMode) {
+      bnPartsMode = false;
+      document.body.classList.remove('bnPartsOn');
+      toast('✂ 부분 편집은 배너 전용이라 편집탭으로 오면서 껐어요.');
+    }
     document.querySelectorAll('.bnItem').forEach(function (el) {
       el.classList.toggle('sel', el.getAttribute('data-bn') === t);
     });
@@ -12043,6 +12584,9 @@ window.gifenc=exports;})();
   function gifTabApplyKind(kind) {
     GIF_TAB_KIND = kind;
     var isBn = kind === 'banner';
+    /* 반복 길이(giBfxLen)는 change 로만 스펙에 반영된다 — 기본값(1.5초)·설정 복원 상태로
+       배너 탭에 들어오면 스펙만 3초로 남아 미리보기가 저장본보다 느리고 길었다 */
+    if (isBn && !GIF.busy && gifEl('giBfxLen')) gifBannerSetLen(gifEl('giBfxLen').value);
     /* 움짤 탭에선 정지사진·AI 누끼 흐름을 통째로 숨긴다 — 그 기능의 집은 움짤배너 탭이다.
        사진을 고르면 스크립트가 박스를 다시 펴므로 JS 토글 대신 CSS 로 못박는다. */
     if (!document.getElementById('gifTabKindCss')) {
@@ -12251,12 +12795,32 @@ window.gifenc=exports;})();
               (1280×720 에 16:9 프레임을 얹었다고 1920×1080 으로 바꾸진 않는다). */
         var e3 = ensureBanners().edit;
         var cur = (e3.cw || def.w) / (e3.ch || def.h), fr = fw / fh;
+        var edFrKeep = false;   /* [취소]를 눌러 캔버스를 그대로 두기로 했나 */
         if (Math.abs(cur - fr) / fr > 0.02) {
-          edSetSize(fw, fh);
-          edFrNotice(fw, fh);
+          /* ⚠ 예전엔 여기서 말없이 캔버스를 갈아치웠다 — 안내(edFrNotice)는 반대편 #edHint 에 6초만 떠서
+             오른쪽 팔레트를 보던 사람은 못 보고 작업하던 게 잘린 것만 뒤늦게 알아챘다(요청).
+             → edSetSize 가 실제로 넣을 값(nw/nh)이 지금 캔버스와 다를 때만 물어본다. */
+          var nw = Math.round(clampN(fw, 1280, ED_MINPX, 4096));
+          var nh = Math.round(clampN(fh, 720, ED_MINPX, 4096));
+          var ow = Math.round(clampN(e3.cw, def.w, ED_MINPX, 4096));
+          var oh = Math.round(clampN(e3.ch, def.h, ED_MINPX, 4096));
+          if (nw !== ow || nh !== oh) {
+            if (confirm('이 프레임은 ' + nw + '×' + nh + ' (' + (nw >= nh ? '가로' : '세로') + ') 예요.\n'
+                      + '지금 캔버스 ' + ow + '×' + oh + ' 를 프레임 크기로 바꿀까요?\n\n'
+                      + '[확인] 캔버스를 프레임에 맞춤 — 작업 중이던 게 잘릴 수 있어요 (Ctrl+Z 로 되돌리기)\n'
+                      + '[취소] 캔버스는 그대로 — 프레임 전체가 보이게 안쪽에 넣어요(둘레에 여백)')) {
+              edSetSize(nw, nh);
+              edFrNotice(nw, nh);
+            } else edFrKeep = true;
+          }
         }
         var d3 = ensureBanners().edit;
-        var sc = Math.max(100, Math.ceil((d3.cw / d3.ch) / (fw / fh) * 100));
+        /* 새 프로젝트는 cw/ch 가 아직 없다(ensureBanners 가 안 만든다) → def 폴백. 안 하면 아래 sc 가 NaN */
+        var dw3 = d3.cw || def.w, dh3 = d3.ch || def.h;
+        /* 캔버스를 맞췄으면 예전대로 꽉 채우고(cover), [취소]면 프레임 전체가 보이게 안쪽에 맞춘다(contain).
+           취소인데 cover 를 쓰면 세로 프레임이 238% 로 부풀어 위아래 테두리가 화면 밖으로 나간다. */
+        var sc = edFrKeep ? Math.min(100, Math.floor((dw3 / dh3) / (fw / fh) * 100))
+                          : Math.max(100, Math.ceil((dw3 / dh3) / (fw / fh) * 100));
         lay.sc = Math.min(sc, 600);
         refreshBnStage();
         renderBnInspector();
@@ -12435,7 +12999,7 @@ window.gifenc=exports;})();
     host.style.cssText = 'position:fixed;left:-99999px;top:0;width:1200px;height:1600px;' +
       'pointer-events:none;opacity:0';
     host.innerHTML = PBK.render(pg, { mode: 'edit', src: srcOf, pnum: bookPnum(pageIdx),
-      tstyle: tstyleOf(pg), tfx: tfxOf(pg) });
+      tstyle: tstyleOf(pg, null, true), tfx: tfxOf(pg) });
     document.body.appendChild(host);
     var out = [];
     try {
@@ -12474,10 +13038,15 @@ window.gifenc=exports;})();
         var ow = slotEl.offsetWidth, oh = slotEl.offsetHeight;
         if (!ow || !oh) { ow = r.width; oh = r.height; deg = 0; }
         /* 칸에 걸린 필터(sf-blur 의 blur 등)도 같이 구워야 화면과 같아진다 */
+        /* ⚠ 무드필터·✨자동보정은 칸(.ph)이 아니라 <img> 인라인 style 에 걸린다(engine.js fltSt).
+           칸만 읽어서 편집탭으로 옮기면 보정이 통째로 날아갔다 → 사진 자신의 필터도 합친다.
+           캔버스 filter 는 왼쪽부터 적용 = CSS(자식 먼저 → 부모)와 같은 순서. */
         var flt = '';
         try {
+          var cfi = getComputedStyle(node).filter;
+          if (cfi && cfi !== 'none') flt = cfi;
           var cf = getComputedStyle(slotEl).filter;
-          if (cf && cf !== 'none') flt = cf;
+          if (cf && cf !== 'none') flt = flt ? (flt + ' ' + cf) : cf;
         } catch (e2) {}
         out.push({ i: i, p: p, rot: Math.round(deg * 100) / 100, flt: flt,
           cx: (r.left - sr.left + r.width / 2) * k,
@@ -12515,6 +13084,8 @@ window.gifenc=exports;})();
           }
           var iw = p.iw > 0 ? p.iw : im.naturalWidth;
           var ih = p.ih > 0 ? p.ih : im.naturalHeight;
+          /* 페더 램프가 걸릴 상자 — 칸맞춤 사진은 <img> 가 칸을 꽉 채우니 칸 크기 그대로 */
+          var feW = W, feH = H;
           g.translate(W / 2, H / 2);
           if (p.free) {
             /* 자유 배치 — --pw/--px/--py/--prot 과 똑같이 계산.
@@ -12525,6 +13096,7 @@ window.gifenc=exports;})();
             g.translate(dx * Q, dy * Q);
             g.rotate(rot);
             g.drawImage(im, -iw * sc * Q / 2, -ih * sc * Q / 2, iw * sc * Q, ih * sc * Q);
+            feW = iw * sc * Q; feH = ih * sc * Q;   /* 자유배치는 마스크가 사진 상자에 걸린다 */
           } else {
             /* 예전 방식 — object-fit:cover + object-position:ox% oy% 를 그대로 재현 */
             var ox = parseFloat(p.ox); if (!isFinite(ox)) ox = 50;
@@ -12535,6 +13107,31 @@ window.gifenc=exports;})();
             var offX = (slot.w - dw) * (ox / 100 - 0.5);
             var offY = (slot.h - dh) * (oy / 100 - 0.5);
             g.drawImage(im, (offX - dw / 2) * Q, (offY - dh / 2) * Q, dw * Q, dh * Q);
+          }
+          /* ⚠ 가장자리 페더(p.fe)도 <img> 인라인 마스크라 칸만 읽으면 통째로 사라진다.
+             engine.js 의 feSt(가로×세로 램프 교차)와 같은 결과를 비트맵에 직접 굽는다.
+             CSS 는 filter → mask 순서라, 필터를 끄고 지운다. */
+          var fe = parseFloat(p.fe);
+          if (isFinite(fe) && fe > 0) {
+            fe = Math.min(45, fe);
+            var fr = fe / 100;
+            g.filter = 'none';
+            g.globalCompositeOperation = 'destination-out';
+            var gh = g.createLinearGradient(-feW / 2, 0, feW / 2, 0);
+            gh.addColorStop(0, 'rgba(0,0,0,1)');
+            gh.addColorStop(fr, 'rgba(0,0,0,0)');
+            gh.addColorStop(1 - fr, 'rgba(0,0,0,0)');
+            gh.addColorStop(1, 'rgba(0,0,0,1)');
+            g.fillStyle = gh;
+            g.fillRect(-feW / 2, -feH / 2, feW, feH);
+            var gv = g.createLinearGradient(0, -feH / 2, 0, feH / 2);
+            gv.addColorStop(0, 'rgba(0,0,0,1)');
+            gv.addColorStop(fr, 'rgba(0,0,0,0)');
+            gv.addColorStop(1 - fr, 'rgba(0,0,0,0)');
+            gv.addColorStop(1, 'rgba(0,0,0,1)');
+            g.fillStyle = gv;
+            g.fillRect(-feW / 2, -feH / 2, feW, feH);
+            g.globalCompositeOperation = 'source-over';
           }
           ok(cv.toDataURL('image/png'));
         } catch (e) { fail(e); }
@@ -13073,6 +13670,11 @@ window.gifenc=exports;})();
   }
   function gifPortraitUiSync() {
     var on = gifPortraitChosen();
+    /* '움직임 없음'이면 gifPhotoMotion 이 곧바로 정지값을 돌려줘 세기 슬라이더가 아무
+       영향이 없는데도 활성 상태로 남아 "안 먹는다"는 오해를 샀다 — 값은 그대로 두고
+       UI만 숨긴다(글자 등장 '없음'의 gifTxtAnimSync 와 같은 방식). */
+    var mvSel = gifEl('giPhMove'), amtRow = gifEl('giPhAmtRow');
+    if (amtRow) amtRow.style.display = (mvSel && mvSel.value === 'none') ? 'none' : '';
     var box = gifEl('giRigBox');
     if (box) box.style.display = on ? '' : 'none';
     var fxBox = gifEl('giBfxBox');
@@ -13529,6 +14131,18 @@ window.gifenc=exports;})();
     og.drawImage(cur, 0, 0, cw, ch, 0, 0, tw, th);
     out.__src = rig.subject;
     rig.subjectSprites[key] = out;
+    /* ⚠ 상한이 없어 '인물 크기(giRigScale)'·휠 확대로 배율을 움직이는 동안 배율마다
+       원본급 캔버스가 계속 쌓였다(rig 를 새로 만들 때까지 한 장도 안 버려짐).
+       최근에 만든 8장만 남긴다 — 한 번에 쓰는 크기는 미리보기·완성본 2~3개뿐이라 다시
+       만들 일이 사실상 없고, 다시 만들어도 같은 입력이면 같은 스프라이트라 결과 픽셀은 그대로다. */
+    var spKeys = rig.subjectSpriteKeys || (rig.subjectSpriteKeys = []);
+    var spOld = spKeys.indexOf(key);
+    if (spOld >= 0) spKeys.splice(spOld, 1);
+    spKeys.push(key);
+    while (spKeys.length > 8) {
+      var spDrop = spKeys.shift();
+      if (spDrop !== key) delete rig.subjectSprites[spDrop];
+    }
     return out;
   }
   function gifDrawHairAwareSubject(g, rig, x, y, scale, ph, W) {
@@ -14102,6 +14716,20 @@ window.gifenc=exports;})();
      kit 폰트는 처음 쓸 때 FontFace 로 등록한다(미리보기가 매 프레임 이 함수를 지나므로
      고르는 순간 등록돼, 만들기 시점엔 이미 로드돼 있다). */
   var giBfxFontLoaded = {};
+  /* 아직 로드가 안 끝난 키트 FontFace 모음 — 만들기 직전에 이걸 기다려야 폴백 글씨로 안 굽는다.
+     ⚠ 사진·GIF 소스는 gifSeek 가 즉시 resolve 라 프레임 루프가 마이크로태스크만 돌고,
+        진행 중인 폰트 로드가 끼어들 틈이 없다(영상 소스만 우연히 맞던 이유). */
+  var giFontPending = [];
+  function giFontTrack(p) {
+    if (!p || typeof p.then !== 'function') return p;
+    giFontPending.push(p);
+    var off = function () {
+      var i9 = giFontPending.indexOf(p);
+      if (i9 >= 0) giFontPending.splice(i9, 1);
+    };
+    p.then(off, off);
+    return p;
+  }
   function gifBfxFontFace() {
     var el = gifEl('giBfxFont'), i = el ? parseInt(el.value, 10) : -1;
     /* 음수 -2/-3 = 동봉 서체(명조/손글씨) */
@@ -14114,8 +14742,8 @@ window.gifenc=exports;})();
       giBfxFontLoaded[fam] = 1;
       try {
         var face = new FontFace(fam, 'url(data:font/ttf;base64,' + f.b64 + ')', { weight: '100 900', style: 'normal', display: 'swap' });
-        face.load().then(function (ff) { document.fonts.add(ff); })
-          .catch(function (e) { console.warn('[폰트] 배너 등록 실패: ' + f.fam, e); });
+        giFontTrack(face.load().then(function (ff) { document.fonts.add(ff); })
+          .catch(function (e) { console.warn('[폰트] 배너 등록 실패: ' + f.fam, e); }));
       } catch (e) {}
     }
     return { fam: '"' + String(fam).replace(/["']/g, '') + '"',
@@ -14719,6 +15347,9 @@ window.gifenc=exports;})();
         if (GIF.mode === 'bottom' || (opt && opt.portrait2d)) gifEl('giPhMove').value = 'portrait2d';
         GIF.url = 'photo:' + f.name;
         GIF.dur = 3;                       /* 사진은 길이 개념이 없다 → 기본 3초 */
+        /* 단 배너(하단·6칸)는 반복 길이가 giBfxLen(기본 1.5초)으로 고정 — 새 사진을 골랐다고
+           3초로 되돌리면 사진 시계만 저장본보다 길어져 미리보기 속도가 어긋난다 */
+        if (GIF.mode === 'bottom' || GIF.mode === 'bottom6') GIF.dur = GIF_BOTTOM_SPEC.len || 3;
         GIF.vw = im.naturalWidth; GIF.vh = im.naturalHeight;
         gifPhotoShim.videoWidth = GIF.vw; gifPhotoShim.videoHeight = GIF.vh;
         gifPhotoShim.readyState = 4; gifPhotoShim.currentTime = 0; gifPhotoShim.paused = false;
@@ -14836,7 +15467,9 @@ window.gifenc=exports;})();
            '영상 맞추기'를 눌러도 drag/wheel 상태가 화면에 반영되지 않았다. */
         if (GIF.fitMode !== 'play') { if (!v.paused) v.pause(); }
         else if (v.paused && !gifFreePaused) v.play();
-        var fixedLen = 3;
+        /* 미리보기 루프 길이 = 저장본과 같아야 한다 — 3초 하드코딩이라 1.5초로 굽는
+           배너가 미리보기에서만 절반 속도·2배 길이로 돌았다(저장본은 GIF_BOTTOM_SPEC.len) */
+        var fixedLen = GIF_BOTTOM_SPEC.len || 3;
         var fixedPh = fixedLen ? ((v.currentTime || 0) % fixedLen) / fixedLen : 0;
         if (v.readyState >= 2) gifDrawFrame(g, v, cv.width, cv.height, fixedPh, true);
         requestAnimationFrame(loop);
@@ -15204,11 +15837,25 @@ window.gifenc=exports;})();
       var el = document.getElementById(id);
       if (!el) return;
       var v = (el.type === 'checkbox') ? !!el.checked : String(el.value);
+      /* [A16] 지연 채움 글꼴 목록이 아직 안 채워져 선택이 비어 있으면(value '')
+         빈 값으로 덮어쓰지 말고, 넣으려던 값(pendVal)을 그대로 저장한다. */
+      if (v === '' && el.dataset && el.dataset.pendVal) v = el.dataset.pendVal;
       /* 6칸 진입으로 표시만 100%가 된 85% 선택은 저장도 85%로 — 강제 표시가 저장을 오염시키지 않게 */
       if (id === 'giBfxScale' && el.dataset && el.dataset.was85 === '1' && v === '1') v = '0.85';
       o[id] = v;
     });
     if (GIF && GIF.ring) o.ring = GIF.ring;
+    /* 추가 문구·이름 글자 위치는 입력칸이 아니라 GIF 객체에만 있어 저장 목록에서 통째로 빠져 있었다 */
+    if (GIF) {
+      o.txts = (GIF.txts || []).map(function (t) {
+        return { s: String(t.s || ''), size: +t.size || 46, rot: +t.rot || 0,
+          col: String(t.col || '#ffffff'), out: String(t.out || '#000000'),
+          dly: +t.dly || 0, x: +t.x || 0, y: +t.y || 0 };
+      });
+      o.namePos = { x: +(GIF.namePos && GIF.namePos.x) || 0,
+        y: +(GIF.namePos && GIF.namePos.y) || 0,
+        rot: +(GIF.namePos && GIF.namePos.rot) || 0 };
+    }
     PREFS.gif = o;
     savePrefs();
   }
@@ -15216,14 +15863,50 @@ window.gifenc=exports;})();
   function gifPrefsLoad() {
     var o = PREFS && PREFS.gif;
     if (!o || typeof o !== 'object') return;
+    /* [A16] 글꼴 목록(#giFont·#giBfxFont)은 "처음 펼칠 때" 채우는 지연 목록이다.
+       먼저 채워 두지 않으면 저장해 둔 번호(예: "12") option 이 아직 없어서 value 가 ''로
+       확정되고, 곧이어 gifPrefsSave 가 그 ''를 다시 저장해 글꼴 선택이 기본체로 날아갔다. */
+    var GIF_FONT_SEL_IDS = ['giFont', 'giBfxFont'];
+    GIF_FONT_SEL_IDS.forEach(function (fid) {
+      var fe = document.getElementById(fid);
+      if (!fe || fe.dataset.filled) return;
+      try { fe.dispatchEvent(new Event('mousedown')); } catch (e) {}
+    });
     GIF_PREF_IDS.forEach(function (id) {
       if (!(id in o)) return;
       var el = document.getElementById(id);
       if (!el) return;
-      if (el.type === 'checkbox') el.checked = !!o[id];
-      else el.value = String(o[id]);
+      if (el.type === 'checkbox') { el.checked = !!o[id]; return; }
+      var want = String(o[id]);
+      var isFontSel = GIF_FONT_SEL_IDS.indexOf(id) >= 0;
+      /* 이미 ''로 오염된 옛 prefs 는 무시하고 기본값(-1)을 지킨다 — 그대로 넣으면
+         선택칸이 빈칸으로 보인다. 빈 값이 정상인 giBfxSub("없음")은 건드리지 않는다. */
+      if (isFontSel && want === '') return;
+      el.value = want;
+      /* 폰트 스캔이 아직 안 끝나 목록을 못 채운 경우 — 넣으려던 값을 남겨 뒀다가
+         목록이 채워질 때(fill) 되살리고, 그 사이 저장도 이 값으로 지킨다.
+         두 글꼴 목록으로만 한정 — 다른 select 까지 남기면 없어진 항목 값이 눌러앉는다. */
+      if (isFontSel && el.value !== want) el.dataset.pendVal = want;
     });
     if (o.ring && GIF) GIF.ring = o.ring;
+    /* 추가 문구·이름 글자 위치 되돌리기 — 되살린 항목은 새 객체라 옛 fitRef 는 버린다 */
+    if (GIF && Array.isArray(o.txts)) {
+      GIF.txts = o.txts.filter(function (t) {
+        return t && typeof t === 'object' && !Array.isArray(t);
+      }).slice(0, GITXT_MAX || 4).map(function (t) {
+        return { s: String(t.s || ''), size: +t.size || 46, rot: +t.rot || 0,
+          col: String(t.col || '#ffffff'), out: String(t.out || '#000000'),
+          dly: +t.dly || 0, x: +t.x || 0, y: +t.y || 0 };
+      });
+      GIF.fitRef = null;
+      try { gifTxtRender(); } catch (e) {}
+    }
+    if (GIF && o.namePos && typeof o.namePos === 'object') {
+      GIF.namePos.x = +o.namePos.x || 0;
+      GIF.namePos.y = +o.namePos.y || 0;
+      GIF.namePos.rot = +o.namePos.rot || 0;
+    }
+    try { gifTxtSyncRot(); } catch (e) {}
     try {
       document.querySelectorAll('[data-r]').forEach(function (b) {
         b.classList.toggle('on', b.getAttribute('data-r') === (o.ring || GIF.ring));
@@ -15541,7 +16224,9 @@ window.gifenc=exports;})();
     function bfill() {
       if (bsel.dataset.filled || !FONTS.length) return;
       bsel.dataset.filled = '1'; fontSelPrep(bsel);
-      var keep = bsel.value;
+      /* [A16] 부팅 때 prefs 가 넣으려다 목록이 없어 실패한 값 — 아직 아무 것도 안 박힌
+         상태(value '')일 때만 되살린다. 그 사이 사용자가 직접 고른 값은 안 덮는다. */
+      var keep = (bsel.value === '' && bsel.dataset.pendVal) ? bsel.dataset.pendVal : bsel.value;
       bsel.innerHTML = '<option value="-1">굵은 기본체</option><option value="-2">명조체 (동봉)</option><option value="-3">손글씨 (동봉)</option>';
       FONTS.forEach(function (ft, i) {
         var o = document.createElement('option');
@@ -15551,6 +16236,7 @@ window.gifenc=exports;})();
         bsel.appendChild(o);
       });
       bsel.value = keep && bsel.querySelector('option[value="' + keep + '"]') ? keep : '-1';
+      delete bsel.dataset.pendVal;
     }
     bsel.addEventListener('focus', bfill);
     bsel.addEventListener('mousedown', bfill);
@@ -15563,7 +16249,10 @@ window.gifenc=exports;})();
     this.value = '';
     if (!picked.length) return alert('그 폴더에서 .ttf / .otf 글꼴 파일을 찾지 못했어요.\n(.ttc 묶음 글꼴은 지원하지 않아요)');
     if (picked.length > 40 && !confirm(picked.length + '개 글꼴이 있어요. 전부 불러올까요?')) return;
-    picked.forEach(function (f) { fontAddLoad(f); });
+    /* [Q14] 예전엔 파일 하나마다 알림창이 떠서 30개면 30번을 눌러야 했다 —
+       조용히 불러오고 결과를 모아 마지막에 한 번만 알린다. */
+    fontBulkStart(picked.length);
+    picked.forEach(function (f) { fontAddLoad(f, true); });
   };
   ['giName', 'giCol', 'giOut', 'giBgCol', 'giBgCol2', 'giTrans', 'giBgMode', 'gifAvSize', 'giTxtAnim', 'giParti'].forEach(function (id) {
     var el = gifEl(id);
@@ -15872,7 +16561,9 @@ window.gifenc=exports;})();
     function fill() {
       if (fsel2.dataset.filled || !FONTS.length) return;
       fsel2.dataset.filled = '1'; fontSelPrep(fsel2);
-      var keep = fsel2.value;
+      /* [A16] 부팅 때 prefs 가 넣으려다 목록이 없어 실패한 값 — 아직 아무 것도 안 박힌
+         상태(value '')일 때만 되살린다. 그 사이 사용자가 직접 고른 값은 안 덮는다. */
+      var keep = (fsel2.value === '' && fsel2.dataset.pendVal) ? fsel2.dataset.pendVal : fsel2.value;
       fsel2.innerHTML = '<option value="-1">굵은 기본체</option><option value="-2">명조체 (동봉)</option><option value="-3">손글씨 (동봉)</option>';
       FONTS.forEach(function (ft, i) {
         var o = document.createElement('option');
@@ -15882,6 +16573,7 @@ window.gifenc=exports;})();
         fsel2.appendChild(o);
       });
       fsel2.value = keep && fsel2.querySelector('option[value="' + keep + '"]') ? keep : '-1';
+      delete fsel2.dataset.pendVal;
     }
     fsel2.addEventListener('focus', fill);
     fsel2.addEventListener('mousedown', fill);
@@ -15910,8 +16602,8 @@ window.gifenc=exports;})();
         giFontLoaded[fam] = 1;
         try {
           var face = new FontFace(fam, 'url(data:font/ttf;base64,' + f.b64 + ')', { weight: '100 900', style: 'normal', display: 'swap' });
-          face.load().then(function (ff) { document.fonts.add(ff); })
-            .catch(function (e) { console.warn('[폰트] 등록 실패: ' + f.fam, e); });
+          giFontTrack(face.load().then(function (ff) { document.fonts.add(ff); })
+            .catch(function (e) { console.warn('[폰트] 등록 실패: ' + f.fam, e); }));
         } catch (e) {}
       }
       return "'" + String(fam).replace(/'/g, '') + "','Malgun Gothic',sans-serif";
@@ -20413,11 +21105,17 @@ window.gifenc=exports;})();
       !gifFramesAlphaStatic(frames, step);
     for (var i = 0; i < frames.length; i += step) {
       var data = frames[i];
-      var delay = Math.round(1000 * step / fps);
+      /* ⚠ GIF 지연은 10ms 격자다 — 예전엔 Math.round(1000*step/fps) 값을 인코더가 다시
+         10ms로 반올림해서 프사·자유 크기가 30fps=33.3 / 24fps=25 / 15fps=14.29 로 나갔다.
+         하단 배너(gifBottomDelays)와 같은 방식으로 고친다 — 누적 시각을 격자에 반올림한
+         '차이'를 쓰면 한 장씩은 30/40ms 로 갈려도 총 길이·평균 fps 가 표기와 정확히 맞는다. */
+      var dEnd = Math.min(frames.length, i + step);
+      var delay = fps > 0 ? Math.max(1, Math.round(dEnd * 100 / fps) - Math.round(i * 100 / fps)) * 10
+                          : Math.round(1000 * step / fps);
       if (frameDelays && frameDelays.length) {
-        delay = 0;
-        for (var di = i; di < Math.min(frames.length, i + step); di++) delay += frameDelays[di] || 0;
-        if (!(delay > 0)) delay = Math.round(1000 * step / fps);
+        var dSum = 0;
+        for (var di = i; di < dEnd; di++) dSum += frameDelays[di] || 0;
+        if (dSum > 0) delay = dSum; /* 배너 경로는 제공된 10ms 격자 지연을 그대로 */
       }
       /* 색을 고를 때만 디더한 사본을 쓴다 — 델타 비교·투명 판정은 원본 그대로 */
       var qdat = GIF_DITHER ? gifDitherCopy(data, W, H, GIF_DITHER) : data;
@@ -21103,6 +21801,12 @@ window.gifenc=exports;})();
          최대 1/6로 준다. 채택 rank와 각 타일의 최종 바이트는 순서와 무관해 결과 동일. */
       var lastFail = -1;
       for (var rank = 0; rank < ladder.length; rank++) {
+        /* ★ [A7] 단일 타일 경로(gifBottom6EncodeTile)에만 있던 품질 하한 건너뛰기를
+           6분할 동기 경로에도 똑같이 둔다. 사다리엔 '관대한 프로필 전용' 칸(fuzz 6 등)이
+           섞여 있는데, 기준이 엄격한 프로필에서 그 칸이 200KiB 안에 들어오면 그대로
+           채택돼 뒤의 gifBottomResultQuality 가 통째로 탈락시켰다 — 아래에 남아 있던
+           합법 칸(64색 등)에 닿지도 못하고 그 프로필이 통째로 버려지던 원인. */
+        if (!gifBottomQualityFloorPassed(ladder[rank], profile)) continue;
         out.length = 0;
         var ld = ladder[rank], allFit = true;
         var probe = null;
@@ -21211,23 +21915,42 @@ window.gifenc=exports;})();
       var ws = [];
       for (var i = 0; i < n; i++) ws.push(new Worker(url));
       GIF_W_POOL = { workers: ws, url: url, next: 1, pending: {}, dead: false, ready: null };
+      /* ⚠ 아래 핸들러·ready 는 전역 대신 이 지역 참조를 쓴다 — 죽은 풀을 전역에서
+         떼어내도 옛 콜백이 빈 전역(또는 새 풀)을 건드리지 않게. */
+      var pool = GIF_W_POOL;
       ws.forEach(function (w) {
         w.onmessage = function (ev) {
-          var cb = GIF_W_POOL.pending[ev.data.id];
-          if (cb) { delete GIF_W_POOL.pending[ev.data.id]; cb(ev.data); }
+          var cb = pool.pending[ev.data.id];
+          if (cb) { delete pool.pending[ev.data.id]; cb(ev.data); }
         };
         w.onerror = function () {
           /* 워커 사망 — 대기 중 요청을 오류로 풀어 폴백이 이어지게 */
-          GIF_W_POOL.dead = true;
-          var p = GIF_W_POOL.pending; GIF_W_POOL.pending = {};
+          if (pool.dead) return;
+          pool.dead = true;
+          var p = pool.pending; pool.pending = {};
           Object.keys(p).forEach(function (k) { p[k]({ err: 'worker-error' }); });
+          /* ⚠ 죽은 풀을 캐시에 그대로 남겨두면 스레드와 워커가 쥔 프레임 버퍼가 안 풀리고,
+             다음 저장부터 세션이 끝날 때까지 단일 스레드 폴백으로만 돌았다. 실제로 반납하고
+             캐시를 비워 다음 호출이 새 풀을 만들게 한다
+             (지금 진행 중인 저장은 pool.dead 를 보고 지금까지처럼 폴백). */
+          try { pool.workers.forEach(function (x) { x.terminate(); }); } catch (e) {}
+          try { URL.revokeObjectURL(pool.url); } catch (e) {}
+          if (GIF_W_POOL === pool) GIF_W_POOL = null;
         };
       });
-      GIF_W_POOL.ready = Promise.race([
-        Promise.all(ws.map(function (_, i) { return gifW_request(GIF_W_POOL, i, { type: 'ping' }); }))
+      pool.ready = Promise.race([
+        Promise.all(ws.map(function (_, i) { return gifW_request(pool, i, { type: 'ping' }); }))
           .then(function () { return true; }),
         new Promise(function (res) { setTimeout(function () { res(false); }, 3000); })
-      ]).then(function (ok) { if (!ok) GIF_W_POOL.dead = true; return ok && !GIF_W_POOL.dead; });
+      ]).then(function (ok) {
+        if (!ok) {
+          /* 핑 무응답 풀도 두 번 다시 안 쓴다 — 스레드만이라도 놓아준다.
+             (여긴 캐시를 안 비운다 — 비우면 저장할 때마다 3초 핑을 다시 기다리게 된다) */
+          pool.dead = true;
+          try { pool.workers.forEach(function (x) { x.terminate(); }); } catch (e) {}
+        }
+        return ok && !pool.dead;
+      });
     } catch (e) { GIF_W_POOL = { dead: true, ready: Promise.resolve(false) }; }
     try { window.__gifWPool = GIF_W_POOL; } catch (e2) {} /* 검수·문의 대응용 상태 노출(무해) */
     return GIF_W_POOL;
@@ -21291,6 +22014,10 @@ window.gifenc=exports;})();
     function nextRank() {
       if (rank >= ladder.length) { clearWorkers(); return Promise.resolve().then(finishFail); }
       var ld = ladder[rank];
+      /* ★ [A7] 동기판·단일 타일 경로와 같은 품질 하한 건너뛰기 — 이게 없으면 엄격한
+         프로필이 '관대한 프로필 전용' 칸(fuzz 6 등)을 채택해 gifBottomResultQuality
+         에서 통째로 탈락하고, 아래 남은 합법 칸을 못 써 등급이 헛되이 내려간다. */
+      if (!gifBottomQualityFloorPassed(ld, profile)) { rank++; return nextRank(); }
       /* 직전 실패(=제일 무거운) 타일 선검사 — 동기판과 같은 지름길 */
       var pre = (lastFail >= 0) ? encodeTile(lastFail, ld, rank) : Promise.resolve(null);
       return pre.then(function (probe) {
@@ -21520,27 +22247,47 @@ window.gifenc=exports;})();
       gifBannerSetLen(gifEl('giBfxLen') ? gifEl('giBfxLen').value : 3);
       gifBannerApplyScale();
     }
-    /* 고른 글꼴이 아직 로드 중이면 폴백 글씨로 박제된다 — 한 번 기다렸다 다시 시작 */
-    if ((GIF.mode === 'bottom' || GIF.mode === 'bottom6') && !GIF.__fontWaited) {
-      var bf9 = gifBfxFontFace();
-      if (bf9) {
-        var fstr = ((bf9.w || '900') + ' 20px ' + bf9.fam);
-        var ready = false;
-        try { ready = document.fonts.check(fstr); } catch (e) { ready = true; }
-        if (!ready) {
-          GIF.__fontWaited = true;
-          var goBtn = gifEl('gifGo');
-          gifSetProg('글꼴 준비 중…');
-          var resume = function () {
-            gifSetProg(null);
-            if (goBtn && typeof goBtn.onclick === 'function') goBtn.onclick();
-          };
-          try {
-            Promise.race([document.fonts.load(fstr),
-              new Promise(function (ok) { setTimeout(ok, 1500); })]).then(resume, resume);
-          } catch (e) { resume(); }
-          return;
+    /* 고른 글꼴이 아직 로드 중이면 폴백 글씨로 박제된다 — 한 번 기다렸다 다시 시작.
+       ⚠ 예전엔 이 대기가 배너(bottom/bottom6)에만 있어서, 프사 이름 카드와 '영상 위 글자'는
+          로딩이 안 끝난 글꼴이 폴백으로 구워졌다. 사진·GIF 소스는 gifSeek 가 즉시 resolve 라
+          프레임 루프 중엔 폰트 로드가 굶는다 → 대기를 모드 공통으로 올린다. */
+    if (!GIF.__fontWaited) {
+      var fwait9 = [];
+      if (GIF.mode === 'bottom' || GIF.mode === 'bottom6') {
+        var bf9 = gifBfxFontFace();
+        if (bf9) {
+          var fstr = ((bf9.w || '900') + ' 20px ' + bf9.fam);
+          var ready = false;
+          try { ready = document.fonts.check(fstr); } catch (e) { ready = true; }
+          if (!ready) { try { fwait9.push(document.fonts.load(fstr)); } catch (e) {} }
         }
+      }
+      /* 카드 이름·영상 위 글자는 모드와 무관하게 gifCardFontFam() 을 쓴다 — 글자가 있을 때만 대기.
+         ※ 이 호출이 아직 등록 안 된 키트 폰트를 giFontPending 에 올리는 역할도 겸한다. */
+      var hasTxt9 = !!(((gifEl('giName') && gifEl('giName').value) || '').trim());
+      for (var ti9 = 0; !hasTxt9 && ti9 < GIF.txts.length; ti9++) {
+        if (GIF.txts[ti9] && String(GIF.txts[ti9].s || '').trim()) hasTxt9 = true;
+      }
+      if (hasTxt9) {
+        var cstr9 = gifTxtWeight() + ' 20px ' + gifCardFontFam();
+        var cready9 = false;
+        try { cready9 = document.fonts.check(cstr9); } catch (e) { cready9 = true; }
+        if (!cready9) { try { fwait9.push(document.fonts.load(cstr9)); } catch (e) {} }
+      }
+      if (giFontPending.length) fwait9 = fwait9.concat(giFontPending.slice());
+      if (fwait9.length) {
+        GIF.__fontWaited = true;
+        var goBtn = gifEl('gifGo');
+        gifSetProg('글꼴 준비 중…');
+        var resume = function () {
+          gifSetProg(null);
+          if (goBtn && typeof goBtn.onclick === 'function') goBtn.onclick();
+        };
+        try {
+          Promise.race([Promise.all(fwait9),
+            new Promise(function (ok) { setTimeout(ok, 1500); })]).then(resume, resume);
+        } catch (e) { resume(); }
+        return;
       }
     }
     GIF.__fontWaited = false;
@@ -21592,8 +22339,12 @@ window.gifenc=exports;})();
        (예전엔 마지막 프레임을 얼려놓고 전환을 뒤에 이어붙여서 영상이 멈춰 보였다) */
     var intro = av && gifEl('giOn').checked;
     /* 영상 위 글자 — 카드(intro)와 배타. 프사·자유 크기 어디서든 쓸 수 있다.
+       ⚠ 배너(하단·사이드·6칸)만 제외한다 — 미리보기의 배너 분기는 글자를 아예 안 그리는데(프레임만 그리고 return)
+       굽는 쪽만 그려서, 화면에 없던 글자가 저장본에만 찍혔다. 게다가 gifOverlayTexts 좌표는
+       420 정사각 기준(cy = W/2 + p*W)이라 720×150·1440×450 판에서는 캔버스 밖이나
+       엉뚱한 자리에 거대한 글자로 나온다. 화면에 안 보이는 모드는 굽지도 않는다.
        글자가 매 프레임 같은 자리에 그대로 있으므로 델타 압축에도 부담이 없다. */
-    var overlayTxt = gifEl('giOverlay').checked && !intro && !gifPortraitBottomFx();
+    var overlayTxt = gifEl('giOverlay').checked && !intro && !bottom && !bottom6 && !gifPortraitBottomFx();
     var TT = intro ? Math.max(2, Math.round(clampN(gifEl('giTransDur').value, 0.5, 0.2, 3) * fps)) : 0;
     var nCard = intro ? Math.max(2, Math.round(clampN(gifEl('giDur').value, 1.5, 0.5, 3) * fps)) : 0;
     if (intro) TT = Math.max(1, Math.min(TT, Math.floor((n - 1) / 2))); /* 앞뒤 겹침이 서로 안 물리게 */
@@ -21620,7 +22371,15 @@ window.gifenc=exports;})();
     /* [41차] 루프 부드럽게 — 인트로 카드가 없으면 마지막 프레임→첫 프레임이 소스 그대로
        하드컷이었다. 시작 K프레임을 떠 두고 끝 K프레임에 스무스스텝으로 덧섞어서
        마지막 장이 첫 장으로 수렴하게 한다(사진 소스·인트로 카드 경로는 이미 이음새 처리됨). */
-    var XK = (!intro && n > Math.round(fps * 0.8) + 2) ? Math.max(2, Math.round(fps * 0.4)) : 0;
+    /* [A5] 사진 소스는 XK 를 끈다 — 바로 위 주석이 이미 "사진 소스…는 이미 이음새 처리됨"이라
+       적어 뒀는데 조건은 intro 만 걸러서, 사진에도 크로스페이드가 돌았다. 켄번즈는
+       gifPhotoMotion 이 왕복(ping-pong)이고 portrait2d 는 ph 를 mod 1 로 감아서
+       마지막 장이 이미 첫 장과 이어진다(하단 배너는 rph=i/(n-1) 이라 아예 같은 장).
+       거기에 첫 장을 또 덧섞으니 ① 끝 0.4초가 이중노출로 뿌옇고 ② frames[마지막]==frames[0]
+       이 깨져 closedRawLoop 델타 최적화가 안 걸려 배너 용량 사다리가 헛돌았고
+       ③ 미리보기·자동용량 재렌더(gifBottomRerenderPortraitFramesInPlace)는 XK 를 안 타서
+       결과물만 끝 0.4초가 달랐다. */
+    var XK = (!intro && GIF.kind !== 'photo' && n > Math.round(fps * 0.8) + 2) ? Math.max(2, Math.round(fps * 0.4)) : 0;
     var xStart = [];
     (function step(i) {
       if (i >= n) { cardFrames(); return; }
@@ -21632,16 +22391,20 @@ window.gifenc=exports;})();
         if (!intro) {
           gifDrawFrame(g, v, W, H, rph, true);
           if (XK) {
-            if (i < XK) {
+            /* [A5] 루프 이음새 — 꼬리 xk2번째 장에 xStart[xk2](첫 장에서 xk2번째 장)를 섞어서,
+               마지막 장이 첫 장이 아니라 xStart[XK-1] 로 수렴했다. 그래서 루프가 안 닫히고
+               머리 0~XK-1 장이 두 번 재생되는 꼴이었다(위 주석의 "마지막 장이 첫 장으로 수렴"
+               취지와 반대). 수렴 대상을 첫 장 하나로 고정한다 — 스냅샷도 1장이면 충분하다. */
+            if (i === 0) {
               var snap = document.createElement('canvas');
               snap.width = W; snap.height = H;
               snap.getContext('2d').drawImage(g.canvas, 0, 0);
               xStart.push(snap);
-            } else if (i >= n - XK && xStart[i - (n - XK)]) {
+            } else if (i >= n - XK && xStart[0]) {
               var xk2 = i - (n - XK);
               var xa = (xk2 + 1) / (XK + 1);
               xa = xa * xa * (3 - 2 * xa);   /* smoothstep — 마지막 장 ≈ 첫 장 */
-              g.save(); g.globalAlpha = xa; g.drawImage(xStart[xk2], 0, 0); g.restore();
+              g.save(); g.globalAlpha = xa; g.drawImage(xStart[0], 0, 0); g.restore();
             }
           }
           /* 영상 위 글자 — 카드 전환 없이 프레임 위에 바로 얹는다(링은 pushFrame에서 위에) */
@@ -21824,7 +22587,15 @@ window.gifenc=exports;})();
               rescued.push('움직임 세기 ' + (amtBack2 ? amtBack2.value : '?') + '%');
               if (amtBack2) {
                 amtBack2.value = GIF.__amtRetryPrev;
-                try { amtBack2.dispatchEvent(new Event('input', { bubbles: true })); } catch (e6) {}
+                /* ⚠ 여기서 input 이벤트를 쏘면 안 된다 — 그 핸들러(giPhAmt.oninput)가
+                   gifStale() 을 부르고, gifStale() 은 방금 만든 GIF.out6 을 null 로 지운다.
+                   그래서 6칸에서 '움직임 세기' 구제가 걸리면 "만들었어요 — 저장 버튼을 눌러
+                   주세요" 안내만 뜨고 저장할 결과가 없었다(실측: 6칸 사전검증 통과 직후
+                   out6 === null, 하단 단일은 세기 구제가 안 걸려 멀쩡했다).
+                   화면 갱신에 필요한 일만 직접 한다 — 결과는 건드리지 않는다. */
+                try { if (gifEl('giPhAmtV')) gifEl('giPhAmtV').textContent = amtBack2.value + '%'; } catch (e6) {}
+                try { gifPortraitRefreshEdgeStatus(); } catch (e7) {}
+                try { gifPrefsSaveLater(); } catch (e9) {}
               }
               GIF.__amtRetryPrev = null;
             }
@@ -21841,10 +22612,14 @@ window.gifenc=exports;})();
             GIF.__amtRetryNote = ''; GIF.__scaleRetryNote = '';
             if (rescued.length) {
               var noteEl = gifEl('gifMeta');
-              var msg = '⚠ 칸당 200KiB를 넘어 <b>' + rescued.join(' · ') + '</b>로 자동 조정해 저장했어요 — ' +
+              /* ⚠ '저장했어요'는 거짓 안내였다 — 이 시점에 한 일은 GIF를 만들어 미리보기에 올린 것뿐이고,
+                 실제 파일 저장은 아래 저장 버튼(#gifSave)을 눌러야 일어난다. 저장된 줄 알고 창을 닫는 사고를 막는다.
+                 버튼 글자는 단일/6분할이 달라서(💾 GIF 저장 / 💾 GIF 6개 저장) 화면에 뜬 그대로 읽어 쓴다. */
+              var saveLabel = (gifEl('gifSave') && gifEl('gifSave').textContent) || '💾 GIF 저장';
+              var msg = '⚠ 칸당 200KiB를 넘어 <b>' + rescued.join(' · ') + '</b>로 자동 조정해 맞췄어요 — ' +
                 (rescued.indexOf('출력 크기 50%') >= 0 ?
                   '방송국에 올리면 <b>꽉 차게 늘어나 그대로 정상 등록</b>됩니다. ' : '') +
-                '설정은 원래 값으로 돌려놨습니다.';
+                '설정은 원래 값으로 돌려놨습니다. 파일로 남기려면 아래 <b>' + saveLabel + '</b>을 눌러 주세요.';
               if (noteEl) noteEl.innerHTML = msg + '<br>' + noteEl.innerHTML;
             }
           }
@@ -22143,16 +22918,23 @@ window.gifenc=exports;})();
         busy(true, '저장할 폴더 고르는 중…');
         return api.pick_dir().then(function (res) {
           res = typeof res === 'string' ? JSON.parse(res) : res;
+          /* 파이썬 pick_dir 은 취소면 {cancel:true}, 실패면 {err:...} 를 돌려준다 —
+             dir 유무만 보면 오류까지 '취소'로 뭉개져 아무 말 없이 끝난다. */
+          if (res && res.err) { busy(false); apiErr('저장할 폴더를 열지 못했어요.', res.err); return; }
           if (!res || !res.dir) { busy(false); return; }
           var setName = String(set6[0].name || '배너세트').replace(/_0?1\.gif$/i, '')
             .replace(/[\/:*?"<>|]/g, '').trim() || '배너세트';
           var setDir = res.dir + '\\' + setName;
-          var okPaths = [], failed = [];
+          var okPaths = [], failed = [], okNames = [], renamedCnt = 0;
           function saveOne(k) {
             if (k >= set6.length) {
               busy(false);
               if (!failed.length) {
-                alert('GIF 6개 세트를 저장했어요.\n' + setDir);
+                /* ⚠ 파이썬은 같은 이름이 있으면 덮어쓰지 않고 "이름 (2)" 로 저장한다 —
+                   실제 이름(actualName)을 알려줘야 폴더 안 파일과 안내가 같아진다. */
+                alert('GIF 6개 세트를 저장했어요.\n' + setDir +
+                  (okNames.length ? '\n\n' + okNames.join('\n') : '') +
+                  (renamedCnt ? '\n(같은 이름이 있어 ' + renamedCnt + '개는 새 이름으로 저장했어요)' : ''));
               } else {
                 alert('⚠ 6개 중 ' + okPaths.length + '개만 저장됐어요.\n실패: ' +
                   failed.join(', ') + '\n\n폴더째 지우고 다시 저장하세요:\n' + setDir);
@@ -22167,7 +22949,11 @@ window.gifenc=exports;})();
             api.save_png(JSON.stringify({ dir: setDir, name: t.name, b64: btoa(str),
               max_bytes: GIF_BOTTOM6_SPEC.limitBytes })).then(function (r2) {
               r2 = typeof r2 === 'string' ? JSON.parse(r2) : r2;
-              if (r2 && r2.ok) okPaths.push(r2.path); else failed.push(t.name);
+              if (r2 && r2.ok) {
+                okPaths.push(r2.path);
+                okNames.push(String(r2.actualName || t.name));
+                if (r2.renamed) renamedCnt++;
+              } else failed.push(t.name);
               saveOne(k + 1);
             }).catch(function () { failed.push(t.name); saveOne(k + 1); });
           }
@@ -22177,6 +22963,9 @@ window.gifenc=exports;})();
       busy(true, '저장할 폴더 고르는 중…');
       return api.pick_dir().then(function (res) {
         res = typeof res === 'string' ? JSON.parse(res) : res;
+        /* 파이썬 pick_dir 은 취소면 {cancel:true}, 실패면 {err:...} 를 돌려준다 —
+           dir 유무만 보면 오류까지 '취소'로 뭉개져 아무 말 없이 끝난다. */
+        if (res && res.err) { busy(false); apiErr('저장할 폴더를 열지 못했어요.', res.err); return; }
         if (!res || !res.dir) { busy(false); return; }
         var payload = { dir: res.dir, files: set6.map(function (t) {
           var s = '';
@@ -22218,6 +23007,9 @@ window.gifenc=exports;})();
         busy(true, '저장할 폴더 고르는 중…');
         return api.pick_dir().then(function (res) {
           res = typeof res === 'string' ? JSON.parse(res) : res;
+          /* 파이썬 pick_dir 은 취소면 {cancel:true}, 실패면 {err:...} 를 돌려준다 —
+             dir 유무만 보면 오류까지 '취소'로 뭉개져 아무 말 없이 끝난다. */
+          if (res && res.err) { busy(false); apiErr('저장할 폴더를 열지 못했어요.', res.err); return; }
           if (!res || !res.dir) { busy(false); return; }
           return api.save_png(JSON.stringify({ dir: res.dir, name: name, b64: b64,
             max_bytes: GIF.mode === 'bottom' ? GIF_BOTTOM6_SPEC.limitBytes : null })).then(function (r2) {
@@ -22342,19 +23134,51 @@ window.gifenc=exports;})();
     }
     return ch;
   }
+  /* 원본 그림을 그려넣는 중인 캔버스 id → 대기 줄.
+     캐시엔 캔버스가 먼저 꽂히고 그림은 나중에 그려지므로, 그 사이 요청에 빈 캔버스를 넘기면
+     그 위에 커밋이 일어나 옛 그림이 통째로 날아간다 — 줄 세웠다가 준비되면 한꺼번에 돌려준다. */
+  var edPaintWait = {};
   function edPaintCanvas(ch, cb) {
     var cv = edPaintCvs[ch.id];
-    if (cv) { cb(cv); return; }
+    if (cv) {
+      if (edPaintWait[ch.id]) { edPaintWait[ch.id].push(cb); return; }   /* 아직 원본 로딩 중 */
+      cb(cv); return;
+    }
     cv = document.createElement('canvas');
     cv.width = ch.iw || BANNERS.edit.w;
     cv.height = ch.ih || BANNERS.edit.h;
     edPaintCvs[ch.id] = cv;
     var src = thumbs[ch.id] || ch.b64;
     if (!src) { cb(cv); return; }
+    var wid = ch.id, wq = edPaintWait[wid] = [];
+    function edPaintDone() {
+      /* 로딩 중 캐시가 비워졌다면(Ctrl+Z) 남의 줄을 지우지 않게 내 줄일 때만 정리 */
+      if (edPaintWait[wid] === wq) delete edPaintWait[wid];
+      cb(cv);
+      for (var i = 0; i < wq.length; i++) wq[i](cv);
+    }
     var im = new Image();
-    im.onload = function () { cv.getContext('2d').drawImage(im, 0, 0); cb(cv); };
-    im.onerror = function () { cb(cv); };
+    im.onload = function () { cv.getContext('2d').drawImage(im, 0, 0); edPaintDone(); };
+    im.onerror = edPaintDone;
     im.src = src;
+  }
+  /* 그리기 레이어 오프스크린 캔버스 청소 —
+     edPaintCvs 에는 넣기만 하고 지우는 곳이 없어서, 레이어를 지우거나 래스터화·올가미
+     복사·'전부 병합'으로 새 id 가 생길 때마다 옛 캔버스(최대 4096² ≒ 67MB)가 눌러앉았다.
+     그림 자체는 thumbs[id]·o.b64 에 그대로 있고, 캐시가 없으면 edPaintCanvas·edLayerBitmap
+     이 거기서 다시 만들어 쓴다(되돌리기가 이미 이 맵을 통째로 비우는 것과 같은 원리) —
+     그래서 '지금 책에 없는 id' 의 캔버스는 버려도 화면·결과 픽셀이 안 바뀐다.
+     ⚠ thumbs 는 여기서 절대 안 건드린다 — 되돌리기·저장이 그 dataURL 로 사진을 되살린다. */
+  function edPaintGC() {
+    if (!book) return;
+    var live = {}, ids = bookUsedPhotoIds(), i;   /* 책(페이지+모든 배너)이 쓰는 id 전부 */
+    for (i = 0; i < ids.length; i++) live[ids[i]] = 1;
+    for (var k in edPaintCvs) {
+      if (!Object.prototype.hasOwnProperty.call(edPaintCvs, k)) continue;
+      /* 원본을 아직 읽는 중인 칸(edPaintWait)은 남긴다 — 지우면 대기 줄이 빈 캔버스를 받는다 */
+      if (live[k] || edPaintWait[k]) continue;
+      delete edPaintCvs[k];
+    }
   }
   /* 배너 px → 레이어 비트맵 px (레이어가 옮겨지고 돌아가고 커져 있어도 정확히) */
   function edToBitmap(ch, px, py, def) {
@@ -22477,12 +23301,37 @@ window.gifenc=exports;})();
     edOg.clearRect(0, 0, edOv.width, edOv.height);
     edDrawShape(edOg, edTool, p0.bx, p0.by, p1.bx, p1.by, o.size, $('#edFill').checked, o.color, o.alpha);
   }
+  /* [성능] 붓질 커밋 — 예전엔 획을 놓을 때마다 refreshBnStage() 로 무대 HTML을 통짜로 다시
+     만들었다(수 MB HTML 재파싱 + 모든 레이어 <img> 재생성·재디코드 + 리스너 재바인딩).
+     정작 바뀐 건 방금 그린 레이어 한 장의 그림뿐이라, 이미 떠 있는 그 <img> 의 src 만
+     갈아끼우면 화면 결과가 같다. src 는 renderBanner 와 똑같이 bnSrcOf() 로 뽑아
+     hiRes·페더 덮어쓰기 상황에서도 어긋나지 않게 한다.
+     <img> 가 아직 없거나(첫 그리기로 레이어가 새로 생긴 경우)·숨김 레이어·비트맵 크기가
+     달라진 경우엔 예전처럼 통짜 리렌더로 떨어진다. */
   function edCommitPaint(ch, cv) {
+    var sameSize = (ch.iw === cv.width && ch.ih === cv.height);
     thumbs[ch.id] = cv.toDataURL();
     ch.b64 = thumbs[ch.id];   /* 프로젝트 저장에도 지니고 다니게 */
     ch.iw = cv.width;
     ch.ih = cv.height;
-    refreshBnStage();
+    var im = null, box = $('#bnBox');
+    if (sameSize && !ch.hide && box && bnType === 'edit') {
+      var bE = ensureBanners().edit;
+      var k = (bE && bE.chars) ? bE.chars.indexOf(ch) : -1;
+      if (k >= 0) {
+        var el = box.querySelector('img.bchar[data-ci="' + k + '"]');
+        if (el && el.hasAttribute('src')) im = el;
+      }
+    }
+    if (!im) { refreshBnStage(); return; }   /* 옛 경로 — 새 레이어·크기 변경 등 */
+    var src = bnSrcOf(ch.id);
+    if (src) im.src = src;
+    /* refreshBnStage 가 하던 것 중 '다시 해야 하는 것'만. 안내선(bnDrawGuides)·리스너
+       (bindBnStage)는 DOM 이 그대로 살아 있어 다시 부르면 중복으로 쌓인다 — 안 부른다. */
+    bnRescaleStage();
+    renderBnHandles();
+    edSyncOverlay(); /* 편집탭 그리기 오버레이 위치·크기 동기화 */
+    histCapture();   /* 배너 편집 공용 캡처 지점 */
   }
   function bindEdOverlay(ov) {
     /* 포토샵식 브러시 커서 따라다니기 */
@@ -22503,10 +23352,20 @@ window.gifenc=exports;})();
       if (edTool === 'wand' || edTool === 'fill') { edMagicClick(start, ev); return; }
       var drawing = true, moved = false, targetCh = null, targetCv = null;
       var lassoPts = [start];
+      /* 캔버스가 준비되기 전(프로젝트 열기·Ctrl+Z 직후엔 캐시가 비어 원본을 다시 디코드한다)에
+         그은 획을 담아뒀다가 준비되는 대로 순서대로 다시 그린다 — 첫 획이 통째로 사라지던 문제 */
+      var pendSeg = [];
+      function edPendFlush() {
+        if (!pendSeg.length) return;
+        if (!targetCv || !targetCh) return;   /* 아직 준비 전이면 버리지 말고 그대로 둔다 */
+        var g3 = targetCv.getContext('2d');
+        for (var pi = 0; pi < pendSeg.length; pi++) edStrokeSeg(g3, targetCh, pendSeg[pi][0], pendSeg[pi][1], def);
+        pendSeg.length = 0;
+      }
       try { ov.setPointerCapture(ev.pointerId); } catch (e) {}
       if (edTool !== 'crop' && edTool !== 'lasso' && edTool !== 'selrect') {
         targetCh = edPaintLayer();
-        edPaintCanvas(targetCh, function (cv) { targetCv = cv; });
+        edPaintCanvas(targetCh, function (cv) { targetCv = cv; edPendFlush(); });
       }
       function mv(e2) {
         if (!drawing) return;
@@ -22515,7 +23374,9 @@ window.gifenc=exports;})();
         var g2 = edOg;
         moved = true;
         if (edTool === 'brush' || edTool === 'erase') {
+          /* 캔버스가 아직 준비 전이면 버리지 말고 쌓아둔다(준비되면 edPendFlush가 그린다) */
           if (targetCv) edStrokeSeg(targetCv.getContext('2d'), targetCh, last, p, def);
+          else if (targetCh) pendSeg.push([last, p]);
           /* 라이브 미리보기 — 커밋과 같은 스탬프 브러시로 (지우개는 붉게 표시) */
           var o = edBrushOpts();
           if (o.erase) edStampLine(g2, last.bx, last.by, p.bx, p.by, o.size / 2, { size: o.size, color: '#ff5050', alpha: 0.45, soft: o.soft, erase: false });
@@ -22566,7 +23427,18 @@ window.gifenc=exports;})();
         }
         edOg.clearRect(0, 0, ov.width, ov.height);
         if (edTool === 'crop') { edApplyCrop(start, last); return; }
-        if (!targetCv) return;
+        /* 예전엔 캔버스 캐시가 비었을 때 여기서 그냥 return 해 첫 획이 통째로 사라졌다
+           (프로젝트 열기·Ctrl+Z 직후). 이제 준비되는 대로 커밋한다.
+           ⚠ targetCh 가 없으면(드래그 도중 단축키로 도구를 바꾼 경우) 예전처럼 조용히 접는다 */
+        if (!targetCv) {
+          if (targetCh) edPaintCanvas(targetCh, function (cv2) { targetCv = cv2; edPendFlush(); edDoCommit(); });
+          return;
+        }
+        edPendFlush();
+        edDoCommit();
+      }
+      /* 커밋 본체 — 캔버스가 늦게 준비된 경우에도 같은 코드로 그리도록 분리 */
+      function edDoCommit() {
         if (edTool === 'brush' || edTool === 'erase') {
           if (!moved) { /* 클릭 한 번 = 점 찍기 */
             var a = edToBitmap(targetCh, start.bx, start.by, def);
@@ -23745,6 +24617,23 @@ window.gifenc=exports;})();
          바로 위 chars 와 같은 비율식으로 같이 줄여준다(반으로 자르면 글자만 2배로 보이던 것). */
       t.sc = Math.round(clampN(t.sc, BTXT_DEF.edit || 40, 8, 500) * def.h / h * 10) / 10;
     });
+    /* 배경(photos[0])도 같이 재계산 — 이게 빠져 있어서 자르면 배경만 딴 데로 튀었다.
+       배경은 x/y = 캔버스 대비 %(중심) + sc = cover 배수라, 잘린 프레임 기준으로 다시
+       환산해야 화면에 보이던 그림이 그 자리에 그대로 남는다(bgGeom 과 같은 식).
+       iw/ih 를 아직 못 잰 배경은 bgGeom 이 캔버스 크기로 폴백(=캔버스에 딱 맞춰 늘어남)이라
+       이미 캔버스 상대다 — 건드리면 오히려 틀어지니 그대로 둔다. */
+    var p0 = e.photos && e.photos[0];
+    if (p0 && p0.id && p0.iw > 0 && p0.ih > 0) {
+      var bpx = clampN(p0.x, 50, -60, 160) / 100 * def.w;
+      var bpy = clampN(p0.y, 50, -60, 160) / 100 * def.h;
+      p0.x = Math.round((bpx - x0) / w * 1000) / 10;
+      p0.y = Math.round((bpy - y0) / h * 1000) / 10;
+      /* sc 는 cover 배수 = 기준이 캔버스라 캔버스가 작아지면 같은 sc 라도 그림이 커진다 —
+         화면상 픽셀 크기를 유지하려고 옛 cover / 새 cover 만큼 되돌려 곱한다. */
+      var cvO = Math.max(def.w / p0.iw, def.h / p0.ih);
+      var cvN = Math.max(w / p0.iw, h / p0.ih);
+      if (cvN > 0) p0.sc = Math.round(Math.max(0.15, Math.min(12, clampN(p0.sc, 1, 0.15, 12) * cvO / cvN)) * 1000) / 1000;
+    }
     e.cw = w; e.ch = h;
     $('#edW').value = w;
     $('#edH').value = h;
@@ -23981,7 +24870,11 @@ window.gifenc=exports;})();
       }
       if (!best) best = { b64: mk(0.5), q: 0.5 };
     }
-    return { b64: best.b64, ext: 'jpg', bytes: b64Bytes(best.b64), q: best.q };
+    /* ⚠ 최저 화질(0.5)로도 한도를 못 맞추는 경우가 있는데 표시가 없어,
+       불투명 배너는 200KB를 넘겨도 그냥 "저장했어요"만 떴다 —
+       투명 PNG 분기와 똑같이 over 를 달아 호출부가 경고할 수 있게 한다 */
+    var jb = b64Bytes(best.b64);
+    return { b64: best.b64, ext: 'jpg', bytes: jb, q: best.q, over: jb > limitBytes };
   }
   /* SOOP 방송국 배너 용량 규격 — 넘으면 자동으로 맞춰 저장한다(fitUnder).
      bot3·bot6 은 통짜로 만들어 720×150 타일로 잘라 내보내므로, 타일 한 장 기준 200KB.
@@ -24020,34 +24913,46 @@ window.gifenc=exports;})();
       return out;
     }).then(function (tiles) {
       var bnTileTag = '';
-      return askName(gifBannerLabel() + '배너 저장',
+      /* ⚠ 이 저장은 720×150 하단 타일 전용(파일 이름도 '하단배너_01…')인데, 제목만
+         움짤배너 탭이 마지막으로 고른 종류(gifBannerLabel)를 따라가서, 사이드를 한 번
+         보고 오면 '사이드배너 저장'으로 떴다 — 실제 결과물에 맞게 하단으로 고정한다. */
+      return askName('하단배너 저장',
         '이름 뒤에 붙일 표시를 정해주세요. 비우면 배너이름_01 … 로 저장돼요.\n'
-        + '(같은 폴더에 또 저장하면 앞 것이 덮어써집니다)', '')
+        /* ⚠ 안내가 정반대였다 — 파이썬 save_png 는 덮어쓰지 않고 "이름 (2)" 로 새로 저장한다 */
+        + '(같은 이름이 있으면 덮어쓰지 않고 뒤에 (2) 를 붙인 새 이름으로 저장돼요)', '')
         .then(function (tag) {
       if (tag === null) { busy(false); return null; }
       bnTileTag = String(tag).replace(/[\\/:*?"<>|]/g, '').replace(/[. ]+$/, '').trim();
       if (bnTileTag) bnTileTag = '_' + bnTileTag;
       return api.pick_dir().then(function (res) {
         res = typeof res === 'string' ? JSON.parse(res) : res;
+        /* 파이썬 pick_dir 은 취소면 {cancel:true}, 실패면 {err:...} 를 돌려준다 —
+           dir 유무만 보면 오류까지 '취소'로 뭉개져 아무 말 없이 끝난다. */
+        if (res && res.err) { busy(false); apiErr('저장할 폴더를 열지 못했어요.', res.err); return null; }
         if (!res || !res.dir) { busy(false); return null; }
-        var i = 0;
+        var i = 0, savedNames = [], renamedCnt = 0;
         function next() {
           if (i >= tiles.length) return Promise.resolve(res.dir);
           $('#busyMsg').textContent = '저장 중… (' + (i + 1) + '/' + n + ')';
-          return api.save_png(JSON.stringify({ dir: res.dir,
-            /* ⚠ 이름이 고정이라 두 번째 배너를 같은 폴더에 저장하면 첫 번째가 사라졌다.
-               사용자가 정한 꼬리표를 붙여 겹치지 않게 한다. */
-            name: '하단배너' + bnTileTag + '_' + String(nums[i]).padStart(2, '0') + '.' + tiles[i].ext,
-            b64: tiles[i].b64 }))
+          /* ⚠ 이름이 고정이라 두 번째 배너를 같은 폴더에 저장하면 첫 번째가 사라졌다.
+             사용자가 정한 꼬리표를 붙여 겹치지 않게 한다. */
+          var reqName = '하단배너' + bnTileTag + '_' + String(nums[i]).padStart(2, '0') + '.' + tiles[i].ext;
+          return api.save_png(JSON.stringify({ dir: res.dir, name: reqName,
+            /* 이름이 겹쳐도 덮어쓰지 말고 새 이름으로 — 파이썬 기본값과 같지만 의도를 분명히 한다 */
+            collision: 'unique', b64: tiles[i].b64 }))
             .then(function (rr) {
               /* 파이썬은 실패해도 예외 대신 {err:...} 를 정상으로 돌려준다 —
                  안 보면 한 장도 안 떨어졌는데 "잘라 저장했어요"가 뜬다. */
               rr = typeof rr === 'string' ? JSON.parse(rr) : rr;
               if (rr && rr.err) { busy(false); apiErr((i + 1) + '번째 칸을 저장하지 못해 멈췄어요.', rr.err); return null; }
+              /* ⚠ 같은 이름이 있으면 파이썬이 "이름 (2)" 로 저장한다 —
+                 실제로 떨어진 이름(actualName)을 모아두어야 안내가 폴더와 같아진다. */
+              savedNames.push(String((rr && rr.actualName) || reqName));
+              if (rr && rr.renamed) renamedCnt++;
               i++; return next();
             });
         }
-        return next().then(function (d) { return { dir: d, tiles: tiles, tag: bnTileTag }; });
+        return next().then(function (d) { return { dir: d, tiles: tiles, tag: bnTileTag, names: savedNames, renamed: renamedCnt }; });
       });
       });
     }).then(function (r) {
@@ -24055,10 +24960,19 @@ window.gifenc=exports;})();
       if (!r || !r.dir) return;
       var mx = Math.max.apply(null, r.tiles.map(function (t) { return t.bytes || 0; }));
       var jpg = r.tiles.filter(function (t) { return t.ext === 'jpg'; }).length;
-      alert(n + '칸으로 잘라 저장했어요.\n' + r.dir + '\n\n하단배너' + (r.tag || '') + '_' +
-        nums.map(function (v) { return String(v).padStart(2, '0'); }).join(', ') +
+      /* ⚠ 움짤 배너는 200KB를 못 맞추면 저장을 거부하는데, 정지 배너 타일은
+         초과해도 그냥 "저장했어요"로 끝났다 — 넘긴 칸 수를 세어 경고한다 */
+      var overCnt = r.tiles.filter(function (t) { return t.over; }).length;
+      /* ⚠ 예전엔 계산해서 만든 이름을 알려줘서, 이름이 겹쳐 (2) 가 붙으면
+         화면 안내와 폴더 안 파일 이름이 달랐다. 실제 저장된 이름을 그대로 보여준다. */
+      var nameLine = (r.names && r.names.length) ? r.names.join('\n')
+        : '하단배너' + (r.tag || '') + '_' + nums.map(function (v) { return String(v).padStart(2, '0'); }).join(', ');
+      alert(n + '칸으로 잘라 저장했어요.\n' + r.dir + '\n\n' + nameLine +
+        (r.renamed ? '\n(같은 이름이 있어 ' + r.renamed + '장은 새 이름으로 저장했어요 — 먼저 저장한 파일은 그대로예요)' : '') +
         '\n가장 큰 파일 ' + (mx / 1024).toFixed(0) + 'KB' +
-        (jpg ? '\n(200KB에 맞추려고 ' + jpg + '장을 JPG로 저장했어요)' : ''));
+        (jpg ? '\n(200KB에 맞추려고 ' + jpg + '장을 JPG로 저장했어요)' : '') +
+        (overCnt ? '\n\n⚠ ' + overCnt + '장이 200KB를 넘었어요 — SOOP 업로드에서 거부될 수 있어요.'
+          + '\n사진을 단순하게 하거나 글자를 줄여 다시 저장해 주세요.' : ''));
     }).catch(function (e) { busy(false); alert('실패: ' + e); });
   }
 
@@ -24271,8 +25185,15 @@ window.gifenc=exports;})();
     $('#ckSwTx').textContent = '아직 없음';
     ckRepaint();
   };
-  $('#ckClose').onclick = function () { $('#ckModal').classList.add('hidden'); };
-  $('#ckModal').addEventListener('click', function (ev) { if (ev.target === this) this.classList.add('hidden'); });
+  /* ⚠ 모달을 닫을 때 원본 캔버스·픽셀 버퍼를 놓아주지 않아, 큰 사진 한 장에 십수 MB 가
+     닫은 뒤에도 계속 물려 있었다(gif 마스크 편집기 gifMaskClose 는 이렇게 비운다).
+     다시 열면 openChroma 가 전부 새로 채우므로 동작은 그대로다. */
+  function ckCloseModal() {
+    $('#ckModal').classList.add('hidden');
+    ckFull = null; ckFullData = null; ckPrev = null; ckKey = null; ckSel = null;
+  }
+  $('#ckClose').onclick = ckCloseModal;
+  $('#ckModal').addEventListener('click', function (ev) { if (ev.target === this) ckCloseModal(); });
   $('#ckApply').onclick = function () {
     if (!ckKey || !ckFullData || !ckSel) return;
     var p = bnLayerObj(ckSel);
@@ -24299,7 +25220,7 @@ window.gifenc=exports;})();
         if (!p.ckFromB64) p.ckFromB64 = thumbs[p.ckFrom] || '';   /* '누끼 취소' 용 원본 */
         measureInto(p, url, function () { refreshBnStage(); });
         busy(false);
-        $('#ckModal').classList.add('hidden');
+        ckCloseModal();   /* 모달 숨기기 + 원본 버퍼 반납(아래 refresh 는 ck 변수를 안 쓴다) */
         refreshBnStage();
         renderBnInspector();
       } catch (e) { busy(false); alert('누끼 실패: ' + e); }
@@ -24375,6 +25296,16 @@ window.gifenc=exports;})();
 
   function slicerPick(mode) {
     if (!api) return alert('초기화 중이에요. 잠깐만요.');
+    /* ⚠ 2026-09-10 — 자동자르기 API(pick_banner_sources·save_banner_slices)는 새 본체 전용이다.
+       현장 고객 본체(2026-08-09_v16 exe)엔 그 파이썬 함수가 아예 없어서 호출이 그 자리에서
+       동기 TypeError 를 낸다 → busy(false) 를 하는 .then/.catch 에 영영 못 닿아 덮개와 스피너가
+       그대로 굳는다(ESC·타임아웃 없음 → 강제종료 말곤 답이 없었다).
+       그래서 busy 를 켜기 전에 먼저 막고 안내만 띄운다. 자르기(save_banner_slices)까지 여기서
+       같이 확인한다 — 고르기만 되고 자르기가 없으면 결국 같은 자리에서 굳기 때문. */
+    if (!api || typeof api.pick_banner_sources !== 'function' || typeof api.save_banner_slices !== 'function') {
+      busy(false);
+      return alert('자동자르기는 새 버전 본체가 필요해요.\n프로그램을 최신 버전으로 업데이트한 뒤 다시 해주세요.');
+    }
     if (mode === 'double' &&
       !confirm('이미지 고르는 창이 두 번 열려요.\n\n첫 번째 = 왼쪽 열(1·3·5)\n두 번째 = 오른쪽 열(2·4·6)\n\n계속할까요?')) return;
     busy(true, '이미지 여는 중…');
@@ -24500,6 +25431,12 @@ window.gifenc=exports;})();
 
   $('#btnSliceApply').onclick = function () {
     if (!bnSlice) return;
+    /* 자르기 버튼도 같은 이유로 먼저 막는다 — 옛 본체엔 save_banner_slices 가 없어
+       호출이 동기 TypeError 를 내면 busy(false) 에 못 닿아 스피너가 굳는다(위 slicerPick 주석). */
+    if (!api || typeof api.save_banner_slices !== 'function') {
+      busy(false);
+      return alert('자동자르기는 새 버전 본체가 필요해요.\n프로그램을 최신 버전으로 업데이트한 뒤 다시 해주세요.');
+    }
     busy(true, '자르는 중…');
     api.save_banner_slices(JSON.stringify({
       views: bnSlice.imgs.map(function (m) {
@@ -24519,7 +25456,11 @@ window.gifenc=exports;})();
         grid.appendChild(cell);
       });
       $('#bnSliceResult').style.display = '';
-      $('#bnSliceDir').textContent = '저장 위치: ' + res.dir + ' (하단배너_01.png ~ 06.png)';
+      /* ⚠ 확장자를 .png 로 박아뒀지만, 파이썬은 한 칸이 200KB를 넘으면 .jpg 로 저장한다
+         (editor.py _fit_tile_bytes → ".jpg") — 화면이 알려주는 이름과 폴더 안 이름이 달랐다.
+         이 API 는 이름을 안 돌려주므로(ok·dir·previews 뿐) 단정하지 않는 쪽으로 고친다. */
+      $('#bnSliceDir').textContent = '저장 위치: ' + res.dir +
+        ' (하단배너_01 ~ 06 · 200KB를 넘은 칸은 .jpg, 나머지는 .png)';
     }).catch(function (e) { busy(false); alert('자르기 실패: ' + e); });
   };
   $('#btnSliceReset').onclick = function () {

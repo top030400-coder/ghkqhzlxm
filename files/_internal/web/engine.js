@@ -287,7 +287,13 @@ window.PBK = (function () {
   function applyParts(html, page, mode) {
     var els = page.els || null;
     var keys = els ? Object.keys(els) : [];
-    var tagging = mode === 'edit';
+    /* 부분편집(✂)이 꺼져 있으면 data-elp 태깅을 읽는 곳이 없다(소비부가 전부 partsMode
+       가드 뒤) — 배너 bnApplyParts 와 같은 가드. els 도 없으면 페이지마다 HTML
+       파싱→재직렬화 왕복을 통째로 생략한다(펼침면 2쪽 + 목록 미니 전부).
+       [부분 편집] 버튼이 body.partsOn 을 붙인 뒤 refreshSpread() 를 다시 부르므로
+       켜는 순간 태깅된 렌더로 바뀌어 동작은 같다. */
+    var tagging = mode === 'edit' && typeof document !== 'undefined' &&
+      !!document.body && document.body.classList.contains('partsOn');
     if (!keys.length && !tagging) return html;
     if (typeof document === 'undefined') return html;
     var tmp = document.createElement('div');
