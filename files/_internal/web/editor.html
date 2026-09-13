@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-12_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-13_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -742,6 +742,37 @@
   .gmrFoot{display:flex;gap:7px;justify-content:flex-end;border-top:1px solid var(--pp-line);padding:10px 12px}
   @media(max-width:760px){.gmrBody{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}.gmrSide{max-height:220px}}
 
+  /* 💧 앱 자체 스포이드 — 색 칸 옆 버튼 · 집기 덮개 · 돋보기 표시 */
+  body .pbkEyeBtn{flex:none;display:inline-flex;align-items:center;justify-content:center;
+    width:24px !important;min-width:24px !important;height:24px !important;padding:0 !important;
+    margin:0 0 0 3px !important;border:1px solid #d6d2c4;border-radius:6px;background:#fff;
+    font-size:12px;line-height:1;cursor:pointer;vertical-align:middle;box-shadow:none;color:inherit}
+  body .pbkEyeBtn:hover{background:#f3efe2}
+  body .pbkEyeBtn.on{background:#2d3a52;border-color:#2d3a52}
+  .sig-field.pbkEyeField{grid-template-columns:86px minmax(0,1fr) 24px}
+  /* 상단 팔레트(스와치 위·이름 아래 세로 칸)는 💧 가 한 줄을 차지하면 툴바가 106→132px 로
+     커진다 — 스와치 오른쪽 위 모서리에 작게 겹쳐 둔다 */
+  #palGroup .cp{position:relative}
+  body #palGroup .cp .pbkEyeBtn{position:absolute;top:-5px;left:calc(50% + 8px);width:17px !important;
+    min-width:17px !important;height:17px !important;margin:0 !important;border-radius:50%;font-size:9px;
+    box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  .sig-field.compact.pbkEyeField{grid-template-columns:58px minmax(0,1fr) 24px}
+  body .sig-field.pbkEyeField > .pbkEyeBtn{margin:0 !important}   /* 24px 칸에 딱 맞게(왼쪽 3px 여백이 칸 밖으로 샜다) */
+  .sig-outline-row.pbkEyeRow{grid-template-columns:88px 32px 24px minmax(40px,1fr) 34px}
+  body .sig-outline-row.pbkEyeRow > .pbkEyeBtn{grid-column:3;margin:0 !important}
+  .sig-outline-row.pbkEyeRow > input[type="range"]{grid-column:4}
+  .sig-outline-row.pbkEyeRow > output{grid-column:5}
+  #pbkEyeOv{position:fixed;inset:0;z-index:2147483000;cursor:crosshair;background:transparent}
+  #pbkEyeHint{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:2147483001;
+    pointer-events:none;background:#2d3a52;color:#fff;font-size:12.5px;padding:7px 14px;
+    border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.25);white-space:nowrap}
+  #pbkEyeLoupe{position:fixed;z-index:2147483002;pointer-events:none;display:none;align-items:center;
+    gap:7px;background:#fff;border:1px solid #cfcab9;border-radius:8px;padding:4px 8px 4px 4px;
+    box-shadow:0 3px 10px rgba(0,0,0,.2);font:600 12px/1 ui-monospace,Consolas,monospace;color:#333}
+  #pbkEyeLoupe i{display:block;width:22px;height:22px;border-radius:5px;border:1px solid rgba(0,0,0,.2);
+    background-image:linear-gradient(45deg,#ddd 25%,transparent 25%,transparent 75%,#ddd 75%),
+      linear-gradient(45deg,#ddd 25%,transparent 25%,transparent 75%,#ddd 75%);
+    background-size:8px 8px;background-position:0 0,4px 4px}
 </style>
 </head>
 <body>
@@ -750,7 +781,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-12 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-13 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -24641,13 +24672,397 @@ window.gifenc=exports;})();
     refreshBnStage();
     renderBnInspector();
   }
-  /* 스포이드 — 크로뮴 시스템 스포이드(EyeDropper) */
-  $('#edPickCol').onclick = function () {
-    if (!window.EyeDropper) return alert('이 환경에선 스포이드를 지원하지 않아요.');
-    new EyeDropper().open().then(function (r) {
-      if (r && r.sRGBHex) $('#edCol').value = r.sRGBHex;
-    }).catch(function () {});
-  };
+  /* ══════════ 💧 앱 자체 스포이드 ══════════
+     ⚠ WebView2 기본 색 창의 스포이드 아이콘은 이 앱에서 동작하지 않는다(50차 실측: 아이콘을
+        눌러도 집기 모드로 안 들어가고, 다음 클릭이 그대로 화면으로 전달됐다). 크로뮴 스포이드는
+        호스트(WebView2)가 스포이드 창을 열어 줘야 동작하는데 그 연결이 없는 것으로 보이고,
+        같은 연결을 쓰는 window.EyeDropper(예전 #edPickCol) 도 믿을 수 없다. 이건 exe 쪽이라
+        화면 패치로 되살릴 수 없다.
+        그래서 OS 스포이드 대신 앱이 직접 그린 화면에서 픽셀을 읽는다:
+          화보집 펼침면(.sheet)  → renderPagePNG(쪽, 1)
+          배너·편집 무대(.bnr)   → renderBannerCanvas(bnType, null, 1)
+          <canvas>(움짤 미리보기·시그풍·그리기) · <video> · <img> → 1×1 임시 캔버스에 옮겨 읽기
+          그 밖(팔레트 칸·버튼·다른 색 칸)  → 칠해진 배경색 / 그 색 칸의 값
+        색 입력마다 옆에 💧 를 붙이고(나중에 생기는 입력도 MutationObserver 로 따라감),
+        집으면 input → change 를 차례로 쏴서 각 칸의 기존 핸들러가 그대로 반영·기록한다. */
+  var EYE = null;
+  var EYE_SEQ = 0;
+  var EYE_SKIP_IDS = { edCol: 1 };   /* 편집 탭 주 색은 툴바의 [💧 스포이드] 가 맡는다 */
+  function eyeHex(r, g, b) {
+    return '#' + [r, g, b].map(function (v) { return ('0' + (v & 255).toString(16)).slice(-2); }).join('');
+  }
+  function eyeParseCss(c) {
+    var m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s\/]+([\d.]+%?))?/.exec(c || '');
+    if (!m) return null;
+    var a = m[4] == null ? 1 : (/%$/.test(m[4]) ? parseFloat(m[4]) / 100 : parseFloat(m[4]));
+    return { r: Math.round(+m[1]), g: Math.round(+m[2]), b: Math.round(+m[3]), a: a };
+  }
+  /* 한 점을 1×1 캔버스로 옮겨 읽는다 — 원본 캔버스에 getContext 를 새로 만들지 않으므로
+     WebGL 캔버스나 아직 컨텍스트가 없는 캔버스를 망가뜨리지 않는다. */
+  var EYE_PX = null;
+  function eyeReadPixel(src, sx, sy) {
+    try {
+      if (!EYE_PX) { EYE_PX = document.createElement('canvas'); EYE_PX.width = EYE_PX.height = 1; }
+      var g = EYE_PX.getContext('2d', { willReadFrequently: true });
+      g.clearRect(0, 0, 1, 1);
+      g.drawImage(src, Math.floor(sx), Math.floor(sy), 1, 1, 0, 0, 1, 1);
+      var d = g.getImageData(0, 0, 1, 1).data;
+      return { r: d[0], g: d[1], b: d[2], a: d[3] / 255 };
+    } catch (e) {
+      EYE_PX = null;   /* 교차 출처로 오염된 원본을 그리면 임시 캔버스도 오염된다 — 새로 만든다 */
+      return null;
+    }
+  }
+  /* object-fit 을 고려해 화면 좌표 → 원본 좌표 */
+  function eyeMediaPoint(el, iw, ih, x, y) {
+    var r = el.getBoundingClientRect();
+    if (!iw || !ih || !r.width || !r.height) return null;
+    var fit = getComputedStyle(el).objectFit || 'fill';
+    var cw = r.width, ch = r.height, dw = cw, dh = ch;
+    if (fit === 'contain' || fit === 'scale-down') {
+      var s1 = Math.min(cw / iw, ch / ih);
+      if (fit === 'scale-down') s1 = Math.min(1, s1);
+      dw = iw * s1; dh = ih * s1;
+    } else if (fit === 'cover') {
+      var s2 = Math.max(cw / iw, ch / ih); dw = iw * s2; dh = ih * s2;
+    } else if (fit === 'none') { dw = iw; dh = ih; }
+    var ox = r.left + (cw - dw) / 2, oy = r.top + (ch - dh) / 2;
+    var u = (x - ox) / dw, v = (y - oy) / dh;
+    if (u < 0 || v < 0 || u >= 1 || v >= 1) return null;
+    return { x: u * iw, y: v * ih };
+  }
+  /* 앱 렌더러로 만든 판(쪽·배너)을 집기 모드 한 번에 한 장씩만 그려 두고 좌표로 읽는다 */
+  function eyeSurface(key, make) {
+    var c = EYE.cache[key];
+    if (c) return c;
+    c = EYE.cache[key] = { ready: false, cv: null, fail: false };
+    var tok = EYE.tok;
+    Promise.resolve().then(make).then(function (cv) {
+      if (!EYE || EYE.tok !== tok) return;
+      c.cv = cv; c.ready = true;
+      eyeHover();   /* 준비되면 지금 커서 위치를 다시 읽는다 */
+    }, function () {
+      if (!EYE || EYE.tok !== tok) return;
+      c.ready = true; c.fail = true;
+      eyeHover();
+    });
+    return c;
+  }
+  function eyePngToCanvas(b64) {
+    return new Promise(function (ok, fail) {
+      var im = new Image();
+      im.onload = function () {
+        var cv = document.createElement('canvas');
+        cv.width = im.naturalWidth; cv.height = im.naturalHeight;
+        cv.getContext('2d').drawImage(im, 0, 0);
+        ok(cv);
+      };
+      im.onerror = function () { fail(new Error('decode')); };
+      im.src = 'data:image/png;base64,' + b64;
+    });
+  }
+  function eyeFromSurface(key, rootEl, make, x, y) {
+    var s = eyeSurface(key, make);
+    if (!s.ready) return { wait: true };
+    if (s.fail || !s.cv) return null;
+    var r = rootEl.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    var u = (x - r.left) / r.width, v = (y - r.top) / r.height;
+    if (u < 0 || v < 0 || u >= 1 || v >= 1) return null;
+    return eyeReadPixel(s.cv, u * s.cv.width, v * s.cv.height);
+  }
+  /* 커서 아래 색 — { r,g,b,a } / { wait:true } / null */
+  function eyeSampleAt(x, y) {
+    var stack = document.elementsFromPoint(x, y);
+    for (var i = 0; i < stack.length; i++) {
+      var el = stack[i];
+      if (!el || !el.closest || el.closest('#pbkEyeOv,#pbkEyeLoupe,#pbkEyeHint')) continue;
+      /* 편집 탭 미리보기 덧칠(선택 영역 파란 틴트·올가미 점선) — 이 위를 읽으면 사진 대신 #4682FF 가
+         들어간다. 확정된 그림은 레이어라 아래 무대 판(renderBannerCanvas)에 이미 들어 있다. */
+      if (el.id === 'edOverlay') continue;
+      /* 1b) 화보집 쪽 목록 썸네일 — .plItem .mini 가 pointer-events:none 이라 스택엔 .plItem 만 잡힌다 */
+      var pli = el.closest('#plItems > .plItem');
+      if (pli) {
+        var li = Array.prototype.indexOf.call(pli.parentNode.children, pli);
+        var mini = pli.querySelector('.mini');
+        if (li >= 0 && mini && book && book.pages && book.pages[li]) {
+          var mr = mini.getBoundingClientRect();
+          if (x >= mr.left && x < mr.right && y >= mr.top && y < mr.bottom) {
+            return eyeFromSurface('page' + li, mini, function () {
+              return renderPagePNG(li, 1).then(eyePngToCanvas);
+            }, x, y);
+          }
+        }
+      }
+      /* 3b) 시그풍 출력 미리보기 — 캔버스가 pointer-events:none 이라 스택엔 틀만 잡힌다 */
+      var spw = el.closest('.sig-output-preview-wrap');
+      if (spw) {
+        var spc = spw.querySelector('canvas');
+        var sr = spc && spc.getBoundingClientRect();
+        if (sr && sr.width && sr.height && x >= sr.left && x < sr.right && y >= sr.top && y < sr.bottom) {
+          var spx = eyeReadPixel(spc, (x - sr.left) / sr.width * spc.width, (y - sr.top) / sr.height * spc.height);
+          if (spx && spx.a > 0.03) return spx;
+        }
+      }
+      /* 1) 화보집 펼침면 — 사진 크롭·필터·글자까지 저장본과 같은 렌더러로 */
+      var sheet = el.closest('#pvL .sheet, #pvR .sheet');
+      if (sheet) {
+        var pi = parseInt(sheet.parentNode.getAttribute('data-page'), 10);
+        if (pi >= 0) {
+          return eyeFromSurface('page' + pi, sheet, function () {
+            return renderPagePNG(pi, 1).then(eyePngToCanvas);
+          }, x, y);
+        }
+      }
+      /* 2) 배너·편집 무대 */
+      var bnr = el.closest('#bnBox .bnr');
+      if (bnr && BANNERS[bnType]) {
+        var ty = bnType;
+        return eyeFromSurface('bn_' + ty, bnr, function () {
+          return renderBannerCanvas(ty, null, 1).then(function (cv) { return cv && cv.canvas ? cv.canvas : cv; });
+        }, x, y);
+      }
+      var tag = el.tagName;
+      var px = null;
+      /* 3) 캔버스·영상·이미지 — 투명한 점이면 아래층을 계속 본다 */
+      if (tag === 'CANVAS') {
+        var rc = el.getBoundingClientRect();
+        if (rc.width && rc.height) {
+          px = eyeReadPixel(el, (x - rc.left) / rc.width * el.width, (y - rc.top) / rc.height * el.height);
+        }
+      } else if (tag === 'VIDEO' && el.readyState >= 2) {
+        var pvd = eyeMediaPoint(el, el.videoWidth, el.videoHeight, x, y);
+        if (pvd) px = eyeReadPixel(el, pvd.x, pvd.y);
+      } else if (tag === 'IMG' && el.complete && el.naturalWidth) {
+        var pim = eyeMediaPoint(el, el.naturalWidth, el.naturalHeight, x, y);
+        if (pim) px = eyeReadPixel(el, pim.x, pim.y);
+      } else if (tag === 'INPUT' && el.type === 'color' && /^#[0-9a-f]{6}$/i.test(el.value)) {
+        /* 다른 색 칸을 누르면 그 칸의 색을 그대로 */
+        var hv = el.value;
+        return { r: parseInt(hv.substr(1, 2), 16), g: parseInt(hv.substr(3, 2), 16),
+                 b: parseInt(hv.substr(5, 2), 16), a: 1 };
+      }
+      if (px && px.a > 0.03) return px;
+      if (tag === 'CANVAS' || tag === 'VIDEO' || tag === 'IMG') continue;
+      /* 4) 칠해진 배경색(팔레트 칸·스와치 버튼·패널) — 왼쪽 두꺼운 색 띠(배경/표지/포인트 스와치)를
+            누르면 버튼 바탕이 아니라 그 띠 색. 1~2px 테두리는 그대로 배경색. */
+      var ecs = getComputedStyle(el);
+      var blw = parseFloat(ecs.borderLeftWidth) || 0;
+      if (blw >= 3 && x - el.getBoundingClientRect().left < blw) {
+        var bcol = eyeParseCss(ecs.borderLeftColor);
+        if (bcol && bcol.a > 0.03) return bcol;
+      }
+      var bg = eyeParseCss(ecs.backgroundColor);
+      if (bg && bg.a > 0.03) return bg;
+    }
+    var bb = eyeParseCss(getComputedStyle(document.body).backgroundColor);
+    return (bb && bb.a > 0.03) ? bb : { r: 255, g: 255, b: 255, a: 1 };
+  }
+  function eyeHover() {
+    if (!EYE || !EYE.xy) return;
+    var c = eyeSampleAt(EYE.xy[0], EYE.xy[1]);
+    var sw = EYE.loupe.firstChild, tx = EYE.loupe.lastChild;
+    if (c && c.wait) { sw.style.background = ''; tx.textContent = '색 불러오는 중…'; }
+    else if (c) { var h = eyeHex(c.r, c.g, c.b); sw.style.background = h; tx.textContent = h.toUpperCase(); }
+    else { sw.style.background = ''; tx.textContent = '—'; }
+    var lx = EYE.xy[0] + 18, ly = EYE.xy[1] + 18;
+    if (lx + 150 > innerWidth) lx = EYE.xy[0] - 160;
+    if (ly + 40 > innerHeight) ly = EYE.xy[1] - 50;
+    EYE.loupe.style.left = lx + 'px';
+    EYE.loupe.style.top = ly + 'px';
+    EYE.loupe.style.display = 'flex';
+  }
+  function eyeEnd() {
+    if (!EYE) return;
+    var e = EYE; EYE = null;
+    document.removeEventListener('keydown', e.onKey, true);
+    if (e.raf) cancelAnimationFrame(e.raf);
+    e.pan = null;
+    [e.ov, e.loupe, e.hint].forEach(function (n) { if (n && n.parentNode) n.parentNode.removeChild(n); });
+    if (e.btn) e.btn.classList.remove('on');
+    e.cache = null;   /* 그려 둔 판(쪽 1200×1600 등)을 놓아준다 */
+  }
+  function eyeApply(input, hex) {
+    /* 집는 사이 인스펙터가 새로 그려졌으면 같은 id 의 새 칸으로 */
+    if (!input.isConnected && input.id) input = document.getElementById(input.id) || input;
+    if (!input.isConnected) return false;
+    input.value = hex;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+  function eyeStart(input, btn) {
+    var again = !!(EYE && EYE.input === input);
+    eyeEnd();
+    if (again || !input) return;   /* 같은 💧 를 다시 누르면 취소 */
+    /* 방금 누른 💧 에 포커스가 남으면 Space/Enter 가 그 버튼을 다시 눌러 집기가 곧장 취소된다 */
+    try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (e0) {}
+    var ov = document.createElement('div'); ov.id = 'pbkEyeOv';
+    var loupe = document.createElement('div'); loupe.id = 'pbkEyeLoupe';
+    loupe.appendChild(document.createElement('i')); loupe.appendChild(document.createElement('b'));
+    var hint = document.createElement('div'); hint.id = 'pbkEyeHint';
+    hint.textContent = '💧 색을 집을 곳을 누르세요 — 사진·배너·미리보기 어디든 · Esc/우클릭 = 취소';
+    EYE = { input: input, btn: btn || null, ov: ov, loupe: loupe, hint: hint, cache: {}, xy: null,
+            tok: ++EYE_SEQ, raf: 0, onKey: null, pan: null, skipClick: false, pick: 0 };
+    if (btn) btn.classList.add('on');
+    function stop(ev) { ev.preventDefault(); ev.stopPropagation(); }
+    function hoverSoon() {
+      if (!EYE || EYE.raf) return;
+      EYE.raf = requestAnimationFrame(function () { if (EYE) { EYE.raf = 0; eyeHover(); } });
+    }
+    ov.addEventListener('pointermove', function (ev) {
+      if (!EYE) return;
+      var pn = EYE.pan;
+      if (pn && ev.pointerId === pn.id) {   /* 집기 중에도 Space/가운데 버튼 드래그로 무대 이동 */
+        pn.cen.scrollLeft = pn.sl - (ev.clientX - pn.x);
+        pn.cen.scrollTop = pn.st - (ev.clientY - pn.y);
+      }
+      EYE.xy = [ev.clientX, ev.clientY];
+      hoverSoon();
+    });
+    ov.addEventListener('pointerdown', function (ev) {
+      stop(ev);
+      if (!EYE) return;
+      EYE.pan = null;
+      var cen = document.getElementById('bnCenter');
+      if ((bnSpaceHeld || ev.button === 1) && cen && document.body.classList.contains('bannerOn')) {
+        EYE.pan = { id: ev.pointerId, btn: ev.button, x: ev.clientX, y: ev.clientY,
+                    sl: cen.scrollLeft, st: cen.scrollTop, cen: cen };
+        try { ov.setPointerCapture(ev.pointerId); } catch (e1) {}
+      }
+    });
+    ov.addEventListener('pointerup', function (ev) {
+      stop(ev);
+      if (EYE && EYE.pan) { if (EYE.pan.btn === 0) EYE.skipClick = true; EYE.pan = null; }
+    });
+    ov.addEventListener('pointercancel', function () { if (EYE) EYE.pan = null; });
+    ['mousedown', 'mouseup', 'dblclick'].forEach(function (t) { ov.addEventListener(t, stop); });
+    ov.addEventListener('contextmenu', function (ev) { stop(ev); eyeEnd(); });
+    /* 휠 — 덮개가 휠을 먹으면 집기 중에 목록·패널을 못 내리고 Ctrl+휠 확대도 안 된다. 아래 요소에 대신 전달. */
+    ov.addEventListener('wheel', function (ev) {
+      if (!EYE) return;
+      var st = document.elementsFromPoint(ev.clientX, ev.clientY), u = null;
+      for (var k = 0; k < st.length; k++) {
+        if (!st[k].closest('#pbkEyeOv,#pbkEyeLoupe,#pbkEyeHint')) { u = st[k]; break; }
+      }
+      if (!u) return;
+      ev.preventDefault();
+      if ((ev.ctrlKey || ev.metaKey || ev.altKey) && document.body.classList.contains('bannerOn') && u.closest('#bnCenter')) {
+        bnZoomStep(Math.max(0.4, Math.min(2.5, Math.pow(1.0016, -ev.deltaY))), { x: ev.clientX, y: ev.clientY });
+      } else {
+        var mul = ev.deltaMode === 1 ? 16 : (ev.deltaMode === 2 ? 400 : 1);
+        var dy = ev.deltaY * mul, dx = ev.deltaX * mul;
+        if (ev.shiftKey && !dx) { dx = dy; dy = 0; }
+        for (var n = u; n && n !== document.documentElement; n = n.parentElement) {
+          var ncs = getComputedStyle(n);
+          var canY = dy && /auto|scroll/.test(ncs.overflowY) &&
+            (dy > 0 ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 0);
+          var canX = dx && /auto|scroll/.test(ncs.overflowX) &&
+            (dx > 0 ? n.scrollLeft + n.clientWidth < n.scrollWidth - 1 : n.scrollLeft > 0);
+          if (canY || canX) { if (canY) n.scrollTop += dy; if (canX) n.scrollLeft += dx; break; }
+        }
+      }
+      hoverSoon();
+    }, { passive: false });
+    /* 집기는 click 에서 — pointerdown 에서 덮개를 치우면 뒤따르는 click 이 아래 요소(쪽·무대)에
+       떨어져 선택이 바뀌거나 색 팝업이 닫힌다. click 까지 여기서 삼킨다. */
+    ov.addEventListener('click', function (ev) {
+      stop(ev);
+      if (!EYE || ev.button !== 0) return;
+      if (EYE.skipClick || bnSpaceHeld) { EYE.skipClick = false; hoverSoon(); return; }   /* 이동 드래그였음 */
+      var pick = ++EYE.pick;   /* 판을 불러오는 중에 다시 누르면 나중 클릭이 이긴다 */
+      var at = [ev.clientX, ev.clientY];
+      EYE.xy = at;
+      var c = eyeSampleAt(at[0], at[1]);
+      if (c && c.wait) {   /* 판이 아직 그려지는 중 — 준비되면 그 자리 색으로 집는다 */
+        var tok = EYE.tok, tries = 0;
+        EYE.hint.textContent = '💧 색 불러오는 중… 잠깐만요';
+        (function waitPick() {
+          if (!EYE || EYE.tok !== tok || EYE.pick !== pick) return;
+          var c2 = eyeSampleAt(at[0], at[1]);
+          if (c2 && c2.wait && ++tries < 200) { setTimeout(waitPick, 60); return; }
+          var tgt = EYE.input;
+          eyeEnd();
+          if (c2 && !c2.wait) eyeApply(tgt, eyeHex(c2.r, c2.g, c2.b));
+        })();
+        return;
+      }
+      var target = EYE.input;
+      eyeEnd();
+      if (c) eyeApply(target, eyeHex(c.r, c.g, c.b));
+    });
+    EYE.onKey = function (ev) {
+      if (ev.key === 'Escape') { ev.preventDefault(); ev.stopImmediatePropagation(); eyeEnd(); return; }
+      var k2 = (ev.key || '').toLowerCase();
+      /* 통과시킬 것: 편집 탭 I(💧 켜고 끄기) · Space(손바닥 이동) · Ctrl + + - 0 1(보기 확대) —
+         화면만 옮기고 내용은 안 바꾼다. 나머지(Ctrl+Z/Y/S, Delete, 방향키, 도구 키)는 집는 동안
+         판·인스펙터를 바꿔 엉뚱한 색을 집게 하므로 막는다. preventDefault 는 안 해서 Alt+F4 등은 그대로. */
+      if (k2 === 'i' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) return;
+      if (ev.code === 'Space') return;
+      if ((ev.ctrlKey || ev.metaKey) && ['=', '+', '-', '_', '0', '1'].indexOf(ev.key) >= 0) return;
+      ev.stopImmediatePropagation();
+    };
+    document.addEventListener('keydown', EYE.onKey, true);
+    document.body.appendChild(ov);
+    document.body.appendChild(hint);
+    document.body.appendChild(loupe);
+  }
+  function eyeSyncBtn(input) {
+    var b = input.__eyeBtn;
+    if (!b) return;
+    var hide = input.hidden || input.disabled || input.style.display === 'none' ||
+      input.style.visibility === 'hidden';
+    b.style.display = hide ? 'none' : '';
+  }
+  function eyeDecorate(input) {
+    if (input.__eyeBtn || EYE_SKIP_IDS[input.id] || input.hasAttribute('data-no-eye')) return;
+    if (!input.parentNode) return;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pbkEyeBtn';
+    b.textContent = '💧';
+    b.title = '스포이드 — 화면에서 색 집기 (사진·배너·미리보기 어디든 · Esc 취소)';
+    b.addEventListener('click', function (ev) {
+      ev.preventDefault(); ev.stopPropagation();   /* 라벨·색 팝업 바깥 클릭으로 새지 않게 */
+      eyeStart(input, b);
+    });
+    input.__eyeBtn = b;
+    input.parentNode.insertBefore(b, input.nextSibling);
+    if (input.parentNode.classList && input.parentNode.classList.contains('sig-field')) {
+      input.parentNode.classList.add('pbkEyeField');   /* 시그풍 2칸 격자에 💧 칸 하나 더 */
+    }
+    if (input.parentNode.classList && input.parentNode.classList.contains('sig-outline-row')) {
+      /* 시그풍 3단 테두리 줄은 4칸 격자(라벨·색·굵기·%)라, 💧 가 끼면 슬라이더가 34px 로 줄고 % 가
+         아랫줄로 떨어진다 — 💧 칸을 하나 더 두고 슬라이더·% 칸을 번호로 고정한다(💧 숨겨져도 안 튐) */
+      input.parentNode.classList.add('pbkEyeRow');
+    }
+    eyeSyncBtn(input);
+  }
+  function eyeScan(root) {
+    if (!root || root.nodeType !== 1) return;
+    if (root.tagName === 'INPUT' && root.type === 'color') { eyeDecorate(root); return; }
+    var list = root.querySelectorAll('input[type=color]');
+    for (var i = 0; i < list.length; i++) eyeDecorate(list[i]);
+  }
+  (function eyeBoot() {
+    eyeScan(document.body);
+    try {
+      new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var m = muts[i];
+          if (m.type === 'childList') {
+            for (var j = 0; j < m.addedNodes.length; j++) eyeScan(m.addedNodes[j]);
+          } else if (m.target && m.target.tagName === 'INPUT' && m.target.type === 'color') {
+            eyeSyncBtn(m.target);
+          }
+        }
+      }).observe(document.body, { childList: true, subtree: true, attributes: true,
+        attributeFilter: ['style', 'hidden', 'disabled'] });
+    } catch (e) {}
+  })();
+  /* 편집 탭 툴바 [💧 스포이드] — 예전엔 window.EyeDropper(OS 스포이드)였는데 WebView2 에서
+     믿을 수 없어 같은 자체 스포이드로 바꿨다. I 키도 이 버튼을 누른다. */
+  $('#edPickCol').onclick = function () { eyeStart($('#edCol'), $('#edPickCol')); };
   /* 그라디언트/단색 레이어 + 전부 병합 */
   function edMakeLayerFromCanvas(cv, name) {
     var e = ensureBanners().edit;
