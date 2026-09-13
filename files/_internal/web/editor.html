@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-13_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-13_v2 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -742,26 +742,36 @@
   .gmrFoot{display:flex;gap:7px;justify-content:flex-end;border-top:1px solid var(--pp-line);padding:10px 12px}
   @media(max-width:760px){.gmrBody{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}.gmrSide{max-height:220px}}
 
-  /* 💧 앱 자체 스포이드 — 색 칸 옆 버튼 · 집기 덮개 · 돋보기 표시 */
-  body .pbkEyeBtn{flex:none;display:inline-flex;align-items:center;justify-content:center;
-    width:24px !important;min-width:24px !important;height:24px !important;padding:0 !important;
-    margin:0 0 0 3px !important;border:1px solid #d6d2c4;border-radius:6px;background:#fff;
-    font-size:12px;line-height:1;cursor:pointer;vertical-align:middle;box-shadow:none;color:inherit}
-  body .pbkEyeBtn:hover{background:#f3efe2}
-  body .pbkEyeBtn.on{background:#2d3a52;border-color:#2d3a52}
-  .sig-field.pbkEyeField{grid-template-columns:86px minmax(0,1fr) 24px}
-  /* 상단 팔레트(스와치 위·이름 아래 세로 칸)는 💧 가 한 줄을 차지하면 툴바가 106→132px 로
-     커진다 — 스와치 오른쪽 위 모서리에 작게 겹쳐 둔다 */
-  #palGroup .cp{position:relative}
-  body #palGroup .cp .pbkEyeBtn{position:absolute;top:-5px;left:calc(50% + 8px);width:17px !important;
-    min-width:17px !important;height:17px !important;margin:0 !important;border-radius:50%;font-size:9px;
-    box-shadow:0 1px 3px rgba(0,0,0,.18)}
-  .sig-field.compact.pbkEyeField{grid-template-columns:58px minmax(0,1fr) 24px}
-  body .sig-field.pbkEyeField > .pbkEyeBtn{margin:0 !important}   /* 24px 칸에 딱 맞게(왼쪽 3px 여백이 칸 밖으로 샜다) */
-  .sig-outline-row.pbkEyeRow{grid-template-columns:88px 32px 24px minmax(40px,1fr) 34px}
-  body .sig-outline-row.pbkEyeRow > .pbkEyeBtn{grid-column:3;margin:0 !important}
-  .sig-outline-row.pbkEyeRow > input[type="range"]{grid-column:4}
-  .sig-outline-row.pbkEyeRow > output{grid-column:5}
+  /* 🎨 앱 색 고르기 창(WebView2 기본 색 창 대신) · 💧 스포이드 덮개 */
+  #pbkCp{position:fixed;z-index:2147482000;display:none;width:232px;box-sizing:border-box;padding:10px;
+    background:#fff;border:1px solid #c8c8c8;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.22);
+    font:12px/1.2 system-ui,'Malgun Gothic',sans-serif;color:#222;user-select:none}
+  #pbkCp.picking{opacity:.35;pointer-events:none}
+  #pbkCp .cpSV{position:relative;height:130px;border-radius:3px;cursor:crosshair;touch-action:none;overflow:hidden}
+  #pbkCp .cpSVw,#pbkCp .cpSVb{position:absolute;inset:0}
+  #pbkCp .cpSVw{background:linear-gradient(to right,#fff,rgba(255,255,255,0))}
+  #pbkCp .cpSVb{background:linear-gradient(to top,#000,rgba(0,0,0,0))}
+  #pbkCp .cpSVk{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border:2px solid #fff;border-radius:50%;
+    box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none}
+  #pbkCp .cpRow{display:flex;align-items:center;gap:9px;margin-top:10px}
+  #pbkCp .cpEye{flex:none;width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;
+    border:1px solid #d0d0d0;border-radius:4px;background:#fff;color:#333;cursor:pointer}
+  #pbkCp .cpEye:hover{background:#f0f0f0}
+  #pbkCp .cpEye.on{background:#2d3a52;color:#fff;border-color:#2d3a52}
+  #pbkCp .cpDot{flex:none;width:30px;height:30px;border-radius:50%;border:1px solid rgba(0,0,0,.18)}
+  #pbkCp .cpHue{position:relative;flex:1;height:12px;border-radius:6px;cursor:pointer;touch-action:none;
+    background:linear-gradient(to right,#f00 0%,#ff0 16.66%,#0f0 33.33%,#0ff 50%,#00f 66.66%,#f0f 83.33%,#f00 100%)}
+  #pbkCp .cpHueK{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #fff;border-radius:50%;
+    box-shadow:0 0 0 1px rgba(0,0,0,.45);pointer-events:none}
+  #pbkCp .cpNums{display:flex;align-items:flex-start;gap:6px;margin-top:10px}
+  #pbkCp .cpRgb,#pbkCp .cpHexW{flex:1;display:flex;gap:6px}
+  #pbkCp .cpRgb[hidden],#pbkCp .cpHexW[hidden]{display:none}
+  #pbkCp label{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#555;font-size:11px}
+  #pbkCp input{width:100%;box-sizing:border-box;height:28px;border:1px solid #cfcfcf;border-radius:4px;text-align:center;
+    font:13px system-ui,sans-serif;color:#222;background:#fff;padding:0 2px;-moz-appearance:textfield}
+  #pbkCp input::-webkit-outer-spin-button,#pbkCp input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  #pbkCp .cpMode{flex:none;width:22px;height:28px;padding:0;border:0;background:transparent;color:#555;cursor:pointer;font-size:13px}
+  input[type=color].pbkCpOn{outline:2px solid #2d3a52;outline-offset:1px}
   #pbkEyeOv{position:fixed;inset:0;z-index:2147483000;cursor:crosshair;background:transparent}
   #pbkEyeHint{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:2147483001;
     pointer-events:none;background:#2d3a52;color:#fff;font-size:12.5px;padding:7px 14px;
@@ -781,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-13 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-13 v2</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -3663,6 +3673,8 @@ window.gifenc=exports;})();
       paintPgBgSwatches();
     };
     ci.onchange = function () { pg.bg = pg.bg || {}; pg.bg.c = ci.value; histPush(); touch(cur); };
+    var pgBg0 = pg.bg && pg.bg.c;   /* 앱 색 창 Esc — '기본'이던 쪽은 '기본'으로(칸의 종이색은 자리표시) */
+    ci.pbkCpRevert = function () { setBg(pgBg0 || ''); };
     pick.appendChild(ci);
     box.appendChild(pick);
     var hint = document.createElement('div');
@@ -3985,6 +3997,8 @@ window.gifenc=exports;})();
         var cc = pg.tcolors && pg.tcolors[f.k];
         ci.value = (cc && /^#[0-9a-fA-F]{6}$/.test(cc)) ? cc : '#dea44e';
         ci.oninput = function () { setColor(ci.value); };
+        /* 앱 색 창 Esc: 칸에 보이던 #dea44e 는 '기본색' 자리표시라 그 값을 되써 넣으면 주황으로 칠해진다 */
+        ci.pbkCpRevert = function () { setColor(cc || null); };
         pop.appendChild(ci);
         w.appendChild(pop);
       };
@@ -4146,6 +4160,7 @@ window.gifenc=exports;})();
       var cc = pg.tcolors && pg.tcolors[key];
       ci.value = (cc && /^#[0-9a-fA-F]{6}$/.test(cc)) ? cc : '#151515';
       ci.oninput = function () { setColor(ci.value); };
+      ci.pbkCpRevert = function () { setColor(cc || null); };   /* 앱 색 창 Esc — 기본색이던 글자는 기본색으로 */
       pop.appendChild(ci);
       cs.parentNode.appendChild(pop);
     };
@@ -11604,6 +11619,8 @@ window.gifenc=exports;})();
       }
       ci.oninput = function () { dc.bg = ci.value; paintBgSwatches(); refreshBnStageSoon(); };
       ci.onchange = function () { dc.bg = ci.value; refreshBnStage(); renderBnInspector(); };
+      var bg0 = dc.bg;   /* 앱 색 창 Esc — '없음'이던 배경은 '없음'으로(칸의 #e7eadb 는 자리표시) */
+      ci.pbkCpRevert = function () { if (bg0 == null) delete dc.bg; else dc.bg = bg0; refreshBnStage(); renderBnInspector(); };
       pickRow.appendChild(ci);
       box.appendChild(pickRow);
     })();
@@ -12276,6 +12293,8 @@ window.gifenc=exports;})();
         var cc = b.tcolors && b.tcolors[f.k];
         ci.value = (cc && /^#[0-9a-fA-F]{6}$/.test(cc)) ? cc : '#dea44e';
         ci.oninput = function () { setColor(ci.value); };
+        /* 앱 색 창 Esc: 칸에 보이던 #dea44e 는 '기본색' 자리표시라 그 값을 되써 넣으면 주황으로 칠해진다 */
+        ci.pbkCpRevert = function () { setColor(cc || null); };
         pop.appendChild(ci);
         wrap.appendChild(pop);
       };
@@ -24673,18 +24692,16 @@ window.gifenc=exports;})();
     renderBnInspector();
   }
   /* ══════════ 💧 앱 자체 스포이드 ══════════
-     ⚠ WebView2 기본 색 창의 스포이드 아이콘은 이 앱에서 동작하지 않는다(50차 실측: 아이콘을
-        눌러도 집기 모드로 안 들어가고, 다음 클릭이 그대로 화면으로 전달됐다). 크로뮴 스포이드는
-        호스트(WebView2)가 스포이드 창을 열어 줘야 동작하는데 그 연결이 없는 것으로 보이고,
-        같은 연결을 쓰는 window.EyeDropper(예전 #edPickCol) 도 믿을 수 없다. 이건 exe 쪽이라
-        화면 패치로 되살릴 수 없다.
-        그래서 OS 스포이드 대신 앱이 직접 그린 화면에서 픽셀을 읽는다:
-          화보집 펼침면(.sheet)  → renderPagePNG(쪽, 1)
-          배너·편집 무대(.bnr)   → renderBannerCanvas(bnType, null, 1)
-          <canvas>(움짤 미리보기·시그풍·그리기) · <video> · <img> → 1×1 임시 캔버스에 옮겨 읽기
-          그 밖(팔레트 칸·버튼·다른 색 칸)  → 칠해진 배경색 / 그 색 칸의 값
-        색 입력마다 옆에 💧 를 붙이고(나중에 생기는 입력도 MutationObserver 로 따라감),
-        집으면 input → change 를 차례로 쏴서 각 칸의 기존 핸들러가 그대로 반영·기록한다. */
+     ⚠ WebView2 기본 색 창의 스포이드 아이콘은 이 앱에서 동작하지 않는다(50·51차 실측 + 고객 영상:
+        아이콘을 눌러도 반응이 없고 다음 클릭이 그대로 화면으로 간다). 크로뮴 스포이드는 호스트(WebView2)가
+        스포이드 창을 열어 줘야 하는데 그 연결이 없고, 같은 경로를 쓰는 window.EyeDropper 도 믿을 수 없다.
+        exe 쪽이라 화면 패치로는 되살릴 수 없다.
+        그래서 앱이 직접 그린 화면에서 픽셀을 읽는 스포이드를 만들고, 아래 '앱 색 고르기 창'의 스포이드
+        아이콘과 편집 탭 [💧 스포이드]·I 키가 이것을 쓴다:
+          화보집 펼침면·쪽 목록 썸네일 → renderPagePNG(쪽, 1) / 배너·편집 무대 → renderBannerCanvas(bnType, null, 1)
+          <canvas>(움짤 미리보기·시그풍) · <video> · <img> → 1×1 임시 캔버스 / 그 밖 → 칠해진 배경색·색 띠
+        ⚠ 51차엔 색 칸마다 💧 버튼을 따로 붙였는데, 고객은 "색 창 안의 스포이드"를 기대했고 💧 는 누르자마자
+          그 칸(예: 쪽 배경색)에 바로 칠해져 "왜 색이 바뀌냐"는 반응이었다 — 52차에서 색 창 안으로 옮겼다. */
   var EYE = null;
   var EYE_SEQ = 0;
   var EYE_SKIP_IDS = { edCol: 1 };   /* 편집 탭 주 색은 툴바의 [💧 스포이드] 가 맡는다 */
@@ -24776,7 +24793,7 @@ window.gifenc=exports;})();
     var stack = document.elementsFromPoint(x, y);
     for (var i = 0; i < stack.length; i++) {
       var el = stack[i];
-      if (!el || !el.closest || el.closest('#pbkEyeOv,#pbkEyeLoupe,#pbkEyeHint')) continue;
+      if (!el || !el.closest || el.closest('#pbkEyeOv,#pbkEyeLoupe,#pbkEyeHint,#pbkCp')) continue;   /* 색 창은 흐리게 두고 그 아래를 집는다 */
       /* 편집 탭 미리보기 덧칠(선택 영역 파란 틴트·올가미 점선) — 이 위를 읽으면 사진 대신 #4682FF 가
          들어간다. 확정된 그림은 레이어라 아래 무대 판(renderBannerCanvas)에 이미 들어 있다. */
       if (el.id === 'edOverlay') continue;
@@ -24880,6 +24897,7 @@ window.gifenc=exports;})();
     e.pan = null;
     [e.ov, e.loupe, e.hint].forEach(function (n) { if (n && n.parentNode) n.parentNode.removeChild(n); });
     if (e.btn) e.btn.classList.remove('on');
+    if (CP_EL) CP_EL.classList.remove('picking');   /* 색 창을 다시 또렷하게 */
     e.cache = null;   /* 그려 둔 판(쪽 1200×1600 등)을 놓아준다 */
   }
   function eyeApply(input, hex) {
@@ -24891,7 +24909,8 @@ window.gifenc=exports;})();
     input.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   }
-  function eyeStart(input, btn) {
+  /* onPick 이 있으면 색 칸에 바로 넣지 않고 그 함수로 넘긴다(색 창의 스포이드) */
+  function eyeStart(input, btn, onPick) {
     var again = !!(EYE && EYE.input === input);
     eyeEnd();
     if (again || !input) return;   /* 같은 💧 를 다시 누르면 취소 */
@@ -24903,7 +24922,8 @@ window.gifenc=exports;})();
     var hint = document.createElement('div'); hint.id = 'pbkEyeHint';
     hint.textContent = '💧 색을 집을 곳을 누르세요 — 사진·배너·미리보기 어디든 · Esc/우클릭 = 취소';
     EYE = { input: input, btn: btn || null, ov: ov, loupe: loupe, hint: hint, cache: {}, xy: null,
-            tok: ++EYE_SEQ, raf: 0, onKey: null, pan: null, skipClick: false, pick: 0 };
+            tok: ++EYE_SEQ, raf: 0, onKey: null, pan: null, skipClick: false, pick: 0,
+            onPick: onPick || null };
     if (btn) btn.classList.add('on');
     function stop(ev) { ev.preventDefault(); ev.stopPropagation(); }
     function hoverSoon() {
@@ -24981,15 +25001,15 @@ window.gifenc=exports;})();
           if (!EYE || EYE.tok !== tok || EYE.pick !== pick) return;
           var c2 = eyeSampleAt(at[0], at[1]);
           if (c2 && c2.wait && ++tries < 200) { setTimeout(waitPick, 60); return; }
-          var tgt = EYE.input;
+          var tgt = EYE.input, cb = EYE.onPick;
           eyeEnd();
-          if (c2 && !c2.wait) eyeApply(tgt, eyeHex(c2.r, c2.g, c2.b));
+          if (c2 && !c2.wait) { if (cb) cb(eyeHex(c2.r, c2.g, c2.b)); else eyeApply(tgt, eyeHex(c2.r, c2.g, c2.b)); }
         })();
         return;
       }
-      var target = EYE.input;
+      var target = EYE.input, done = EYE.onPick;
       eyeEnd();
-      if (c) eyeApply(target, eyeHex(c.r, c.g, c.b));
+      if (c) { if (done) done(eyeHex(c.r, c.g, c.b)); else eyeApply(target, eyeHex(c.r, c.g, c.b)); }
     });
     EYE.onKey = function (ev) {
       if (ev.key === 'Escape') { ev.preventDefault(); ev.stopImmediatePropagation(); eyeEnd(); return; }
@@ -25007,61 +25027,271 @@ window.gifenc=exports;})();
     document.body.appendChild(hint);
     document.body.appendChild(loupe);
   }
-  function eyeSyncBtn(input) {
-    var b = input.__eyeBtn;
-    if (!b) return;
-    var hide = input.hidden || input.disabled || input.style.display === 'none' ||
-      input.style.visibility === 'hidden';
-    b.style.display = hide ? 'none' : '';
+  /* ══════════ 🎨 앱 색 고르기 창 ══════════
+     WebView2 가 여는 기본 색 창은 스포이드 아이콘이 보이기만 하고 눌러도 반응이 없다(실측, 고객 영상).
+     그래서 모든 <input type="color"> 의 기본 창을 막고, 같은 모양(색 영역 · 스포이드 · 색상 막대 ·
+     R/G/B)의 창을 앱이 직접 띄운다. 스포이드 아이콘은 위의 자체 스포이드(eyeStart)로 화면 색을 읽어
+     이 창의 색으로 넣는다. 값 반영은 기본 창과 똑같이: 고르는 동안 input, 닫힐 때 change,
+     Esc 는 연 순간의 색으로 되돌린다. 기존 색 칸 핸들러는 손대지 않는다. */
+  var CP = null;          /* { input, orig, h, s, v, dirty, hex } */
+  var CP_EL = null;
+  function cpClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function cpHexToRgb(h) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(h || '');
+    if (!m) return null;
+    var n = parseInt(m[1], 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
   }
-  function eyeDecorate(input) {
-    if (input.__eyeBtn || EYE_SKIP_IDS[input.id] || input.hasAttribute('data-no-eye')) return;
-    if (!input.parentNode) return;
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'pbkEyeBtn';
-    b.textContent = '💧';
-    b.title = '스포이드 — 화면에서 색 집기 (사진·배너·미리보기 어디든 · Esc 취소)';
-    b.addEventListener('click', function (ev) {
-      ev.preventDefault(); ev.stopPropagation();   /* 라벨·색 팝업 바깥 클릭으로 새지 않게 */
-      eyeStart(input, b);
+  function cpRgbToHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, h = 0;
+    if (d) {
+      if (mx === r) h = ((g - b) / d) % 6;
+      else if (mx === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60; if (h < 0) h += 360;
+    }
+    return { h: h, s: mx ? d / mx : 0, v: mx };
+  }
+  function cpHsvToRgb(h, s, v) {
+    var c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c, r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+    else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) };
+  }
+  function cpBuild() {
+    if (CP_EL) return CP_EL;
+    var el = document.createElement('div');
+    el.id = 'pbkCp';
+    el.innerHTML =
+      '<div class="cpSV"><div class="cpSVw"></div><div class="cpSVb"></div><i class="cpSVk"></i></div>' +
+      '<div class="cpRow">' +
+        '<button type="button" class="cpEye" title="스포이드 — 화면에서 색 집기 (Esc 취소)">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M20.7 5.6 18.4 3.3a1 1 0 0 0-1.4 0l-3 3-1.3-1.3-1.4 1.4 1.4 1.4-7.9 7.9V19h3.3l7.9-7.9 1.4 1.4 1.4-1.4-1.3-1.3 3-3a1 1 0 0 0 .2-1.2ZM7.2 17H6v-1.2l7.6-7.6 1.2 1.2Z"/></svg>' +
+        '</button>' +
+        '<span class="cpDot"></span>' +
+        '<div class="cpHue"><i class="cpHueK"></i></div>' +
+      '</div>' +
+      '<div class="cpNums">' +
+        '<div class="cpRgb">' +
+          '<label><input class="cpR" type="number" min="0" max="255" step="1"><span>R</span></label>' +
+          '<label><input class="cpG" type="number" min="0" max="255" step="1"><span>G</span></label>' +
+          '<label><input class="cpB" type="number" min="0" max="255" step="1"><span>B</span></label>' +
+        '</div>' +
+        '<div class="cpHexW" hidden><label><input class="cpHex" type="text" maxlength="7" spellcheck="false"><span>HEX</span></label></div>' +
+        '<button type="button" class="cpMode" title="RGB / HEX 바꾸기">⇅</button>' +
+      '</div>';
+    var q = function (c) { return el.querySelector(c); };
+    /* 창 안을 누른 것이 문서로 새면 글자색 팝업(.colorPop) 닫기 등 바깥 클릭 처리가 돌아
+       이 창이 붙어 있던 색 칸이 사라진다 */
+    ['pointerdown', 'mousedown', 'click', 'dblclick'].forEach(function (t) {
+      el.addEventListener(t, function (ev) { ev.stopPropagation(); });
     });
-    input.__eyeBtn = b;
-    input.parentNode.insertBefore(b, input.nextSibling);
-    if (input.parentNode.classList && input.parentNode.classList.contains('sig-field')) {
-      input.parentNode.classList.add('pbkEyeField');   /* 시그풍 2칸 격자에 💧 칸 하나 더 */
+    function drag(area, onPos) {
+      area.addEventListener('pointerdown', function (ev) {
+        if (!CP || ev.button !== 0) return;
+        ev.preventDefault();
+        try { area.setPointerCapture(ev.pointerId); } catch (e) {}
+        var move = function (e2) {
+          if (!CP) return;
+          var r = area.getBoundingClientRect();
+          onPos(cpClamp((e2.clientX - r.left) / r.width, 0, 1), cpClamp((e2.clientY - r.top) / r.height, 0, 1));
+        };
+        move(ev);
+        var up = function () {
+          area.removeEventListener('pointermove', move);
+          area.removeEventListener('pointerup', up);
+          area.removeEventListener('pointercancel', up);
+        };
+        area.addEventListener('pointermove', move);
+        area.addEventListener('pointerup', up);
+        area.addEventListener('pointercancel', up);
+      });
     }
-    if (input.parentNode.classList && input.parentNode.classList.contains('sig-outline-row')) {
-      /* 시그풍 3단 테두리 줄은 4칸 격자(라벨·색·굵기·%)라, 💧 가 끼면 슬라이더가 34px 로 줄고 % 가
-         아랫줄로 떨어진다 — 💧 칸을 하나 더 두고 슬라이더·% 칸을 번호로 고정한다(💧 숨겨져도 안 튐) */
-      input.parentNode.classList.add('pbkEyeRow');
+    drag(q('.cpSV'), function (u, v) { CP.s = u; CP.v = 1 - v; cpEmit(); });
+    drag(q('.cpHue'), function (u) { CP.h = Math.min(359.999, u * 360); cpEmit(); });
+    ['.cpR', '.cpG', '.cpB'].forEach(function (c) {
+      q(c).addEventListener('input', function () {
+        if (!CP) return;
+        var r = cpClamp(parseInt(q('.cpR').value, 10) || 0, 0, 255);
+        var g = cpClamp(parseInt(q('.cpG').value, 10) || 0, 0, 255);
+        var b = cpClamp(parseInt(q('.cpB').value, 10) || 0, 0, 255);
+        var hsv = cpRgbToHsv(r, g, b);
+        if (hsv.s) CP.h = hsv.h;   /* 회색이면 색상 막대 위치는 그대로 */
+        CP.s = hsv.s; CP.v = hsv.v;
+        cpEmit(c);
+      });
+    });
+    q('.cpHex').addEventListener('input', function () {
+      if (!CP) return;
+      var t = q('.cpHex').value.trim();
+      if (t[0] !== '#') t = '#' + t;
+      var rgb = cpHexToRgb(t);
+      if (!rgb) return;
+      var hsv = cpRgbToHsv(rgb.r, rgb.g, rgb.b);
+      if (hsv.s) CP.h = hsv.h;
+      CP.s = hsv.s; CP.v = hsv.v;
+      cpEmit('.cpHex');
+    });
+    el.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); cpClose(true); }
+    });
+    q('.cpMode').addEventListener('click', function () {
+      var hexOn = q('.cpHexW').hidden;
+      q('.cpHexW').hidden = !hexOn;
+      q('.cpRgb').hidden = hexOn;
+    });
+    q('.cpEye').addEventListener('click', function () {
+      if (!CP) return;
+      var eye = q('.cpEye');
+      el.classList.add('picking');
+      eyeStart(CP.input, eye, function (hex) {
+        if (!CP) return;
+        var rgb = cpHexToRgb(hex), hsv = cpRgbToHsv(rgb.r, rgb.g, rgb.b);
+        if (hsv.s) CP.h = hsv.h;
+        CP.s = hsv.s; CP.v = hsv.v;
+        cpEmit();
+      });
+    });
+    document.body.appendChild(el);
+    CP_EL = el;
+    return el;
+  }
+  /* 창 표시 갱신(skip = 지금 타이핑 중인 칸은 덮어쓰지 않는다) */
+  function cpPaint(skip) {
+    var el = CP_EL, q = function (c) { return el.querySelector(c); };
+    var rgb = cpHsvToRgb(CP.h, CP.s, CP.v), pure = cpHsvToRgb(CP.h, 1, 1);
+    var hex = eyeHex(rgb.r, rgb.g, rgb.b);
+    CP.hex = hex;
+    q('.cpSV').style.background = 'rgb(' + pure.r + ',' + pure.g + ',' + pure.b + ')';
+    var k = q('.cpSVk');
+    k.style.left = (CP.s * 100) + '%'; k.style.top = ((1 - CP.v) * 100) + '%';
+    q('.cpHueK').style.left = (CP.h / 360 * 100) + '%';
+    q('.cpHueK').style.background = 'rgb(' + pure.r + ',' + pure.g + ',' + pure.b + ')';
+    q('.cpDot').style.background = hex;
+    if (skip !== '.cpR') q('.cpR').value = rgb.r;
+    if (skip !== '.cpG') q('.cpG').value = rgb.g;
+    if (skip !== '.cpB') q('.cpB').value = rgb.b;
+    if (skip !== '.cpHex') q('.cpHex').value = hex;
+  }
+  /* 색 칸에 반영 — 기본 창처럼 고르는 동안 input 만, change 는 닫을 때 */
+  function cpEmit(skip) {
+    if (!CP) return;
+    cpPaint(skip);
+    var inp = CP.input;
+    if (!inp.isConnected && inp.id) inp = CP.input = document.getElementById(inp.id) || inp;
+    if (!inp.isConnected) { cpClose(false, true); return; }
+    if (inp.value.toLowerCase() === CP.hex) return;
+    inp.value = CP.hex;
+    CP.dirty = true;
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function cpPlace() {
+    var el = CP_EL, r = CP.input.getBoundingClientRect();
+    var w = el.offsetWidth, h = el.offsetHeight, m = 6;
+    var left = cpClamp(r.left, m, innerWidth - w - m);
+    var top = r.bottom + 4;
+    if (top + h > innerHeight - m) top = Math.max(m, r.top - h - 4);
+    el.style.left = left + 'px'; el.style.top = top + 'px';
+  }
+  function cpOpen(input) {
+    if (CP && CP.input === input) { cpClose(true); return; }
+    if (CP) cpClose(true);
+    cpBuild();
+    var rgb = cpHexToRgb(input.value) || { r: 0, g: 0, b: 0 };
+    var hsv = cpRgbToHsv(rgb.r, rgb.g, rgb.b);
+    CP = { input: input, orig: input.value, h: hsv.h, s: hsv.s, v: hsv.v, dirty: false, hex: '' };
+    CP_EL.classList.remove('picking');
+    CP_EL.style.display = 'block';
+    cpPaint();
+    cpPlace();
+    input.classList.add('pbkCpOn');
+  }
+  /* commit=true: 고른 색 확정(change) · false: Esc — 연 순간의 색으로 되돌림 */
+  function cpClose(commit, silent) {
+    if (!CP) return;
+    var c = CP; CP = null;
+    if (EYE) eyeEnd();
+    if (CP_EL) { CP_EL.style.display = 'none'; CP_EL.classList.remove('picking'); }
+    var inp = c.input;
+    inp.classList.remove('pbkCpOn');
+    if (silent || !inp.isConnected) return;
+    if (!commit && inp.value.toLowerCase() !== String(c.orig).toLowerCase()) {
+      inp.value = c.orig;
+      /* 칸이 기본값 자리표시를 보여 주던 경우 그 값을 되써 넣으면 안 된다 — 칸이 준 되돌리기로 */
+      if (typeof inp.pbkCpRevert === 'function') { try { inp.pbkCpRevert(); } catch (eR) {} return; }
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
     }
-    eyeSyncBtn(input);
+    if (commit && c.dirty) inp.dispatchEvent(new Event('change', { bubbles: true }));
   }
-  function eyeScan(root) {
-    if (!root || root.nodeType !== 1) return;
-    if (root.tagName === 'INPUT' && root.type === 'color') { eyeDecorate(root); return; }
-    var list = root.querySelectorAll('input[type=color]');
-    for (var i = 0; i < list.length; i++) eyeDecorate(list[i]);
-  }
-  (function eyeBoot() {
-    eyeScan(document.body);
-    try {
-      new MutationObserver(function (muts) {
-        for (var i = 0; i < muts.length; i++) {
-          var m = muts[i];
-          if (m.type === 'childList') {
-            for (var j = 0; j < m.addedNodes.length; j++) eyeScan(m.addedNodes[j]);
-          } else if (m.target && m.target.tagName === 'INPUT' && m.target.type === 'color') {
-            eyeSyncBtn(m.target);
-          }
-        }
-      }).observe(document.body, { childList: true, subtree: true, attributes: true,
-        attributeFilter: ['style', 'hidden', 'disabled'] });
-    } catch (e) {}
-  })();
+  function cpIsColor(t) { return t && t.tagName === 'INPUT' && t.type === 'color' && !t.disabled; }
+  /* 기본 색 창을 막고 앱 창을 연다 — 캡처 단계에서 가로채 기존 핸들러보다 먼저 */
+  document.addEventListener('mousedown', function (ev) {
+    if (!cpIsColor(ev.target)) return;
+    ev.preventDefault();   /* 색 칸 자체엔 포커스를 주지 않는다 */
+    /* 기본 창은 이 순간 포커스를 옮겨 앞 글자칸의 change/blur 가 먼저 기록됐다. 안 그러면 색 변경이 먼저
+       쌓이고 글자 수정이 뒤에 쌓여 시그풍 되돌리기 순서가 뒤집히고, 창을 연 채 누른 Enter·Ctrl+Z 가 그 글자칸으로 간다. */
+    var a = document.activeElement;
+    if (a && a !== ev.target && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '')) a.blur();
+  }, true);
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!cpIsColor(t)) return;
+    ev.preventDefault();   /* WebView2 기본 색 창(스포이드가 안 되는 창)을 안 띄운다 */
+    cpOpen(t);
+  }, true);
+  document.addEventListener('keydown', function (ev) {
+    if (CP && ev.key === 'Escape' && !EYE) { ev.preventDefault(); ev.stopImmediatePropagation(); cpClose(false); return; }
+    if (cpIsColor(ev.target) && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); cpOpen(ev.target); return; }
+    /* 창이 열린 채 누른 Ctrl+Z·방향키·[ ]·Delete 는 인스펙터를 새로 그려 이 창을 떨어진 칸에 남기거나
+       (다음 드래그에서 조용히 꺼짐) 확정 안 된 색 너머까지 되돌린다. 기본 창처럼 먼저 확정·닫고 키는 그대로 보낸다.
+       창 안 R/G/B/HEX 입력과 창 안 Enter 확정은 예외. */
+    if (CP && !EYE && ev.target !== CP.input && !/^(Control|Shift|Alt|Meta|CapsLock|Tab)$/.test(ev.key || '')) {
+      var inCp = CP_EL.contains(ev.target);
+      if (!(inCp && (ev.target.tagName === 'INPUT' || ev.key === 'Enter' || ev.key === ' '))) cpClose(true);
+    }
+  }, true);
+  /* 바깥을 누르면 확정하고 닫는다(기본 창과 같음). 누른 동작 자체는 막지 않는다. */
+  var CP_RECLICK = null;
+  document.addEventListener('pointerdown', function (ev) {
+    CP_RECLICK = null;
+    if (!CP || EYE) return;
+    var t = ev.target;
+    if (CP_EL.contains(t) || t === CP.input) return;
+    cpClose(true);
+    /* 확정(change)에서 '직접' 배경색 등이 인스펙터·무대를 innerHTML 로 다시 그리면 방금 누른 요소가 문서에서
+       떨어지고, Chromium 은 그 클릭을 아예 보내지 않는다 — 누른 버튼·다음 색 칸이 한 번 씹힌다.
+       같은 자리에서 손을 뗐으면 새로 생긴 요소에 클릭을 한 번만 대신 보낸다(진짜 클릭이 왔으면 안 보냄). */
+    if (ev.button === 0 && t && t.nodeType === 1 && !t.isConnected) {
+      var nt = document.elementFromPoint(ev.clientX, ev.clientY);
+      if (nt && !CP_EL.contains(nt)) CP_RECLICK = { el: nt, got: false };
+    }
+  }, true);
+  document.addEventListener('click', function (ev) {
+    if (CP_RECLICK && CP_RECLICK.el.contains(ev.target)) CP_RECLICK.got = true;
+  }, true);
+  document.addEventListener('pointerup', function (ev) {
+    var rc = CP_RECLICK;
+    if (!rc) return;
+    CP_RECLICK = null;
+    var up = document.elementFromPoint(ev.clientX, ev.clientY);
+    if (!up || (up !== rc.el && !rc.el.contains(up))) return;   /* 누른 채 다른 곳에서 뗐으면(드래그) 안 보냄 */
+    setTimeout(function () {                                     /* 같은 입력의 진짜 click 이 먼저 지나가게 */
+      if (rc.got || !rc.el.isConnected) return;
+      var f = rc.el.closest('textarea,select,input:not([type=color]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit])');
+      if (f) f.focus();
+      else rc.el.click();   /* 버튼·스와치·체크박스·라벨. 색 칸이면 위 click 캡처가 받아 새 칸의 창을 연다 */
+    }, 0);
+  }, true);
+  document.addEventListener('wheel', function (ev) {
+    if (!CP || EYE || CP_EL.contains(ev.target)) return;
+    cpClose(true);
+  }, { capture: true, passive: true });
+  window.addEventListener('resize', function () { if (CP && !EYE) cpClose(true); });
   /* 편집 탭 툴바 [💧 스포이드] — 예전엔 window.EyeDropper(OS 스포이드)였는데 WebView2 에서
-     믿을 수 없어 같은 자체 스포이드로 바꿨다. I 키도 이 버튼을 누른다. */
+     믿을 수 없어 같은 자체 스포이드로 바꿨다. 포토샵처럼 집은 색이 곧바로 주 색이 된다. I 키도 이 버튼을 누른다. */
   $('#edPickCol').onclick = function () { eyeStart($('#edCol'), $('#edPickCol')); };
   /* 그라디언트/단색 레이어 + 전부 병합 */
   function edMakeLayerFromCanvas(cv, name) {
