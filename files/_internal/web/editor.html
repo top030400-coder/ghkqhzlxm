@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-13_v2 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-13_v3 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -791,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-13 v2</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-13 v3</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -25147,10 +25147,19 @@ window.gifenc=exports;})();
       el.classList.add('picking');
       eyeStart(CP.input, eye, function (hex) {
         if (!CP) return;
+        /* ⚠ 스포이드로 집은 색은 창의 선택색만 바꾼다 — 칸에 input 을 쏘면 그 자리에서 쪽 배경·배너·움짤·시그풍
+           그림 색이 바로 바뀐다(52차 고객·지한 지적: "색상 땡겨오는데 왜 이미지 색이 바뀌냐").
+           칸에는 창을 닫아 확정할 때(바깥 클릭·Enter) 넣고, Esc 면 버린다. */
         var rgb = cpHexToRgb(hex), hsv = cpRgbToHsv(rgb.r, rgb.g, rgb.b);
         if (hsv.s) CP.h = hsv.h;
         CP.s = hsv.s; CP.v = hsv.v;
-        cpEmit();
+        cpPaint();
+        /* HSV 왕복 반올림으로 1 차이 나지 않게, 표시·보류값은 집은 색 그대로 */
+        var q2 = function (c) { return CP_EL.querySelector(c); };
+        q2('.cpR').value = rgb.r; q2('.cpG').value = rgb.g; q2('.cpB').value = rgb.b;
+        q2('.cpHex').value = hex; q2('.cpDot').style.background = hex;
+        CP.hex = hex;
+        CP.pendingHex = hex;
       });
     });
     document.body.appendChild(el);
@@ -25177,6 +25186,7 @@ window.gifenc=exports;})();
   /* 색 칸에 반영 — 기본 창처럼 고르는 동안 input 만, change 는 닫을 때 */
   function cpEmit(skip) {
     if (!CP) return;
+    CP.pendingHex = null;
     cpPaint(skip);
     var inp = CP.input;
     if (!inp.isConnected && inp.id) inp = CP.input = document.getElementById(inp.id) || inp;
@@ -25200,7 +25210,7 @@ window.gifenc=exports;})();
     cpBuild();
     var rgb = cpHexToRgb(input.value) || { r: 0, g: 0, b: 0 };
     var hsv = cpRgbToHsv(rgb.r, rgb.g, rgb.b);
-    CP = { input: input, orig: input.value, h: hsv.h, s: hsv.s, v: hsv.v, dirty: false, hex: '' };
+    CP = { input: input, orig: input.value, h: hsv.h, s: hsv.s, v: hsv.v, dirty: false, hex: '', pendingHex: null };
     CP_EL.classList.remove('picking');
     CP_EL.style.display = 'block';
     cpPaint();
@@ -25223,6 +25233,11 @@ window.gifenc=exports;})();
       inp.dispatchEvent(new Event('input', { bubbles: true }));
       inp.dispatchEvent(new Event('change', { bubbles: true }));
       return;
+    }
+    if (commit && c.pendingHex && inp.value.toLowerCase() !== c.pendingHex) {
+      inp.value = c.pendingHex;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      c.dirty = true;
     }
     if (commit && c.dirty) inp.dispatchEvent(new Event('change', { bubbles: true }));
   }
