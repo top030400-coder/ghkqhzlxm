@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-13_v4 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-16_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -791,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-13 v4</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-16 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -22406,10 +22406,45 @@ window.gifenc=exports;})();
       cardFull = document.createElement('canvas');
       cardFull.width = W; cardFull.height = H;
     }
+    /* ── 프사 투명 실루엣 고정 ──
+       프사는 '직전 프레임과 같은 픽셀은 건너뛰는' 델타 압축으로 2MB 를 맞춘다. 그런데 이름 카드가
+       켜지면 전환·파티클이 원 가장자리 픽셀의 알파를 프레임마다 128 위아래로 흔들어,
+       gifFramesAlphaStatic 이 false → gifEncode 가 안전장치로 델타를 통째로 끄고
+       전 프레임을 독립 인코딩한다. 실측(420×420·15fps·3초):
+         카드 끔 45장 273KB(장당 6KB) / 카드 켬 68장 1,921KB(장당 29KB) — 5배.
+       그 바람에 2MB 한도에 걸려 '프레임 ½'(15fps→7.5fps)가 발동했다
+       (고객 문의: "15fps인데 프레임이 떨어져요", "최적화하면 이름이 너무 짧아요").
+       매 프레임 알파를 같은 원 마스크 값으로 덮어써 실루엣을 고정하면 델타가 되살아난다 —
+       실측: 카드 3초·15fps 와 30fps 가 '프레임 ½' 없이 그대로 들어간다.
+       ⚠ gifDrawRing 은 원(W/2) 안쪽으로 클립하므로 마스크로 잘려 나가는 그림이 없다.
+          ✏손그림 링 애니메이션만 실루엣이 흔들리는 게 의도라 예외로 둔다. */
+    var avMaskA = null, avMaskOn = av;
+    function avAlphaMask() {
+      if (!avMaskOn) return null;
+      if (avMaskA) return avMaskA;
+      var ringAnimEl = gifEl('gifRingAnim');
+      if (GIF.ring === 'sketch' && ringAnimEl && ringAnimEl.checked) { avMaskOn = false; return null; }
+      try {
+        var mc = document.createElement('canvas');
+        mc.width = W; mc.height = H;
+        var mg = mc.getContext('2d', { willReadFrequently: true });
+        mg.fillStyle = '#fff';
+        mg.beginPath();
+        gifRingClipPath(mg, W, 0);
+        mg.fill();
+        avMaskA = mg.getImageData(0, 0, W, H).data;
+      } catch (eM) { avMaskOn = false; return null; }
+      return avMaskA;
+    }
     function pushFrame() {
       if (av) gifDrawRing(g, W, frames.length / total); /* 링은 전체 루프 위상으로 맨 위에 */
       /* getImageData는 호출마다 새 버퍼를 주므로 .slice(0)는 187MB급 이중 복사 낭비였다 */
-      frames.push(g.getImageData(0, 0, W, H).data);
+      var fdat = g.getImageData(0, 0, W, H).data;
+      var mAlpha = avAlphaMask();
+      if (mAlpha && mAlpha.length === fdat.length) {
+        for (var ai = 3; ai < fdat.length; ai += 4) fdat[ai] = mAlpha[ai];
+      }
+      frames.push(fdat);
     }
     var vfCv = document.createElement('canvas');
     vfCv.width = W; vfCv.height = H;
