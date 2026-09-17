@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-16_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-18_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -791,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-16 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-18 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -13403,6 +13403,18 @@ window.gifenc=exports;})();
   /* 하단 배너는 서비스 규격을 하나의 계약으로 고정한다. GIF 지연은 10ms 단위라
      72장을 40/50ms로 고르게 섞어야 합계가 정확히 3000ms가 된다. */
   var GIF_BOTTOM_SPEC = { w: 720, h: 150, fps: 24, len: 3, frames: 72, durationMs: 3000 };
+  /* 프사(SOOP 원형)는 420×420 · 2MB 미만이 규격이다 — 만들 때(사다리 한도)와
+     저장할 때(게이트)가 같은 값을 봐야 해서 한곳에 둔다. */
+  var GIF_AV_LIMIT = 2 * 1024 * 1024;
+  /* '프레임 ½' 는 프사 사다리(step 1·2)만 있다고 보고 박아 둔 문구였다. step 은 하단
+     배너 사다리와 공유되고 거기엔 1.5 칸이 있어서(72장 → 48장 = ⅔) 지금도 '프레임 ½'
+     라는 거짓 문구가 나갔다. 분수는 실제 값으로, 그리고 남은 장수·fps를 함께 적는다. */
+  function gifStepLabel(step, kept, fpsOut) {
+    if (!(step > 1)) return '';
+    var FR = { 2: '½', 3: '⅓', 4: '¼', 5: '⅕', 6: '⅙' };
+    var frac = FR[step] || (Math.round(1000 / step) / 10) + '%';
+    return ' · 프레임 ' + frac + '(' + kept + '장 · ' + fpsOut + 'fps)';
+  }
   /* ★ 구도 기준폭 — 출력 크기(배율)를 줄여도 글자·이펙트·여백·이동량은 '원본 기준
      비율'로 계산해야 미리보기와 완성본 구도가 같다. 배율이 스펙(w/h)을 줄이므로,
      비율 계산은 스펙이 아니라 이 기준값(GIF_BANNER_GEOMS 원본)을 쓴다. */
@@ -15873,7 +15885,7 @@ window.gifenc=exports;})();
   var GIF_PREF_IDS = ['gifRc1', 'gifRc2', 'gifRw', 'gifRingAnim', 'gifFps', 'gifAvSize',
     'giName', 'giFont', 'giCol', 'giOut', 'giOutW', 'giGlow', 'giGlowC', 'giGlowW', 'giShadow',
     'giBgMode', 'giBgCol', 'giBgCol2', 'giTrans', 'giTransSpd', 'giTransDur', 'giDur',
-    'giTxtAnim', 'giParti', 'giTxtDelay', 'giTxtSpd', 'giOn', 'giOverlay',
+    'giTxtAnim', 'giParti', 'giTxtDelay', 'giTxtSpd', 'giOn', 'giOverlay', 'giPrev',
     /* 사진 2D 하단 배너 설정은 프사 인트로와 별도 키로 보존한다. */
     'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxNameCol',
     'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
@@ -15938,6 +15950,11 @@ window.gifenc=exports;})();
          두 글꼴 목록으로만 한정 — 다른 select 까지 남기면 없어진 항목 값이 눌러앉는다. */
       if (isFontSel && el.value !== want) el.dataset.pendVal = want;
     });
+    /* giPrev(인트로 미리보기)는 복원할 때 change 가 안 떠서 내부 플래그와 어긋난다 —
+       onchange 와 같은 상태로 맞춰 준다(눌러도 안 켜지는 상태 방지).
+       이 칸만 저장 목록에서 빠져 있어서, 켜 놓고 쓴 다음 앱을 다시 켜면 링이 안 돌고
+       이름도 안 떠 "눌러야만 그 화면이 보인다"는 문의가 됐다(2026-09-18). */
+    if ('giPrev' in o) { gifUserPaused = false; gifCycT0 = null; }
     if (o.ring && GIF) GIF.ring = o.ring;
     /* 추가 문구·이름 글자 위치 되돌리기 — 되살린 항목은 새 객체라 옛 fitRef 는 버린다 */
     if (GIF && Array.isArray(o.txts)) {
@@ -22432,6 +22449,15 @@ window.gifenc=exports;})();
         mg.beginPath();
         gifRingClipPath(mg, W, 0);
         mg.fill();
+        /* ⚠ 56차 회귀 수정 — 클립 경로만으로 마스크를 만들면 ✏손그림 링이 깎인다.
+           gifRingClipPath 는 손그림 원의 '중심선' 다각형인데, 실제 선은 gifDrawRing 이
+           그 중심선을 따라 lineWidth = w*0.75 로 긋는다 → 중심선 바깥으로 0.375w
+           (굵기 12 → 4.5px · 40 → 15px) 뻗는다. 55차는 그 바깥 절반을 알파 0으로
+           지워, 마스크가 없는 미리보기와 저장 결과가 달라졌다(미리보기 ≠ 결과물).
+           링을 같은 위상(0)으로 한 번 더 그려 알파 합집합을 마스크로 쓴다 —
+           gifDrawRing 은 맨 앞에서 원(W/2)으로 클립하므로 실루엣이 원을 넘지 않고,
+           손그림이 아닌 링은 이미 원 전체가 채워져 있어 결과가 한 픽셀도 안 변한다. */
+        try { gifDrawRing(mg, W, 0); } catch (eR) {}
         avMaskA = mg.getImageData(0, 0, W, H).data;
       } catch (eM) { avMaskOn = false; return null; }
       return avMaskA;
@@ -22544,7 +22570,7 @@ window.gifenc=exports;})();
          이제 "통과 못 하는 값"과 "통과하는 값" 사이를 이분탐색으로 좁혀,
          한도 안에서 가장 약한 압축(=가장 큰 파일=가장 좋은 화질)을 골라 쓴다.
          단계 순서: 256색·전프레임 → 프레임 ½ → 색 감량. 앞 단계에서 되면 뒤는 안 간다. */
-      var LIMIT = 2 * 1024 * 1024;
+      var LIMIT = GIF_AV_LIMIT;
       var NEAR = 0.93;          /* 한도의 93% 넘게 채웠으면 충분 — 더 쪼개지 않고 끝낸다 */
       var FMAX = 40;            /* 미세압축 상한(±40) */
       var bytes = null, used = null;
@@ -22858,7 +22884,9 @@ window.gifenc=exports;})();
         if (cache[key]) return cb(cache[key], ld);
         gifSetProg('움짤 만드는 중… 2MB에 꽉 채우는 중 (' + ld.c + '색' +
           (ld.fs ? ' · 최고 화질' : '') +
-          (ld.f ? ' · 미세압축 ±' + ld.f : '') + (ld.step > 1 ? ' · 프레임 ½' : '') + ')');
+          (ld.f ? ' · 미세압축 ±' + ld.f : '') +
+          gifStepLabel(ld.step, Math.ceil(frames.length / ld.step),
+            Math.round(fps / ld.step * 10) / 10) + ')');
         gifStep(function () {
           var b, keepFs = GIF_FS;
           if (ld.fs) GIF_FS = ld.fs;
@@ -22935,11 +22963,11 @@ window.gifenc=exports;})();
         var actualFps = used.fps || Math.round(fps / used.step * 1000) / 1000;
         gifEl('gifMeta').innerHTML = W + '×' + H + ' · ' + actualFrames + '프레임/' + actualFps + 'fps → <b>' +
           (kb >= 1024 ? (kb / 1024).toFixed(2) + 'MB' : Math.round(kb) + 'KB') + '</b>' +
-          (av ? (over ? ' — ⚠ 2MB를 못 맞췄어요. 길이나 fps를 줄여보세요.' : ' — ✅ 프사 규격 OK (' + W + '×' + H + ' · 2MB 미만)') : '') +
+          (av ? (over ? ' — ⚠ 2MB를 넘어서 저장할 수 없어요. 길이·fps·이름 카드 시간을 줄이거나 출력 크기를 210×210 으로 바꿔 보세요.' : ' — ✅ 프사 규격 OK (' + W + '×' + H + ' · 2MB 미만)') : '') +
           (bottom ? ' — ✅ ' + gifBannerLabel() + ' 배너 ' + GIF_BOTTOM_SPEC.w + '×' + GIF_BOTTOM_SPEC.h + ' · 정확히 ' + GIF_BOTTOM_SPEC.len.toFixed(2) + '초 · ' + bytes.length.toLocaleString() + '/' + GIF_BOTTOM6_SPEC.limitBytes.toLocaleString() + ' bytes' : '') +
           (bottom && used.renderProfileIndex ? '<br><span style="color:#8b887c">' +
             PBK.esc(gifBottomProfileMetaLine(used.renderProfileIndex, used.renderProfileScalePct)) + '</span>' : '') +
-          ((used.c < 256 || used.step > 1 || used.f > 0) ? '<br><span style="color:#8b887c">자동 맞춤: ' + used.c + '색' + (used.f ? ' · 미세압축 ±' + used.f : '') + (used.step > 1 ? ' · 프레임 ½' : '') + (used.od ? ' · 배경 결 고르게(디더)' : '') + (used.first ? ' · 정지 배경 ' + used.first + '색 화질 유지' : '') + '</span>' : '') +
+          ((used.c < 256 || actualFrames < frames.length || used.f > 0) ? '<br><span style="color:#8b887c">자동 맞춤: ' + used.c + '색' + (used.f ? ' · 미세압축 ±' + used.f : '') + gifStepLabel(used.step, actualFrames, actualFps) + (used.od ? ' · 배경 결 고르게(디더)' : '') + (used.first ? ' · 정지 배경 ' + used.first + '색 화질 유지' : '') + '</span>' : '') +
           (room ? '<br><span style="color:#8b887c">여유 ' + ((LIMIT - bytes.length) / 1048576).toFixed(2) +
             'MB — fps나 길이를 올리면 더 부드럽게 뽑을 수 있어요</span>' : '');
         /* ⚠ 자유 크기(프사 아님)는 여태 한도도 경고도 없었다. 20~40MB 짜리가 그냥 나와서
@@ -23077,6 +23105,21 @@ window.gifenc=exports;})();
       return alert(gifBannerLabel() + ' 배너는 1개도 200KiB 이하일 때만 저장합니다. 다시 만들어 주세요.');
     }
     if (!GIF.out) return;
+    /* 프사 2MB 게이트 — 하단 배너(200KiB)·6칸에는 있는데 프사만 없어서, 사다리가 한도를
+       못 맞춘 결과물이 경고만 띄운 채 그대로 저장됐다. 실제로 고객이 5.71MB 짜리를
+       저장해 SOOP 프사로 올리려다 막혔다(2026-09-18 문의).
+       ⚠ 배너 게이트처럼 GIF.out 을 null 로 만들지 않는다 — 그러면 두 번째 클릭이 바로
+       위 `if (!GIF.out) return;` 에 아무 말 없이 먹힌다. 미리보기·메타를 남겨 둬야
+       무엇을 얼마나 줄여야 하는지 보고 다시 뽑을 수 있다. */
+    if (GIF.mode === 'avatar' && GIF.out.length > GIF_AV_LIMIT) {
+      return alert('프사는 2MB 미만일 때만 저장할 수 있어요 — 지금 ' +
+        (GIF.out.length / 1048576).toFixed(2) + 'MB 입니다.\n\n' +
+        '아래 중 하나만 줄여도 대개 들어갑니다:\n' +
+        '· 움짤 길이 또는 fps\n' +
+        '· 이름 카드 시간\n' +
+        '· 출력 크기를 210×210 으로 (거의 확실히 통과)\n' +
+        '· ✏ 손그림 링을 쓰면서 "움직이는 링" 을 켠 경우 — 그 체크를 끄면 많이 줄어요');
+    }
     var name = GIF.outName || '움짤.gif';
     if (GIF.mode === 'avatar' && name.indexOf('_프사') < 0) name = name.replace(/\.gif$/, '') + '_프사' + (GIF.outSize || 420) + '.gif';
     var bnTag = '_' + gifBannerLabel() + GIF_BOTTOM_SPEC.w + 'x' + GIF_BOTTOM_SPEC.h;
@@ -26441,6 +26484,11 @@ window.gifenc=exports;})();
     gifRefinePalette: gifRefinePalette, gifSetKmeans: function (v) { GIF_KMEANS = v; },
     gifSetFs: function (v) { GIF_FS = v; }, gifSetDither: function (v) { GIF_DITHER = v; },
     gifSetFirst: function (v) { GIF_FIRST_RICH = v; },
+    gifDrawRing: gifDrawRing, gifRingClipPath: gifRingClipPath,
+    gifStepLabel: gifStepLabel, gifAvLimit: GIF_AV_LIMIT,
+    gifPrefIds: function () { return GIF_PREF_IDS.slice(0); },
+    /* 검수 전용 — 저장 게이트를 실제 5MB 인코드 없이 확인하려고 결과 버퍼만 갈아 끼운다 */
+    gifSetOutForQA: function (b) { GIF.out = b; },
     gifDrawFrame: gifDrawFrame, gifClampPan: gifClampPan, gifCardPeekT: gifCardPeekT,
     gifSrcInfo: function () {
       var v = gifV();
