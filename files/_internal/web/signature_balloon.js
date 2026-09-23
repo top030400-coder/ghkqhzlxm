@@ -753,140 +753,12 @@
     }, true);
   }
 
-  /* [57차] 배경 '색 바꾸기' — 테마 그림은 그대로 두고 색만 돌린다.
-     모던·리치 배경은 미리 그려둔 그림이라 주색/보조색으로는 안 바뀌고,
-     렌더가 이미 걸고 있는 hue-rotate 필터만이 색을 바꿀 수 있다(drawBackgroundPaint).
-     그래서 '원하는 색'을 받아 테마 원래 색과의 색상환 차이를 계산해 hue 에 넣는다.
-     고객 문의: "이 테마를 쓰고 싶지만 초록이 아니라 노란색으로 하고 싶을 수 있으니 색만 바꾸는 거죠". */
-  function hexToHsl(hex) {
-    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
-    if (!m) return null;
-    const n = parseInt(m[1], 16);
-    const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
-    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-    let h = 0;
-    if (d) {
-      if (mx === r) h = ((g - b) / d) % 6;
-      else if (mx === g) h = (b - r) / d + 2;
-      else h = (r - g) / d + 4;
-      h *= 60;
-      if (h < 0) h += 360;
-    }
-    const l = (mx + mn) / 2;
-    const s = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
-    return { h: h, s: s, l: l };
-  }
-  /* 회전의 기준은 '테마 주색' 이 아니라 **실제 그려지는 그림의 지배 색상** 이어야 한다.
-     주색으로 잡았더니 모던 민트(주색 #78cfa6 = 152°)인데 화면 평균은 99° 라,
-     노랑(50°)을 고르면 50-152=-102° 가 적용돼 99-102 = 357°(빨강)이 나왔다(실측).
-     그림에서 한 번 재서 캐시한다 — 무채색 픽셀은 빼고 원형 평균으로. */
-  const bgHueCache = {}, bgSatCache = {};   /* bgSatCache = '색이 있는 픽셀의 비율' */
-  function themeImageHue(texture, rotateDeg) {
-    const key = texture + "|" + (rotateDeg || 0);
-    if (key in bgHueCache) return bgHueCache[key];
-    let h = null;
-    try {
-      const img = images[texture];
-      if (img && (img.naturalWidth || img.width)) {
-        const n = 64;
-        const c = document.createElement("canvas");
-        c.width = n; c.height = n;
-        const x = c.getContext("2d", { willReadFrequently: true });
-        if (rotateDeg) x.filter = "hue-rotate(" + rotateDeg + "deg)";
-        x.drawImage(img, 0, 0, n, n);
-        x.filter = "none";
-        const d = x.getImageData(0, 0, n, n).data;
-        let sx = 0, sy = 0, cnt = 0, satSum = 0, satAll = 0, allCnt = 0;
-        for (let i = 0; i < d.length; i += 4) {
-          if (d[i + 3] < 200) continue;
-          const r = d[i] / 255, g2 = d[i + 1] / 255, b = d[i + 2] / 255;
-          const mx = Math.max(r, g2, b), mn = Math.min(r, g2, b), df = mx - mn;
-          allCnt++; satAll += df;
-          if (df < 0.06) continue;            /* 흰 바탕·회색은 색상 판정에서 뺀다 */
-          satSum += df;
-          let hh = 0;
-          if (mx === r) hh = ((g2 - b) / df) % 6;
-          else if (mx === g2) hh = (b - r) / df + 2;
-          else hh = (r - g2) / df + 4;
-          hh *= 60; if (hh < 0) hh += 360;
-          const a = hh * Math.PI / 180;
-          sx += Math.cos(a); sy += Math.sin(a); cnt++;
-        }
-        if (cnt > 40) {
-          h = Math.atan2(sy / cnt, sx / cnt) * 180 / Math.PI;
-          if (h < 0) h += 360;
-        }
-        /* ⚠ 평균 채도로 재면 흰 바탕이 많은 테마(모던 민트 0.088)까지 '무채색' 으로 잡혀
-           멀쩡한 테마가 색 덮개 경로로 새 버린다. '색이 있는 픽셀이 몇 %인가' 로 판정한다. */
-        bgSatCache[texture] = allCnt ? cnt / allCnt : 1;
-      }
-    } catch (e) { h = null; }   /* 그림을 못 읽으면(오염 등) 주색으로 폴백 */
-    bgHueCache[key] = h;
-    return h;
-  }
+  /* 배경 '색 바꾸기' — 고른 색을 기억만 한다. 실제 칠하기는 drawBackgroundPaint 가
+     'color' 합성으로 한다(그림의 밝고 어두운 결은 두고 색상·채도만 고른 색으로).
+     색상 회전·채도·밝기 슬라이더는 사용자가 직접 만지는 값으로 그대로 둔다. */
   function applyBgRecolor() {
-    const to = state.background.recolorTo;
-    if (!to) return;
-    const theme = themes.find(item => item.texture === state.background.texture);
-    const imgHue = themeImageHue(state.background.texture);
-    const base = imgHue == null
-      ? hexToHsl(theme ? theme.primary : state.background.primary)
-      : { h: imgHue, s: 1, l: .5 };
-    const want = hexToHsl(to);
-    if (!base || !want) return;
-    const wrap = v => { while (v > 180) v -= 360; while (v < -180) v += 360; return v; };
-    let d = wrap(want.h - base.h);
-    /* CSS hue-rotate 는 진짜 색상환 회전이 아니라 근사 행렬이라, 그대로 걸면
-       노랑 쪽이 10~15° 밀린다(실측: 목표 50° → 화면 39°). 실제로 한 번 걸어 재보고
-       남은 차이만큼 보정한다 — 64x64 로 재므로 비용은 거의 없다. */
-    if (imgHue != null) {
-      for (let pass = 0; pass < 2; pass++) {
-        const got = themeImageHue(state.background.texture, Math.round(d));
-        if (got == null) break;
-        const off = wrap(want.h - got);
-        if (Math.abs(off) < 1.5) break;
-        d = wrap(d + off);
-      }
-    }
-    state.background.hue = Math.round(d);
-    /* ⚠ 그림만 돌리면 반쪽만 바뀐다 — 모던이 아닌 테마(리치·플랫·심플)는 무늬를
-       주색/보조색으로 필터 바깥에서 따로 그린다(drawPattern). 같은 각도로 같이 돌려야
-       그림과 무늬가 한 색으로 간다. */
-    const spin = hex => {
-      const c0 = hexToHsl(hex);
-      if (!c0) return hex;
-      let hh = (c0.h + d) % 360; if (hh < 0) hh += 360;
-      return hslToHex(hh, c0.s, c0.l);
-    };
-    if (theme) {
-      state.background.primary = spin(theme.primary);
-      state.background.secondary = spin(theme.secondary);
-    }
-    /* 무채색에 가까운 테마(시그 숫자 모노·쿨그레이 등)는 색상환을 아무리 돌려도
-       회색이 회색이라 색이 안 붙는다(실측: 파랑을 골라도 2.3° 빨강 근처에서 안 움직임).
-       그런 테마만 '고른 색을 옅게 덮는' 방식으로 간다 — 렌더가 이미 갖고 있는
-       tintOpacity 덮개를 쓰므로 그림의 무늬·숫자는 그대로 살아 있다. */
-    const imgSat = bgSatCache[state.background.texture];
-    const flat = imgHue == null ? base.s < 0.2 : (imgSat != null && imgSat < 0.12);   /* 색 있는 픽셀 12% 미만 = 무채색 그림 */
-    if (flat && want.s > 0.22) {
-      state.background.hue = 0;
-      state.background.saturation = theme && theme.saturation != null ? theme.saturation : 100;
-      state.background.primary = to;
-      state.background.secondary = hslToHex(want.h, Math.min(1, want.s * .5), Math.min(.93, want.l + .24));
-      state.background.tintOpacity = 34;
-    }
-  }
-  function hslToHex(h, sat, l) {
-    const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
-    let r = 0, g2 = 0, b = 0;
-    if (h < 60) { r = c; g2 = x; }
-    else if (h < 120) { r = x; g2 = c; }
-    else if (h < 180) { g2 = c; b = x; }
-    else if (h < 240) { g2 = x; b = c; }
-    else if (h < 300) { r = x; b = c; }
-    else { r = c; b = x; }
-    const f = v => Math.max(0, Math.min(255, Math.round((v + m) * 255))).toString(16).padStart(2, "0");
-    return "#" + f(r) + f(g2) + f(b);
+    if (!state.background.recolorTo) return;
+    state.background.maskPaintMode = "theme";
   }
   function hexToRgba(hex, alpha) {
     let h = String(hex || "#000000").replace("#", "");
@@ -1942,7 +1814,8 @@
         primary: preset.theme.primary,
         secondary: preset.theme.secondary,
         tintOpacity: preset.theme.modern || preset.theme.simple || preset.theme.key.startsWith("flat") ? 0 : 12,
-        pattern: preset.theme.pattern
+        pattern: preset.theme.pattern,
+        recolorTo: state.background.recolorTo || ""   /* 고른 색을 썸네일에도 그대로 */
       }
     };
     c.save();
@@ -4387,6 +4260,22 @@
     }
 
     if (!paintBg.modern) drawPattern(c, paintBg.pattern, paintBg.primary, paintBg.secondary, paintBg.top);
+
+    /* ── 색 바꾸기 ──
+       'color' 합성은 아래 그림의 **밝기(명도)는 그대로 두고 색상·채도만** 위 색으로 바꾼다.
+       그래서 무늬·소품의 밝고 어두운 결과 흰 여백은 그대로 살고, 색만 고른 색이 된다.
+       예전엔 색상환을 돌리는(hue-rotate) 방식이었는데 두 가지가 걸렸다 —
+         ① 고른 색이 원래 색과 가까우면 회전량이 0에 가까워 거의 안 바뀌었다
+            (실측: 모던 피치 체리 + 주황 → 회전 -1도, 사실상 그대로)
+         ② 원본이 연한 파스텔이면 진한 색을 골라도 연한 색으로만 나왔다.
+       ⚠ 흰색(명도 1)과 검정(명도 0)은 색이 안 붙는 게 'color' 합성의 정의다 — 의도된 동작이다. */
+    if (paintBg.recolorTo) {
+      c.save();
+      c.globalCompositeOperation = "color";
+      c.fillStyle = paintBg.recolorTo;
+      c.fillRect(0, 0, W, H);
+      c.restore();
+    }
   }
 
   function drawBackground(c, bg, includeOutline = true) {
@@ -5901,15 +5790,15 @@
       bgRecolorOff.addEventListener("click", () => {
         const before = beginMainChange();
         state.background.recolorTo = "";
+        /* 테마 기본값으로 되돌린다 — 색 바꾸기는 렌더에서만 덧입히므로 건드린 값이 없지만,
+           예전 판에서 각도·주색을 돌려 둔 프로젝트를 열었을 때도 깨끗하게 돌아가게 한다. */
         const theme = themes.find(item => item.texture === state.background.texture);
-        state.background.hue = (theme && theme.hue) || 0;
-        state.background.saturation = theme && theme.saturation != null ? theme.saturation : 100;
-        /* ⚠ 색 바꾸기가 무늬 색(주색·보조색)까지 같이 돌려놨으므로 여기서 같이 되돌린다 —
-           안 그러면 '원래 색으로' 를 눌러도 무늬만 돌아간 색으로 남는다(실측 2.8° 어긋남). */
         if (theme) {
+          state.background.hue = theme.hue || 0;
+          state.background.saturation = theme.saturation == null ? 100 : theme.saturation;
+          state.background.brightness = theme.brightness == null ? 100 : theme.brightness;
           state.background.primary = theme.primary;
           state.background.secondary = theme.secondary;
-          /* 무채색 테마에 씌웠던 색 덮개도 테마 기본값으로 되돌린다 */
           state.background.tintOpacity =
             theme.modern || theme.simple || String(theme.key || "").startsWith("flat") ? 0 : 12;
         }

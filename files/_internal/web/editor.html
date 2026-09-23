@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-24_v2 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-24_v4 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -791,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-24 v2</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-24 v4</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -1157,23 +1157,16 @@
             <label class="ckRow">이름 등장
               <select id="giBfxReveal">
                 <option value="sweep" selected>빛으로 쓸어 나타남</option>
+                <option value="slam">💥 쾅 찍기 (크게 왔다 탁)</option>
+                <option value="fly">🚀 휙 날아들기</option>
+                <option value="spin">🌀 빙글 돌며 등장</option>
+                <option value="drop">⬇ 위에서 쿵 (눌렸다 펴짐)</option>
+                <option value="swing">🎐 흔들며 등장</option>
                 <option value="type">한 글자씩</option>
                 <option value="fade">부드럽게 나타남</option>
                 <option value="always">처음부터 표시</option>
               </select>
             </label>
-            <label class="ckRow">글씨 모션
-              <select id="giBfxMotion">
-                <option value="none" selected>없음</option>
-                <option value="float">둥실둥실 (위아래)</option>
-                <option value="bounce">콩콩 (통통 튀기)</option>
-                <option value="breathe">숨쉬기 (커졌다 작아졌다)</option>
-                <option value="sway">살짝 갸웃 (기울기)</option>
-                <option value="wave">～ 물결 (글자마다)</option>
-                <option value="pulse">✨ 반짝임</option>
-              </select>
-            </label>
-            <div class="bnRec" style="font-size:11px">'이름 등장'은 한 번 나타나고 끝나지만, <b>글씨 모션은 반복 내내 계속 움직여요</b>(같이 써도 됩니다). 움직이면 용량이 늘어 칸당 200KiB를 넘을 수 있는데, 그땐 앱이 색·프레임을 줄여 알아서 맞춥니다.</div>
             <label class="ckRow">글자색 <input type="color" id="giBfxNameCol" value="#ffffff"></label>
             <label class="ckRow wide">이름 X <input type="range" id="giBfxX" min="2" max="68" step="1" value="8"><span class="fxVal" id="giBfxXV">8%</span></label>
             <label class="ckRow wide">이름 Y <input type="range" id="giBfxY" min="18" max="88" step="1" value="58"><span class="fxVal" id="giBfxYV">58%</span></label>
@@ -1377,6 +1370,11 @@
         <div class="ckRow">글자 등장
           <select id="giTxtAnim" style="flex:1">
             <option value="pop" selected>팡 팝업</option>
+            <option value="slam">💥 쾅 찍기 (크게 왔다 탁)</option>
+            <option value="fly">🚀 휙 날아들기</option>
+            <option value="spin">🌀 빙글 돌며 등장</option>
+            <option value="drop">⬇ 위에서 쿵 (눌렸다 펴짐)</option>
+            <option value="swing">🎐 흔들며 등장</option>
             <option value="seq">한 글자씩</option>
             <option value="slide">옆에서 슬라이드</option>
             <option value="fadeup">↑ 떠오르기</option>
@@ -1386,17 +1384,6 @@
             <option value="wave">～ 물결</option>
             <option value="none">— 없음 (처음부터 계속 떠 있음)</option>
           </select></div>
-        <div class="ckRow">글씨 모션
-          <select id="giTxtMotion" style="flex:1" title="글자가 뜬 뒤에도 계속 움직이는 효과예요. 등장 연출과 같이 쓸 수 있어요">
-                <option value="none" selected>없음</option>
-                <option value="float">둥실둥실 (위아래)</option>
-                <option value="bounce">콩콩 (통통 튀기)</option>
-                <option value="breathe">숨쉬기 (커졌다 작아졌다)</option>
-                <option value="sway">살짝 갸웃 (기울기)</option>
-                <option value="wave">～ 물결 (글자마다)</option>
-                <option value="pulse">✨ 반짝임</option>
-          </select></div>
-        <div class="bnRec" style="font-size:11px">'글자 등장'은 한 번 나타나고 끝나지만, <b>글씨 모션은 글자가 떠 있는 내내 계속 움직여요</b>. 두 개를 같이 쓰셔도 됩니다.</div>
         <div class="ckRow" id="giTxtSpdRow">글자 생성 속도 <input type="range" id="giTxtSpd" min="0.06" max="2.5" step="0.02" value="0.3" style="flex:1" title="글자가 다 나타나기까지 걸리는 시간 — 왼쪽으로 갈수록 탁 튀어나오고, 오른쪽으로 갈수록 천천히 부드럽게 떠요. '한 글자씩'이면 타자 속도도 같이 빨라집니다"><span id="giTxtSpdV">0.30초</span></div>
         <div class="bnRec" id="giTxtSpdHint" style="font-size:11px"></div>
         <div class="bnRec" id="giCardNote" style="font-size:11px">글자는 <b>카드가 영상을 다 덮은 뒤에 떠서 걷히기 전에 사라져요</b> — 영상 위에 글자가 눌어붙는 잔상이 안 생깁니다.</div>
@@ -14846,8 +14833,6 @@ window.gifenc=exports;})();
          but freeze only the reveal animation so text does not consume the motion
          budget needed by the character. The UI preference itself is untouched. */
       reveal: profile.staticName ? 'always' : ((gifEl('giBfxReveal') && gifEl('giBfxReveal').value) || 'sweep'),
-      /* 용량 구제로 글자를 얼리는 등급에서는 모션도 같이 멈춘다(reveal 과 같은 규칙) */
-      motion: profile.staticName ? 'none' : ((gifEl('giBfxMotion') && gifEl('giBfxMotion').value) || 'none'),
       x: gifBfxVal('giBfxX', 8, 2, 68) / 100,
       y: gifBfxVal('giBfxY', 58, 18, 88) / 100,
       size: gifBfxVal('giBfxSize', 48, 22, 96),
@@ -14913,6 +14898,9 @@ window.gifenc=exports;})();
     if (C.reveal === 'sweep') reveal = gifBfxEase(.04, .28, u);
     else if (C.reveal === 'fade') reveal = gifBfxEase(.04, .26, u);
     else if (C.reveal === 'type') reveal = gifBfxEase(.03, .42, u);
+    /* 역동적인 등장 5종 — 진행도만 여기서 뽑고, 실제 변형은 아래 transform 에서 건다 */
+    else if (C.reveal === 'slam' || C.reveal === 'fly' || C.reveal === 'spin' ||
+             C.reveal === 'drop' || C.reveal === 'swing') reveal = gifBfxEase(.03, .52, u);
     var alpha = Math.max(0, Math.min(1, reveal * fadeOut));
     if (C.reveal === 'type') {
       var chars = Array.from(name), take = Math.max(0, Math.min(chars.length, Math.ceil(chars.length * reveal)));
@@ -14935,43 +14923,40 @@ window.gifenc=exports;})();
           바뀌어도(gifBannerSetLen) 이음새가 저절로 닫힌다.
        ⚠ 흔들림은 정수 픽셀로 맞춘다. 소수 픽셀이면 글자 경계가 매 프레임 다시 칠해져
           바뀐 픽셀이 늘고 칸당 200KiB 한도를 갉아먹는다. */
-    var mTau = Math.PI * 2, mWave = 0, mDy = 0, mRot = 0, mGlow = 1;
-    var mScale = 1;
-    if (C.motion === 'float') mDy = Math.round(Math.sin(mTau * u) * Math.max(1, fs * .07));
-    else if (C.motion === 'bounce') mDy = -Math.round(Math.abs(Math.sin(mTau * u * 2)) * Math.max(1, fs * .09));
-    else if (C.motion === 'breathe') mScale = 1 + .035 * Math.sin(mTau * u);
-    else if (C.motion === 'sway') mRot = Math.sin(mTau * u) * .026;
-    else if (C.motion === 'pulse') mGlow = .7 + .6 * (.5 + .5 * Math.sin(mTau * 2 * u));
-    else if (C.motion === 'wave') mWave = Math.max(1, fs * .085);
+    /* 역동적인 등장 — reveal(0~1) 동안만 크기·기울기·위치를 바꿔 날아들게 한다.
+       다 뜨고 나면(reveal=1) 값이 전부 기본으로 돌아가 글씨 모션과 겹치지 않는다. */
+    var mDy = 0, mRot = 0, mDx = 0, mEnter = 1;
+    if (reveal < 1) {
+      var rv2 = reveal;
+      if (C.reveal === 'slam') {
+        mEnter = 2.6 - 1.6 * (1 - Math.pow(1 - rv2, 5));
+        mRot += (1 - (1 - Math.pow(1 - rv2, 5))) * 0.34;
+      } else if (C.reveal === 'fly') {
+        var kf = 1 - Math.pow(1 - rv2, 4);
+        mDx = -(1 - kf) * W * 0.5; mRot += (1 - kf) * -0.5; mEnter = 1 + (1 - kf) * 0.45;
+      } else if (C.reveal === 'spin') {
+        var kp = 1 - Math.pow(1 - rv2, 3);
+        mRot += (1 - kp) * Math.PI * 1.15; mEnter = 0.15 + 0.85 * kp;
+      } else if (C.reveal === 'drop') {
+        var kd = rv2 < 0.72 ? Math.pow(rv2 / 0.72, 2) : 1;
+        mDy += -(1 - kd) * H * 0.9;
+      } else if (C.reveal === 'swing') {
+        mRot += Math.sin(rv2 * 14) * Math.pow(1 - rv2, 2) * 0.42;
+        mEnter = 0.75 + 0.25 * (1 - Math.pow(1 - rv2, 3));
+      }
+    }
     if (mRot) { g.translate(x, y); g.rotate(mRot); g.translate(-x, -y); }
-    if (mScale !== 1) { g.translate(x, y); g.scale(mScale, mScale); g.translate(-x, -y); }
+    if (mEnter !== 1) { g.translate(x, y); g.scale(mEnter, mEnter); g.translate(-x, -y); }
+    if (mDx) g.translate(mDx, 0);
     if (mDy) g.translate(0, mDy);
     g.globalAlpha = alpha;
     g.lineJoin = 'round'; g.miterLimit = 2;
     g.strokeStyle = 'rgba(4,10,26,.78)'; g.lineWidth = Math.max(1, 2.2 * sc);
-    var nameGlowBlur = C.glow > 0 ? (3 + C.glow * .13) * sc * mGlow : 0;
+    var nameGlowBlur = C.glow > 0 ? (3 + C.glow * .13) * sc : 0;
     g.shadowColor = nameGlowBlur > 0 ? C.particleCol : 'transparent'; g.shadowBlur = nameGlowBlur;
-    if (mWave) {
-      /* ～ 물결 — 글자마다 위상을 어긋나게 해 파도처럼 흐른다. u 의 주기가 1 이라 이음새는 닫힌다.
-         테두리와 채움을 각각 한 바퀴 돌려야 앞 글자 테두리가 뒤 글자를 덮지 않는다. */
-      var wch = Array.from(name), wi, wx = x, wdy;
-      for (wi = 0; wi < wch.length; wi++) {
-        wdy = Math.round(Math.sin(mTau * (u + wi * .12)) * mWave);
-        g.strokeText(wch[wi], wx, y + wdy);
-        wx += g.measureText(wch[wi]).width;
-      }
-      g.shadowColor = 'transparent'; g.shadowBlur = 0;
-      g.fillStyle = C.nameCol;
-      for (wi = 0, wx = x; wi < wch.length; wi++) {
-        wdy = Math.round(Math.sin(mTau * (u + wi * .12)) * mWave);
-        g.fillText(wch[wi], wx, y + wdy);
-        wx += g.measureText(wch[wi]).width;
-      }
-    } else {
-      g.strokeText(name, x, y);
-      g.shadowColor = 'transparent'; g.shadowBlur = 0;
-      g.fillStyle = C.nameCol; g.fillText(name, x, y);
-    }
+    g.strokeText(name, x, y);
+    g.shadowColor = 'transparent'; g.shadowBlur = 0;
+    g.fillStyle = C.nameCol; g.fillText(name, x, y);
     if (C.reveal === 'sweep' && reveal > 0 && reveal < 1) {
       var lx = x + fullW * reveal;
       var lg = g.createLinearGradient(lx - 9 * sc, 0, lx + 9 * sc, 0);
@@ -15946,9 +15931,9 @@ window.gifenc=exports;})();
   var GIF_PREF_IDS = ['gifRc1', 'gifRc2', 'gifRw', 'gifRingAnim', 'gifFps', 'gifAvSize',
     'giName', 'giFont', 'giCol', 'giOut', 'giOutW', 'giGlow', 'giGlowC', 'giGlowW', 'giShadow',
     'giBgMode', 'giBgCol', 'giBgCol2', 'giTrans', 'giTransSpd', 'giTransDur', 'giDur',
-    'giTxtAnim', 'giTxtMotion', 'giParti', 'giTxtDelay', 'giTxtSpd', 'giOn', 'giOverlay', 'giPrev',
+    'giTxtAnim', 'giParti', 'giTxtDelay', 'giTxtSpd', 'giOn', 'giOverlay', 'giPrev',
     /* 사진 2D 하단 배너 설정은 프사 인트로와 별도 키로 보존한다. */
-    'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxMotion', 'giBfxNameCol',
+    'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxNameCol',
     'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
     'giRigSafe', 'giRigScale', 'giRigX', 'giRigY',
     'giHairOn', 'giHairStrength',
@@ -16323,7 +16308,7 @@ window.gifenc=exports;})();
   gifEl('giRigLeft').onclick = function () { gifPortraitNudge(-3, 0); };
   gifEl('giRigRight').onclick = function () { gifPortraitNudge(3, 0); };
   [
-    'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxMotion', 'giBfxNameCol',
+    'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxNameCol',
     'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
     'giRigSafe', 'giRigScale', 'giRigX', 'giRigY',
     'giBfxParticles', 'giBfxParticleCol', 'giBfxParticleAmt', 'giBfxGlow', 'giBfxOrb', 'giBfxSparkle'
@@ -16382,7 +16367,7 @@ window.gifenc=exports;})();
     fontBulkStart(picked.length);
     picked.forEach(function (f) { fontAddLoad(f, true); });
   };
-  ['giName', 'giCol', 'giOut', 'giBgCol', 'giBgCol2', 'giTrans', 'giBgMode', 'gifAvSize', 'giTxtAnim', 'giTxtMotion', 'giParti'].forEach(function (id) {
+  ['giName', 'giCol', 'giOut', 'giBgCol', 'giBgCol2', 'giTrans', 'giBgMode', 'gifAvSize', 'giTxtAnim', 'giParti'].forEach(function (id) {
     var el = gifEl(id);
     el.oninput = gifStale;
     el.onchange = function () {
@@ -19866,7 +19851,7 @@ window.gifenc=exports;})();
       for (var ii = 0; ii < items.length; ii++) {
         var it = items[ii];
         var fs2 = Math.round(it.fs * sK);
-        var outW = outPct * fs2, glowW = glowPct * fs2, mWaveAmp = 0;
+        var outW = outPct * fs2, glowW = glowPct * fs2;
         g.font = gifTxtWeight() + ' ' + fs2 + 'px ' + gifCardFontFam();
         g.textAlign = 'center';
         g.textBaseline = 'middle';
@@ -19880,29 +19865,21 @@ window.gifenc=exports;})();
            글자가 실려 GIF 델타 압축 잔상(고스트)이 생긴다. */
         var noAnim2 = (mode2 === 'none');
         var us = noAnim2 ? 999 : (tSec - Math.min(baseDly + it.dly, maxStart)); /* 이 글자의 등장 후 경과(초) */
-        var u = noAnim2 ? 1 : Math.max(0, Math.min(1, us / IN));
+        /* 역동적인 등장(날아들기·쾅·회전)은 잔잔한 연출보다 시간이 더 필요하다 —
+           기본 0.3초면 15fps에서 4~5장 만에 끝나 "너무 빨라서 티도 안 난다"(지한 피드백).
+           카드가 허락하는 만큼 늘려 쓴다. */
+        var DYN = (mode2 === 'slam' || mode2 === 'fly' || mode2 === 'spin' ||
+                   mode2 === 'drop' || mode2 === 'swing');
+        var INu = DYN ? Math.min(Math.max(IN * 2.4, 0.55),
+                                 Math.max(0.35, CARD_D - FADE - Math.min(baseDly + it.dly, maxStart) - 0.12))
+                      : IN;
+        var u = noAnim2 ? 1 : Math.max(0, Math.min(1, us / INu));
         var a0 = noAnim2 ? outA : (Math.min(1, u * 2.5) * outA);
         if (a0 <= 0.004) continue;                    /* 아직 안 떴거나 이미 사라짐 */
         var col = it.col, oc = it.oc;
         /* 기울기 — 그리는 자리를 중심으로 돌린다(등장 연출 어느 것에나 그대로 먹는다) */
         var rotR = (it.rot || 0) * Math.PI / 180;
         var drawTxt = function (str, x, y) {
-          /* ～ 물결 — 글자마다 위상을 어긋나게 해 파도처럼. 한 글자씩 나눠 그리되
-             위상은 ringPh 기준이라 루프 이음새가 닫힌다. */
-          if (mWaveAmp && str && str.length > 1) {
-            var wA = Array.from(str), wT = 0, wi2;
-            for (wi2 = 0; wi2 < wA.length; wi2++) wT += g.measureText(wA[wi2]).width;
-            var wX = x - wT / 2;
-            var oldAlign = g.textAlign;
-            g.textAlign = 'left';
-            for (wi2 = 0; wi2 < wA.length; wi2++) {
-              var wW = g.measureText(wA[wi2]).width;
-              drawTxt(wA[wi2], wX, y + Math.round(Math.sin(Math.PI * 2 * ((isFinite(ringPh) ? ringPh : 0) + wi2 * 0.11)) * mWaveAmp));
-              wX += wW;
-            }
-            g.textAlign = oldAlign;
-            return;
-          }
           if (rotR) { g.save(); g.translate(x, y); g.rotate(rotR); x = 0; y = 0; }
           if (glowOn) {
             /* 글로우 — 여러 번 겹쳐 그려야 캔버스 그림자가 충분히 진해진다 */
@@ -19948,24 +19925,6 @@ window.gifenc=exports;})();
         var dS = 1 + 0.035 * he;          /* 3.5% 아주 천천히 커짐 */
         var dY = -0.0075 * W * he;        /* 살짝 떠오름 */
         if (noAnim2) { dS = 1; dY = 0; }  /* '없음'이면 이 미세 모션도 정지 */
-        /* ── 글씨 모션 ──
-           등장 연출(mode2)이 끝난 뒤에도 계속 움직이는 효과. 모든 등장 연출이 dY(위치)·
-           dS(크기)·rotR(기울기)를 함께 쓰므로, 여기서 더해 주면 어떤 연출과도 같이 돈다.
-           ⚠ 위상은 카드 진행(t01)이 아니라 루프 전체 위상(ringPh)에서 뽑는다 —
-              '루프당 k바퀴(k 정수)' 라야 움짤이 다시 돌아갈 때 안 튄다.
-           ⚠ 위아래 흔들림은 정수 픽셀로 맞춘다. 소수 픽셀이면 글자 경계가 매 프레임
-              다시 칠해져 2MB 사다리를 그만큼 갉아먹는다. */
-        var txMo = (gifEl('giTxtMotion') && gifEl('giTxtMotion').value) || 'none';
-        if (txMo !== 'none') {
-          var mP = Math.PI * 2 * (isFinite(ringPh) ? ringPh : 0);
-          var mU = W * 0.012;                                  /* 흔들림 기준 폭 */
-          if (txMo === 'float') dY += Math.round(Math.sin(mP) * mU);
-          else if (txMo === 'bounce') dY += -Math.round(Math.abs(Math.sin(mP * 2)) * mU * 1.35);
-          else if (txMo === 'breathe') dS *= 1 + 0.035 * Math.sin(mP);
-          else if (txMo === 'sway') rotR += Math.sin(mP) * 0.05;
-          else if (txMo === 'pulse') glowW *= 0.7 + 0.6 * (0.5 + 0.5 * Math.sin(mP * 2));
-          else if (txMo === 'wave') mWaveAmp = mU * 1.1;       /* 글자별 — 아래에서 쓴다 */
-        }
         if (mode2 === 'none') {
           /* 등장 연출 없음 — 처음부터 제자리에 그대로 */
           g.save();
@@ -20100,6 +20059,64 @@ window.gifenc=exports;})();
             }
             xcur += wd[ci2];
           }
+        } else if (mode2 === 'slam') {
+          /* 💥 쾅 찍기 — 크게 기울어진 채 날아들어 탁 꽂히고, 착지 뒤 짧게 떨린다.
+             고객 레퍼런스(프사에 이름이 쾅 박히는 연출)를 그대로 본뜬 것. */
+          var kS = 1 - Math.pow(1 - u, 3);          /* 5제곱은 앞이 너무 급해 뚝뚝 끊겨 보였다 */
+          var scS = 2.4 - 1.4 * kS;
+          var ringT = Math.max(0, (u - 0.62) / 0.38);
+          var ring = ringT > 0 && ringT < 1
+            ? Math.sin(ringT * Math.PI * 3) * Math.pow(1 - ringT, 2) * 0.075 : 0;
+          g.save();
+          g.translate(cxT, cyT + dY);
+          g.rotate((1 - kS) * 0.34 + ring);
+          g.scale(Math.max(0.05, scS) * dS, Math.max(0.05, scS) * dS);
+          g.globalAlpha = a0;
+          drawTxt(it.s, 0, 0);
+          g.restore();
+        } else if (mode2 === 'fly') {
+          /* 🚀 휙 날아들기 — 왼쪽 바깥에서 기울어진 채 날아와 제자리에 꽂힌다 */
+          var kF = 1 - Math.pow(1 - u, 3);
+          var scF = 1 + (1 - kF) * 0.45;
+          g.save();
+          g.translate(cxT - (1 - kF) * W * 0.85, cyT + dY);
+          g.rotate((1 - kF) * -0.5);
+          g.scale(scF * dS, scF * dS);
+          g.globalAlpha = a0;
+          drawTxt(it.s, 0, 0);
+          g.restore();
+        } else if (mode2 === 'spin') {
+          /* 🌀 빙글 — 작게 돌며 들어와 커지면서 자리잡는다 */
+          var kP = 1 - Math.pow(1 - u, 3);
+          var scP = 0.15 + 0.85 * kP;
+          g.save();
+          g.translate(cxT, cyT + dY);
+          g.rotate((1 - kP) * Math.PI * 1.15);
+          g.scale(scP * dS, scP * dS);
+          g.globalAlpha = a0;
+          drawTxt(it.s, 0, 0);
+          g.restore();
+        } else if (mode2 === 'drop') {
+          /* ⬇ 위에서 쿵 — 가속하며 떨어져 바닥에서 납작하게 눌렸다가 펴진다 */
+          var kD = u < 0.66 ? Math.pow(u / 0.66, 2) : 1;
+          var sq = u <= 0.66 ? 1
+            : 1 - Math.sin(Math.min(1, (u - 0.66) / 0.34) * Math.PI) * 0.26;
+          g.save();
+          g.translate(cxT, cyT + dY - (1 - kD) * W * 0.55);
+          g.scale(dS * (2 - sq), dS * sq);
+          g.globalAlpha = a0;
+          drawTxt(it.s, 0, 0);
+          g.restore();
+        } else if (mode2 === 'swing') {
+          /* 🎐 흔들며 — 기울어진 채 들어와 좌우로 흔들리다 멈춘다(감쇠 진동) */
+          var kW = 1 - Math.pow(1 - u, 3);
+          g.save();
+          g.translate(cxT, cyT + dY);
+          g.rotate(Math.sin(u * 14) * Math.pow(1 - u, 2) * 0.42);
+          g.scale((0.75 + 0.25 * kW) * dS, (0.75 + 0.25 * kW) * dS);
+          g.globalAlpha = a0;
+          drawTxt(it.s, 0, 0);
+          g.restore();
         } else { /* 팡 팝업 */
           g.save();
           g.translate(cxT, cyT + dY);
