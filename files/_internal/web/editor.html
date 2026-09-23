@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-24_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-24_v2 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -791,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-24 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-24 v2</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -1166,8 +1166,10 @@
               <select id="giBfxMotion">
                 <option value="none" selected>없음</option>
                 <option value="float">둥실둥실 (위아래)</option>
+                <option value="bounce">콩콩 (통통 튀기)</option>
+                <option value="breathe">숨쉬기 (커졌다 작아졌다)</option>
+                <option value="sway">살짝 갸웃 (기울기)</option>
                 <option value="wave">～ 물결 (글자마다)</option>
-                <option value="sway">살짝 갸웃</option>
                 <option value="pulse">✨ 반짝임</option>
               </select>
             </label>
@@ -1384,6 +1386,17 @@
             <option value="wave">～ 물결</option>
             <option value="none">— 없음 (처음부터 계속 떠 있음)</option>
           </select></div>
+        <div class="ckRow">글씨 모션
+          <select id="giTxtMotion" style="flex:1" title="글자가 뜬 뒤에도 계속 움직이는 효과예요. 등장 연출과 같이 쓸 수 있어요">
+                <option value="none" selected>없음</option>
+                <option value="float">둥실둥실 (위아래)</option>
+                <option value="bounce">콩콩 (통통 튀기)</option>
+                <option value="breathe">숨쉬기 (커졌다 작아졌다)</option>
+                <option value="sway">살짝 갸웃 (기울기)</option>
+                <option value="wave">～ 물결 (글자마다)</option>
+                <option value="pulse">✨ 반짝임</option>
+          </select></div>
+        <div class="bnRec" style="font-size:11px">'글자 등장'은 한 번 나타나고 끝나지만, <b>글씨 모션은 글자가 떠 있는 내내 계속 움직여요</b>. 두 개를 같이 쓰셔도 됩니다.</div>
         <div class="ckRow" id="giTxtSpdRow">글자 생성 속도 <input type="range" id="giTxtSpd" min="0.06" max="2.5" step="0.02" value="0.3" style="flex:1" title="글자가 다 나타나기까지 걸리는 시간 — 왼쪽으로 갈수록 탁 튀어나오고, 오른쪽으로 갈수록 천천히 부드럽게 떠요. '한 글자씩'이면 타자 속도도 같이 빨라집니다"><span id="giTxtSpdV">0.30초</span></div>
         <div class="bnRec" id="giTxtSpdHint" style="font-size:11px"></div>
         <div class="bnRec" id="giCardNote" style="font-size:11px">글자는 <b>카드가 영상을 다 덮은 뒤에 떠서 걷히기 전에 사라져요</b> — 영상 위에 글자가 눌어붙는 잔상이 안 생깁니다.</div>
@@ -14923,11 +14936,15 @@ window.gifenc=exports;})();
        ⚠ 흔들림은 정수 픽셀로 맞춘다. 소수 픽셀이면 글자 경계가 매 프레임 다시 칠해져
           바뀐 픽셀이 늘고 칸당 200KiB 한도를 갉아먹는다. */
     var mTau = Math.PI * 2, mWave = 0, mDy = 0, mRot = 0, mGlow = 1;
+    var mScale = 1;
     if (C.motion === 'float') mDy = Math.round(Math.sin(mTau * u) * Math.max(1, fs * .07));
+    else if (C.motion === 'bounce') mDy = -Math.round(Math.abs(Math.sin(mTau * u * 2)) * Math.max(1, fs * .09));
+    else if (C.motion === 'breathe') mScale = 1 + .035 * Math.sin(mTau * u);
     else if (C.motion === 'sway') mRot = Math.sin(mTau * u) * .026;
     else if (C.motion === 'pulse') mGlow = .7 + .6 * (.5 + .5 * Math.sin(mTau * 2 * u));
     else if (C.motion === 'wave') mWave = Math.max(1, fs * .085);
     if (mRot) { g.translate(x, y); g.rotate(mRot); g.translate(-x, -y); }
+    if (mScale !== 1) { g.translate(x, y); g.scale(mScale, mScale); g.translate(-x, -y); }
     if (mDy) g.translate(0, mDy);
     g.globalAlpha = alpha;
     g.lineJoin = 'round'; g.miterLimit = 2;
@@ -15929,7 +15946,7 @@ window.gifenc=exports;})();
   var GIF_PREF_IDS = ['gifRc1', 'gifRc2', 'gifRw', 'gifRingAnim', 'gifFps', 'gifAvSize',
     'giName', 'giFont', 'giCol', 'giOut', 'giOutW', 'giGlow', 'giGlowC', 'giGlowW', 'giShadow',
     'giBgMode', 'giBgCol', 'giBgCol2', 'giTrans', 'giTransSpd', 'giTransDur', 'giDur',
-    'giTxtAnim', 'giParti', 'giTxtDelay', 'giTxtSpd', 'giOn', 'giOverlay', 'giPrev',
+    'giTxtAnim', 'giTxtMotion', 'giParti', 'giTxtDelay', 'giTxtSpd', 'giOn', 'giOverlay', 'giPrev',
     /* 사진 2D 하단 배너 설정은 프사 인트로와 별도 키로 보존한다. */
     'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxMotion', 'giBfxNameCol',
     'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
@@ -16365,7 +16382,7 @@ window.gifenc=exports;})();
     fontBulkStart(picked.length);
     picked.forEach(function (f) { fontAddLoad(f, true); });
   };
-  ['giName', 'giCol', 'giOut', 'giBgCol', 'giBgCol2', 'giTrans', 'giBgMode', 'gifAvSize', 'giTxtAnim', 'giParti'].forEach(function (id) {
+  ['giName', 'giCol', 'giOut', 'giBgCol', 'giBgCol2', 'giTrans', 'giBgMode', 'gifAvSize', 'giTxtAnim', 'giTxtMotion', 'giParti'].forEach(function (id) {
     var el = gifEl(id);
     el.oninput = gifStale;
     el.onchange = function () {
@@ -19849,7 +19866,7 @@ window.gifenc=exports;})();
       for (var ii = 0; ii < items.length; ii++) {
         var it = items[ii];
         var fs2 = Math.round(it.fs * sK);
-        var outW = outPct * fs2, glowW = glowPct * fs2;
+        var outW = outPct * fs2, glowW = glowPct * fs2, mWaveAmp = 0;
         g.font = gifTxtWeight() + ' ' + fs2 + 'px ' + gifCardFontFam();
         g.textAlign = 'center';
         g.textBaseline = 'middle';
@@ -19870,6 +19887,22 @@ window.gifenc=exports;})();
         /* 기울기 — 그리는 자리를 중심으로 돌린다(등장 연출 어느 것에나 그대로 먹는다) */
         var rotR = (it.rot || 0) * Math.PI / 180;
         var drawTxt = function (str, x, y) {
+          /* ～ 물결 — 글자마다 위상을 어긋나게 해 파도처럼. 한 글자씩 나눠 그리되
+             위상은 ringPh 기준이라 루프 이음새가 닫힌다. */
+          if (mWaveAmp && str && str.length > 1) {
+            var wA = Array.from(str), wT = 0, wi2;
+            for (wi2 = 0; wi2 < wA.length; wi2++) wT += g.measureText(wA[wi2]).width;
+            var wX = x - wT / 2;
+            var oldAlign = g.textAlign;
+            g.textAlign = 'left';
+            for (wi2 = 0; wi2 < wA.length; wi2++) {
+              var wW = g.measureText(wA[wi2]).width;
+              drawTxt(wA[wi2], wX, y + Math.round(Math.sin(Math.PI * 2 * ((isFinite(ringPh) ? ringPh : 0) + wi2 * 0.11)) * mWaveAmp));
+              wX += wW;
+            }
+            g.textAlign = oldAlign;
+            return;
+          }
           if (rotR) { g.save(); g.translate(x, y); g.rotate(rotR); x = 0; y = 0; }
           if (glowOn) {
             /* 글로우 — 여러 번 겹쳐 그려야 캔버스 그림자가 충분히 진해진다 */
@@ -19915,6 +19948,24 @@ window.gifenc=exports;})();
         var dS = 1 + 0.035 * he;          /* 3.5% 아주 천천히 커짐 */
         var dY = -0.0075 * W * he;        /* 살짝 떠오름 */
         if (noAnim2) { dS = 1; dY = 0; }  /* '없음'이면 이 미세 모션도 정지 */
+        /* ── 글씨 모션 ──
+           등장 연출(mode2)이 끝난 뒤에도 계속 움직이는 효과. 모든 등장 연출이 dY(위치)·
+           dS(크기)·rotR(기울기)를 함께 쓰므로, 여기서 더해 주면 어떤 연출과도 같이 돈다.
+           ⚠ 위상은 카드 진행(t01)이 아니라 루프 전체 위상(ringPh)에서 뽑는다 —
+              '루프당 k바퀴(k 정수)' 라야 움짤이 다시 돌아갈 때 안 튄다.
+           ⚠ 위아래 흔들림은 정수 픽셀로 맞춘다. 소수 픽셀이면 글자 경계가 매 프레임
+              다시 칠해져 2MB 사다리를 그만큼 갉아먹는다. */
+        var txMo = (gifEl('giTxtMotion') && gifEl('giTxtMotion').value) || 'none';
+        if (txMo !== 'none') {
+          var mP = Math.PI * 2 * (isFinite(ringPh) ? ringPh : 0);
+          var mU = W * 0.012;                                  /* 흔들림 기준 폭 */
+          if (txMo === 'float') dY += Math.round(Math.sin(mP) * mU);
+          else if (txMo === 'bounce') dY += -Math.round(Math.abs(Math.sin(mP * 2)) * mU * 1.35);
+          else if (txMo === 'breathe') dS *= 1 + 0.035 * Math.sin(mP);
+          else if (txMo === 'sway') rotR += Math.sin(mP) * 0.05;
+          else if (txMo === 'pulse') glowW *= 0.7 + 0.6 * (0.5 + 0.5 * Math.sin(mP * 2));
+          else if (txMo === 'wave') mWaveAmp = mU * 1.1;       /* 글자별 — 아래에서 쓴다 */
+        }
         if (mode2 === 'none') {
           /* 등장 연출 없음 — 처음부터 제자리에 그대로 */
           g.save();
