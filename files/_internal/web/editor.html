@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-18_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-23_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -791,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-18 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-23 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -1162,6 +1162,16 @@
                 <option value="always">처음부터 표시</option>
               </select>
             </label>
+            <label class="ckRow">글씨 모션
+              <select id="giBfxMotion">
+                <option value="none" selected>없음</option>
+                <option value="float">둥실둥실 (위아래)</option>
+                <option value="wave">～ 물결 (글자마다)</option>
+                <option value="sway">살짝 갸웃</option>
+                <option value="pulse">✨ 반짝임</option>
+              </select>
+            </label>
+            <div class="bnRec" style="font-size:11px">'이름 등장'은 한 번 나타나고 끝나지만, <b>글씨 모션은 반복 내내 계속 움직여요</b>(같이 써도 됩니다). 움직이면 용량이 늘어 칸당 200KiB를 넘을 수 있는데, 그땐 앱이 색·프레임을 줄여 알아서 맞춥니다.</div>
             <label class="ckRow">글자색 <input type="color" id="giBfxNameCol" value="#ffffff"></label>
             <label class="ckRow wide">이름 X <input type="range" id="giBfxX" min="2" max="68" step="1" value="8"><span class="fxVal" id="giBfxXV">8%</span></label>
             <label class="ckRow wide">이름 Y <input type="range" id="giBfxY" min="18" max="88" step="1" value="58"><span class="fxVal" id="giBfxYV">58%</span></label>
@@ -14823,6 +14833,8 @@ window.gifenc=exports;})();
          but freeze only the reveal animation so text does not consume the motion
          budget needed by the character. The UI preference itself is untouched. */
       reveal: profile.staticName ? 'always' : ((gifEl('giBfxReveal') && gifEl('giBfxReveal').value) || 'sweep'),
+      /* 용량 구제로 글자를 얼리는 등급에서는 모션도 같이 멈춘다(reveal 과 같은 규칙) */
+      motion: profile.staticName ? 'none' : ((gifEl('giBfxMotion') && gifEl('giBfxMotion').value) || 'none'),
       x: gifBfxVal('giBfxX', 8, 2, 68) / 100,
       y: gifBfxVal('giBfxY', 58, 18, 88) / 100,
       size: gifBfxVal('giBfxSize', 48, 22, 96),
@@ -14903,14 +14915,46 @@ window.gifenc=exports;})();
     if (C.reveal === 'sweep') {
       g.beginPath(); g.rect(x - 4 * sc, 0, Math.max(0, fullW * reveal + 10 * sc), H); g.clip();
     }
+    /* ── 글씨 모션 ──
+       ⚠ 반드시 u(루프 위상)만의 함수여야 한다. 굽기 경로는 마지막 프레임에서 u 를 0 으로
+          되감아 첫 장과 같은 장을 만들고(gifBfxPhase), 델타 압축이 그 항등을 전제로 돈다.
+       ⚠ 주기는 '초' 가 아니라 '루프당 k바퀴(k 정수)' 로 잡는다 — 반복 길이가 1.5/2/3초로
+          바뀌어도(gifBannerSetLen) 이음새가 저절로 닫힌다.
+       ⚠ 흔들림은 정수 픽셀로 맞춘다. 소수 픽셀이면 글자 경계가 매 프레임 다시 칠해져
+          바뀐 픽셀이 늘고 칸당 200KiB 한도를 갉아먹는다. */
+    var mTau = Math.PI * 2, mWave = 0, mDy = 0, mRot = 0, mGlow = 1;
+    if (C.motion === 'float') mDy = Math.round(Math.sin(mTau * u) * Math.max(1, fs * .07));
+    else if (C.motion === 'sway') mRot = Math.sin(mTau * u) * .026;
+    else if (C.motion === 'pulse') mGlow = .7 + .6 * (.5 + .5 * Math.sin(mTau * 2 * u));
+    else if (C.motion === 'wave') mWave = Math.max(1, fs * .085);
+    if (mRot) { g.translate(x, y); g.rotate(mRot); g.translate(-x, -y); }
+    if (mDy) g.translate(0, mDy);
     g.globalAlpha = alpha;
     g.lineJoin = 'round'; g.miterLimit = 2;
     g.strokeStyle = 'rgba(4,10,26,.78)'; g.lineWidth = Math.max(1, 2.2 * sc);
-    var nameGlowBlur = C.glow > 0 ? (3 + C.glow * .13) * sc : 0;
+    var nameGlowBlur = C.glow > 0 ? (3 + C.glow * .13) * sc * mGlow : 0;
     g.shadowColor = nameGlowBlur > 0 ? C.particleCol : 'transparent'; g.shadowBlur = nameGlowBlur;
-    g.strokeText(name, x, y);
-    g.shadowColor = 'transparent'; g.shadowBlur = 0;
-    g.fillStyle = C.nameCol; g.fillText(name, x, y);
+    if (mWave) {
+      /* ～ 물결 — 글자마다 위상을 어긋나게 해 파도처럼 흐른다. u 의 주기가 1 이라 이음새는 닫힌다.
+         테두리와 채움을 각각 한 바퀴 돌려야 앞 글자 테두리가 뒤 글자를 덮지 않는다. */
+      var wch = Array.from(name), wi, wx = x, wdy;
+      for (wi = 0; wi < wch.length; wi++) {
+        wdy = Math.round(Math.sin(mTau * (u + wi * .12)) * mWave);
+        g.strokeText(wch[wi], wx, y + wdy);
+        wx += g.measureText(wch[wi]).width;
+      }
+      g.shadowColor = 'transparent'; g.shadowBlur = 0;
+      g.fillStyle = C.nameCol;
+      for (wi = 0, wx = x; wi < wch.length; wi++) {
+        wdy = Math.round(Math.sin(mTau * (u + wi * .12)) * mWave);
+        g.fillText(wch[wi], wx, y + wdy);
+        wx += g.measureText(wch[wi]).width;
+      }
+    } else {
+      g.strokeText(name, x, y);
+      g.shadowColor = 'transparent'; g.shadowBlur = 0;
+      g.fillStyle = C.nameCol; g.fillText(name, x, y);
+    }
     if (C.reveal === 'sweep' && reveal > 0 && reveal < 1) {
       var lx = x + fullW * reveal;
       var lg = g.createLinearGradient(lx - 9 * sc, 0, lx + 9 * sc, 0);
@@ -15887,7 +15931,7 @@ window.gifenc=exports;})();
     'giBgMode', 'giBgCol', 'giBgCol2', 'giTrans', 'giTransSpd', 'giTransDur', 'giDur',
     'giTxtAnim', 'giParti', 'giTxtDelay', 'giTxtSpd', 'giOn', 'giOverlay', 'giPrev',
     /* 사진 2D 하단 배너 설정은 프사 인트로와 별도 키로 보존한다. */
-    'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxNameCol',
+    'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxMotion', 'giBfxNameCol',
     'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
     'giRigSafe', 'giRigScale', 'giRigX', 'giRigY',
     'giHairOn', 'giHairStrength',
@@ -16262,7 +16306,7 @@ window.gifenc=exports;})();
   gifEl('giRigLeft').onclick = function () { gifPortraitNudge(-3, 0); };
   gifEl('giRigRight').onclick = function () { gifPortraitNudge(3, 0); };
   [
-    'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxNameCol',
+    'giBfxOn', 'giBfxName', 'giBfxSub', 'giBfxSubCustom', 'giBfxReveal', 'giBfxMotion', 'giBfxNameCol',
     'giBfxX', 'giBfxY', 'giBfxSize', 'giBfxFont', 'giBfxSubDx', 'giBfxSubDy', 'giBfxCharMode', 'giBfxLen', 'giBfxScale',
     'giRigSafe', 'giRigScale', 'giRigX', 'giRigY',
     'giBfxParticles', 'giBfxParticleCol', 'giBfxParticleAmt', 'giBfxGlow', 'giBfxOrb', 'giBfxSparkle'
@@ -26485,6 +26529,9 @@ window.gifenc=exports;})();
     gifSetFs: function (v) { GIF_FS = v; }, gifSetDither: function (v) { GIF_DITHER = v; },
     gifSetFirst: function (v) { GIF_FIRST_RICH = v; },
     gifDrawRing: gifDrawRing, gifRingClipPath: gifRingClipPath,
+    /* 배너 글씨(이름·서브)를 원하는 루프 위상으로 한 장만 그려 본다 — 글씨 모션 검수용.
+       굽기 전체를 돌리지 않고 '위상이 바뀌면 글자가 움직이는가' 만 픽셀로 잰다. */
+    gifDrawBfxNameSub: gifDrawBfxNameSub, gifBfxPhase: gifBfxPhase, gifBfxCfg: gifBfxCfg,
     gifStepLabel: gifStepLabel, gifAvLimit: GIF_AV_LIMIT,
     gifPrefIds: function () { return GIF_PREF_IDS.slice(0); },
     /* 검수 전용 — 저장 게이트를 실제 5MB 인코드 없이 확인하려고 결과 버퍼만 갈아 끼운다 */

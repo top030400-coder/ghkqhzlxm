@@ -372,11 +372,17 @@
     return `<optgroup label="${escapeHtml(group.label)}">${options.map(theme => `<option value="${escapeHtml(theme.texture)}">${escapeHtml(theme.name)}</option>`).join("")}</optgroup>`;
   }).join("");
 
-  const presetThemeKeys = [
-    "modernPeach", "modernSky", "modernRose", "modernPink",
-    "modernLilac", "modernMint", "modernLemon", "modernAqua",
-    "modernBlue", "modernMono", "modernCoral", "modernBerry"
-  ];
+  /* [57차] 빠른 배경 썸네일을 드롭다운(배경 그림 · 43종)과 같은 목록으로 맞춘다.
+     예전엔 모던 12종만 썸네일이 있고 나머지 31종(시그 숫자·플랫·리치·심플)은 드롭다운에서
+     하나씩 눌러 봐야만 확인됐다 — 고객 문의 "미리보기는 없을까요? 하나하나 눌러야 해서 번거로워요".
+     ⚠ backgroundTextureGroups 에서 그대로 뽑으므로 드롭다운과 영원히 1:1 이고,
+        모던 12종이 앞(0~11)에 그대로 남아 저장된 프로젝트의 presetIndex 도 안 깨진다. */
+  const presetThemeKeys = backgroundTextureGroups.reduce(function (all, group) {
+    return all.concat(group.keys);
+  }, []);
+  /* 그리드에 그룹 제목을 끼우기 위한 키→묶음 이름 표(목록이 걸러져도 안 어긋나게 키 기준) */
+  const presetGroupOfKey = {};
+  backgroundTextureGroups.forEach(group => group.keys.forEach(key => { presetGroupOfKey[key] = group.label; }));
 
   const layouts = [
     {
@@ -747,6 +753,45 @@
     }, true);
   }
 
+  /* [57차] 배경 '색 바꾸기' — 테마 그림은 그대로 두고 색만 돌린다.
+     모던·리치 배경은 미리 그려둔 그림이라 주색/보조색으로는 안 바뀌고,
+     렌더가 이미 걸고 있는 hue-rotate 필터만이 색을 바꿀 수 있다(drawBackgroundPaint).
+     그래서 '원하는 색'을 받아 테마 원래 색과의 색상환 차이를 계산해 hue 에 넣는다.
+     고객 문의: "이 테마를 쓰고 싶지만 초록이 아니라 노란색으로 하고 싶을 수 있으니 색만 바꾸는 거죠". */
+  function hexToHsl(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) {
+      if (mx === r) h = ((g - b) / d) % 6;
+      else if (mx === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    const l = (mx + mn) / 2;
+    const s = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+    return { h: h, s: s, l: l };
+  }
+  function applyBgRecolor() {
+    const to = state.background.recolorTo;
+    if (!to) return;
+    const theme = themes.find(item => item.texture === state.background.texture);
+    const base = hexToHsl(theme ? theme.primary : state.background.primary);
+    const want = hexToHsl(to);
+    if (!base || !want) return;
+    let d = want.h - base.h;
+    while (d > 180) d -= 360;
+    while (d < -180) d += 360;
+    state.background.hue = Math.round(d);
+    /* 회색에 가까운 테마는 색상환을 돌려도 색이 안 붙는다 — 채도를 올려 줘야 보인다 */
+    if (base.s < 0.2 && want.s > 0.22) {
+      state.background.saturation = Math.max(Number(state.background.saturation) || 100, 145);
+    }
+  }
   function hexToRgba(hex, alpha) {
     let h = String(hex || "#000000").replace("#", "");
     if (h.length === 3) h = h.split("").map(ch => ch + ch).join("");
@@ -1094,6 +1139,11 @@
               <div class="sig-field"><label>색상 회전</label><input id="sigBgHue" type="range" min="-180" max="180" step="1"></div>
               <div class="sig-field"><label>채도</label><input id="sigBgSaturation" type="range" min="0" max="180" step="1"></div>
               <div class="sig-field"><label>밝기</label><input id="sigBgBrightness" type="range" min="45" max="150" step="1"></div>
+              <div class="sig-two">
+                <div class="sig-field compact"><label>🎨 색 바꾸기</label><input id="sigBgRecolor" type="color"></div>
+                <div class="sig-field compact"><label>&nbsp;</label><button type="button" class="sig-btn" id="sigBgRecolorOff">원래 색으로</button></div>
+              </div>
+              <div class="sig-upload-note">배경 <b>그림은 그대로 두고 색만</b> 바꿔요 — 초록 클로버를 노랑으로. 배경을 바꿔도 고른 색이 따라갑니다.</div>
             </section>
 
             <section class="sig-section">
@@ -1492,6 +1542,7 @@
       });
     }
     Object.assign(state.background, backgroundUpdate);
+    applyBgRecolor();   /* 배경을 갈아입혀도 고른 색은 따라간다 */
     if (!preserveContent) {
       state.placementIndex = 0;
       Object.assign(state.character, deepCopy(preset.layout.char));
@@ -1550,6 +1601,7 @@
       offsetX: 0,
       offsetY: 0
     });
+    applyBgRecolor();   /* 완성 템플릿을 적용해도 고른 색은 따라간다 */
     if (tpl.maskSeed) {
       /* 시드는 적용할 때마다 새 캔버스 — "적용된 마스크는 불변" 계약(captureMainSnapshot
          주석 참고)을 지켜 언두 스냅샷 참조 공유가 안전하다. */
@@ -1651,7 +1703,19 @@
   function renderPresetGrid() {
     const grid = document.getElementById("sigPresetGrid");
     grid.innerHTML = "";
+    let lastGroup = null;
     presets.forEach((preset, index) => {
+      /* 43칸이라 묶음 제목이 없으면 찾기 어렵다. 제목은 .sig-preset 이 아니라서
+         highlightPreset 의 인덱스 계산에는 영향이 없다. */
+      const groupLabel = presetGroupOfKey[preset.theme.key];
+      if (groupLabel && groupLabel !== lastGroup) {
+        lastGroup = groupLabel;
+        const head = document.createElement("div");
+        head.className = "sig-grid-title";
+        head.style.cssText = "grid-column:1/-1;font-size:11px;opacity:.7;margin:10px 0 2px";
+        head.textContent = groupLabel;
+        grid.appendChild(head);
+      }
       const button = document.createElement("button");
       button.type = "button";
       button.className = "sig-preset";
@@ -5306,6 +5370,7 @@
       sigBgPrimary: state.background.primary,
       sigBgSecondary: state.background.secondary,
       sigBgTintOpacity: state.background.tintOpacity,
+      sigBgRecolor: state.background.recolorTo || state.background.primary || "#ffffff",
       sigBgHue: state.background.hue,
       sigBgSaturation: state.background.saturation,
       sigBgBrightness: state.background.brightness,
@@ -5717,6 +5782,37 @@
     bindValue("sigBgPrimary", state.background, "primary", String);
     bindValue("sigBgSecondary", state.background, "secondary", String);
     bindValue("sigBgTintOpacity", state.background, "tintOpacity");
+    /* ⚠ 색칸을 드래그하는 동안(input) syncControls 를 부르면 안 된다 — 값을 다시 써 넣는 순간
+       고르기 창이 닫힌다(시그풍 bindValue 가 그래서 requestRender 만 부른다). change 에서만 정리한다. */
+    const bgRecolorInput = document.getElementById("sigBgRecolor");
+    let bgRecolorHistory = null;
+    if (bgRecolorInput) {
+      bgRecolorInput.addEventListener("input", event => {
+        if (!bgRecolorHistory) bgRecolorHistory = beginMainChange();
+        state.background.recolorTo = event.target.value;
+        applyBgRecolor();
+        requestRender();
+      });
+      bgRecolorInput.addEventListener("change", () => {
+        applyBgRecolor();
+        syncControls();
+        requestRender();
+        if (bgRecolorHistory) { commitMainChange(bgRecolorHistory); bgRecolorHistory = null; }
+      });
+    }
+    const bgRecolorOff = document.getElementById("sigBgRecolorOff");
+    if (bgRecolorOff) {
+      bgRecolorOff.addEventListener("click", () => {
+        const before = beginMainChange();
+        state.background.recolorTo = "";
+        const theme = themes.find(item => item.texture === state.background.texture);
+        state.background.hue = (theme && theme.hue) || 0;
+        state.background.saturation = theme && theme.saturation != null ? theme.saturation : 100;
+        syncControls();
+        requestRender();
+        commitMainChange(before);
+      });
+    }
     bindValue("sigBgHue", state.background, "hue");
     bindValue("sigBgSaturation", state.background, "saturation");
     bindValue("sigBgBrightness", state.background, "brightness");
@@ -5762,6 +5858,7 @@
         state.background.surface = "none";
         state.background.motif = "none";
       }
+      applyBgRecolor();   /* 드롭다운으로 배경을 바꿔도 고른 색은 따라간다 */
       syncControls();
       requestRender();
       if (event.type === "change") {
