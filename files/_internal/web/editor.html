@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-23_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-24_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -791,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-23 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-24 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -27100,6 +27100,9 @@ window.gifenc=exports;})();
       PHOTO.rigError = ''; GIF.kind = 'photo'; GIF.mode = 'bottom'; GIF.vw = source.width; GIF.vh = source.height;
       gifPhotoShim.videoWidth = source.width; gifPhotoShim.videoHeight = source.height;
       gifPhotoShim.readyState = 4; gifEl('giPhMove').value = 'portrait2d';
+      /* 짝인 setSyntheticPhotoWithoutRig 와 달리 만들기 버튼을 안 풀어 줘서,
+         이 훅만 써서 검수하면 클릭이 조용히 씹혔다(검수 전용 훅) */
+      gifEl('gifGo').disabled = false;
       gifPortraitEdgeStatus(next.edgeProfile, null);
       return this.getPhotoState();
     },
