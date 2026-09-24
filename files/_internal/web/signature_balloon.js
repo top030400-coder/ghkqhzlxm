@@ -831,6 +831,7 @@
       brightness: 100,
       color1: state.background.primary,
       color2: state.background.secondary,
+      recolorTo: "",          /* 「소품 색」 — 비어 있으면 원래 색 그대로 */
       front: false,
       locked: false
     };
@@ -1161,7 +1162,13 @@
                 <div class="sig-field"><label>불투명도</label><input id="sigPropOpacity" type="range" min="0.1" max="1" step="0.01"></div>
                 <div class="sig-field"><label>색상 회전</label><input id="sigPropHue" type="range" min="-180" max="180" step="1"></div>
                 <div class="sig-field"><label>채도</label><input id="sigPropSaturation" type="range" min="0" max="180" step="1"></div>
+                <div class="sig-field compact"><label>🎨 소품 색</label><input id="sigPropRecolor" type="color" value="#ff9bb7"></div>
+                <div class="sig-field compact"><label>&nbsp;</label><button type="button" class="sig-btn" id="sigPropRecolorOff">원래 색으로</button></div>
                 <div class="sig-field"><label>밝기</label><input id="sigPropBrightness" type="range" min="45" max="160" step="1"></div>
+                <div class="sig-field compact"><label>🧽 소품 지우개</label><button type="button" class="sig-btn" id="sigPropEraser">끔</button></div>
+                <div class="sig-field compact"><label>&nbsp;</label><button type="button" class="sig-btn" id="sigPropEraseReset">지운 곳 복구</button></div>
+                <div class="sig-field"><label>지우개 굵기</label><input id="sigPropEraseSize" type="range" min="4" max="80" step="1" value="18"></div>
+                <div class="sig-upload-note">지우개를 켜고 <b>고른 소품 위를 드래그</b>하면 그 소품만 지워져요. 다른 레이어는 안 건드리고, 되돌리기(Ctrl+Z)도 됩니다.</div>
                 <div class="sig-two">
                   <div class="sig-field compact"><label>선</label><input id="sigPropColor1" type="color"></div>
                   <div class="sig-field compact"><label>면</label><input id="sigPropColor2" type="color"></div>
@@ -4477,6 +4484,65 @@
     c.lineJoin = "round";
   }
 
+    /* 소품에 지운 자국(마스크)이 있으면 그걸 얹은 사본을 만든다.
+     마스크는 소품 그림 원본 크기의 캔버스이고, 흰색으로 칠한 곳이 '지운 곳' 이다. */
+  function propEraseMask(prop, raster, make) {
+    if (prop.__mask) return prop.__mask;
+    const w = raster.naturalWidth || raster.width, h = raster.naturalHeight || raster.height;
+    if (!w || !h) return null;
+    if (!make && !prop.erase) return null;
+    const cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    if (prop.erase && prop.__eraseImg && prop.__eraseImg.width) {
+      cv.getContext("2d").drawImage(prop.__eraseImg, 0, 0, w, h);
+    }
+    prop.__mask = cv;
+    return cv;
+  }
+  /* 저장해 둔 지운 자국(문자열)을 그림으로 되살린다 — 프로젝트를 다시 열었을 때 */
+  function propEraseRestore(prop) {
+    if (!prop.erase || prop.__eraseImg || prop.__eraseLoading) return;
+    prop.__eraseLoading = true;
+    const im = new Image();
+    im.onload = () => {
+      prop.__eraseImg = im;
+      prop.__mask = null;
+      prop.__renderKey = "";
+      prop.__eraseLoading = false;
+      requestRender();
+    };
+    im.onerror = () => { prop.__eraseLoading = false; };
+    im.src = prop.erase;
+  }
+  /* 소품 그림을 '모양만 남기고 한 색으로' 칠한 사본. 같은 (소품·색) 조합은 다시 안 만든다. */
+  const propTintCache = new Map();
+  function propTintCanvas(raster, color) {
+    try {
+      const key = (raster.src || raster.__key || "") + "|" + color;
+      const hit = propTintCache.get(key);
+      if (hit) return hit;
+      const w = raster.naturalWidth || raster.width;
+      const h = raster.naturalHeight || raster.height;
+      if (!w || !h) return null;
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      const cx = cv.getContext("2d");
+      cx.drawImage(raster, 0, 0);
+      /* ⚠ 예전엔 source-in 으로 한 색을 통째로 부었더니 테두리·속선·음영이 전부 뭉개져
+         구름인지 하트인지도 모를 검은 덩어리가 됐다(실사용 지적).
+         'color' 합성은 아래 그림의 밝기(명도)는 그대로 두고 색상·채도만 바꾼다 —
+         배경 「색 바꾸기」 와 같은 방식이라 모양과 음영이 그대로 살아난다.
+         ⚠ 'color' 는 투명한 자리까지 칠하므로, 끝나고 원래 모양으로 다시 잘라낸다. */
+      cx.globalCompositeOperation = "color";
+      cx.fillStyle = color;
+      cx.fillRect(0, 0, w, h);
+      cx.globalCompositeOperation = "destination-in";
+      cx.drawImage(raster, 0, 0);
+      if (propTintCache.size > 60) propTintCache.clear();   /* 색을 이리저리 바꿔도 안 불어나게 */
+      propTintCache.set(key, cv);
+      return cv;
+    } catch (e) { return null; }
+  }
   function drawProp(c, prop) {
     c.save();
     setPropTransform(c, prop);
@@ -4491,6 +4557,41 @@
       const fit = Math.min(140 / raster.naturalWidth, 140 / raster.naturalHeight);
       const rasterWidth = raster.naturalWidth * fit;
       const rasterHeight = raster.naturalHeight * fit;
+      propEraseRestore(prop);
+      const hasErase = !!(prop.__mask || (prop.erase && prop.__eraseImg));
+      if (prop.recolorTo || hasErase) {
+        /* 「소품 색」 — 소품 그림의 모양(알파)만 남기고 고른 색으로 칠한다.
+           source-in 은 겹치는 부분만 남겨서 가장자리 반투명까지 그대로 살아난다.
+           「소품 지우개」 — 지운 자국을 destination-out 으로 빼낸다.
+           ⚠ 본 캔버스에 직접 걸면 소품 바깥이 통째로 지워지므로 반드시 별도 캔버스에서 한다. */
+        let pc = prop.recolorTo ? propTintCanvas(raster, prop.recolorTo) : raster;
+        if (hasErase && pc) {
+          const key = (prop.recolorTo || "-") + "|" + (prop.__eraseRev || 0);
+          if (prop.__render && prop.__renderKey === key) {
+            pc = prop.__render;
+          } else {
+            const w = raster.naturalWidth || raster.width, h = raster.naturalHeight || raster.height;
+            const cv = document.createElement("canvas");
+            cv.width = w; cv.height = h;
+            const cx = cv.getContext("2d");
+            cx.drawImage(pc, 0, 0, w, h);
+            const mask = propEraseMask(prop, raster, false);
+            if (mask) {
+              cx.globalCompositeOperation = "destination-out";
+              cx.drawImage(mask, 0, 0, w, h);
+            }
+            prop.__render = cv;
+            prop.__renderKey = key;
+            pc = cv;
+          }
+        }
+        if (pc) {
+          c.filter = prop.recolorTo ? "none" : c.filter;
+          c.drawImage(pc, -rasterWidth / 2, -rasterHeight / 2, rasterWidth, rasterHeight);
+          c.restore();
+          return;
+        }
+      }
       c.drawImage(raster, -rasterWidth / 2, -rasterHeight / 2, rasterWidth, rasterHeight);
       c.restore();
       return;
@@ -5486,6 +5587,8 @@
     document.getElementById("sigPropOpacity").value = prop.opacity == null ? .92 : prop.opacity;
     document.getElementById("sigPropHue").value = prop.hue || 0;
     document.getElementById("sigPropSaturation").value = prop.saturation == null ? 100 : prop.saturation;
+    const propRecolorEl = document.getElementById("sigPropRecolor");
+    if (propRecolorEl) propRecolorEl.value = prop.recolorTo || prop.color1 || "#ff9bb7";
     document.getElementById("sigPropBrightness").value = prop.brightness == null ? 100 : prop.brightness;
     document.getElementById("sigPropColor1").value = prop.color1;
     document.getElementById("sigPropColor2").value = prop.color2;
@@ -5910,6 +6013,42 @@
     bindPropControl("sigPropOpacity", "opacity");
     bindPropControl("sigPropHue", "hue");
     bindPropControl("sigPropSaturation", "saturation");
+    /* ⚠ 색칸은 드래그 중(input) syncControls 를 부르면 고르기 창이 닫힌다 —
+       bindPropControl 은 requestRender 만 하므로 그대로 써도 안전하다. */
+    bindPropControl("sigPropRecolor", "recolorTo", String);
+    const eraserBtn = document.getElementById("sigPropEraser");
+    if (eraserBtn) eraserBtn.addEventListener("click", () => setPropEraser(!propEraser.on));
+    const eraseSize = document.getElementById("sigPropEraseSize");
+    if (eraseSize) eraseSize.addEventListener("input", () => {
+      propEraser.size = Number(eraseSize.value) || 18;
+      resizePropEraseCursor();   /* 슬라이더를 움직이는 동안 크기가 눈에 보이게 */
+    });
+    const eraseReset = document.getElementById("sigPropEraseReset");
+    window.addEventListener("resize", resizePropEraseCursor);
+    if (eraseReset) {
+      eraseReset.addEventListener("click", () => {
+        const prop = selectedProp();
+        if (!prop) return;
+        const before = beginMainChange();
+        prop.erase = "";
+        prop.__mask = null; prop.__eraseImg = null; prop.__render = null; prop.__renderKey = "";
+        prop.__eraseRev = (prop.__eraseRev || 0) + 1;
+        requestRender();
+        commitMainChange(before);
+      });
+    }
+    const propRecolorOff = document.getElementById("sigPropRecolorOff");
+    if (propRecolorOff) {
+      propRecolorOff.addEventListener("click", () => {
+        const prop = selectedProp();
+        if (!prop) return;
+        const before = beginMainChange();
+        prop.recolorTo = "";
+        syncControls();
+        requestRender();
+        commitMainChange(before);
+      });
+    }
     bindPropControl("sigPropBrightness", "brightness");
     bindPropControl("sigPropColor1", "color1", String);
     bindPropControl("sigPropColor2", "color2", String);
@@ -6414,11 +6553,120 @@
     return layerTarget(state.selected);
   }
 
+  /* ── 소품 전용 지우개 ──
+     캔버스 좌표를 고른 소품의 '그림 안 좌표' 로 되돌려서 마스크에 칠한다.
+     소품은 translate(x,y) → rotate(rot) → scale(scale) 로 놓이고, 그림은 그 안에서
+     가장 긴 변이 140 이 되게 맞춰 그려진다(fit). 그 역순으로 계산한다. */
+  const propEraser = { on: false, size: 18, active: null };
+  function propImageAt(prop, point) {
+    const raster = propImages[prop.type];
+    if (!raster || !(raster.naturalWidth || raster.width)) return null;
+    const w = raster.naturalWidth || raster.width, h = raster.naturalHeight || raster.height;
+    const fit = Math.min(140 / w, 140 / h);
+    const sc = prop.scale || 1;
+    const rad = -(prop.rot || 0) * Math.PI / 180;
+    let dx = point.x - prop.x, dy = point.y - prop.y;
+    const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
+    const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
+    const lx = rx / sc, ly = ry / sc;
+    return {
+      raster: raster,
+      x: (lx + w * fit / 2) / fit,
+      y: (ly + h * fit / 2) / fit,
+      r: Math.max(1, propEraser.size / (sc * fit)),
+      inside: Math.abs(lx) <= w * fit / 2 + 2 && Math.abs(ly) <= h * fit / 2 + 2
+    };
+  }
+  function propEraseAt(prop, point) {
+    const p = propImageAt(prop, point);
+    if (!p) return false;
+    const mask = propEraseMask(prop, p.raster, true);
+    if (!mask) return false;
+    const cx = mask.getContext("2d");
+    cx.globalCompositeOperation = "source-over";
+    cx.fillStyle = "#fff";
+    cx.beginPath();
+    cx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    cx.fill();
+    prop.__eraseRev = (prop.__eraseRev || 0) + 1;
+    return true;
+  }
+  function propEraseCommit(prop) {
+    if (!prop || !prop.__mask) return;
+    try { prop.erase = prop.__mask.toDataURL("image/png"); } catch (e) {}
+    prop.__eraseImg = null;   /* 방금 그린 마스크가 원본이므로 다시 읽을 필요 없음 */
+  }
+  /* 지우개 커서 — 십자로는 '얼마나 지워지는지' 가 안 보인다.
+     지워질 크기만 한 동그라미를 마우스에 따라다니게 하고 기본 커서는 숨긴다.
+     position:fixed + clientX/Y 라 캔버스가 어디에 놓이든, 스크롤해도 안 어긋난다. */
+  let propEraseCursorEl = null;
+  function propEraseCursor() {
+    if (propEraseCursorEl) return propEraseCursorEl;
+    const el = document.createElement("div");
+    el.id = "sigPropEraseCursor";
+    el.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;border-radius:50%;" +
+      "pointer-events:none;z-index:2147483000;display:none;box-sizing:border-box;" +
+      "border:1.5px solid rgba(24,24,28,.9);" +
+      "box-shadow:0 0 0 1.5px rgba(255,255,255,.95),inset 0 0 0 1.5px rgba(255,255,255,.95);";
+    document.body.appendChild(el);
+    propEraseCursorEl = el;
+    return el;
+  }
+  function hidePropEraseCursor() {
+    if (propEraseCursorEl) propEraseCursorEl.style.display = "none";
+  }
+  /* propEraser.size 는 '캔버스 논리 단위 반지름' 이다(propImageAt 의 r 을 되돌린 값).
+     캔버스가 늘어나 보이는 만큼(rect.width / W) 곱해 화면 크기로 옮긴다. */
+  function propEraseCursorSize() {
+    const rect = canvas.getBoundingClientRect();
+    return Math.max(6, propEraser.size * 2 * (rect.width || W) / W);
+  }
+  function movePropEraseCursor(event) {
+    if (!propEraser.on || !canvas) { hidePropEraseCursor(); return; }
+    const el = propEraseCursor();
+    const d = propEraseCursorSize();
+    el.style.display = "block";
+    el.style.width = d + "px";
+    el.style.height = d + "px";
+    el.style.transform = "translate(" + (event.clientX - d / 2) + "px," + (event.clientY - d / 2) + "px)";
+    el.__cx = event.clientX; el.__cy = event.clientY;
+  }
+  function resizePropEraseCursor() {
+    const el = propEraseCursorEl;
+    if (!el || !propEraser.on || el.style.display !== "block" || !canvas) return;
+    const d = propEraseCursorSize();
+    el.style.width = d + "px";
+    el.style.height = d + "px";
+    el.style.transform = "translate(" + ((el.__cx || 0) - d / 2) + "px," + ((el.__cy || 0) - d / 2) + "px)";
+  }
+  function setPropEraser(on) {
+    propEraser.on = !!on;
+    const btn = document.getElementById("sigPropEraser");
+    if (btn) { btn.textContent = propEraser.on ? "켬" : "끔"; btn.classList.toggle("primary", propEraser.on); }
+    /* 동그라미가 커서 노릇을 하므로 기본 화살표는 숨긴다. */
+    if (canvas) canvas.style.cursor = propEraser.on ? "none" : "default";
+    if (!propEraser.on) hidePropEraseCursor();
+  }
+
   function bindCanvasInteractions() {
     canvas.addEventListener("pointerdown", event => {
       blurActiveSigEditorField();
       event.preventDefault();
       const point = canvasPoint(event);
+      if (propEraser.on) {
+        movePropEraseCursor(event);
+        const prop = selectedProp();
+        if (prop && !prop.locked) {
+          const hit = propImageAt(prop, point);
+          if (hit && hit.inside) {
+            propEraser.active = { prop: prop, historyBefore: beginMainChange(), pointerId: event.pointerId };
+            propEraseAt(prop, point);
+            requestRender();
+            try { canvas.setPointerCapture(event.pointerId); } catch (e) {}
+            return;
+          }
+        }
+      }
       const selectedRef = { kind: state.selected.kind, index: state.selected.index };
       if (resizeHandleHit(selectedRef, point)) {
         const target = layerTarget(selectedRef);
@@ -6449,9 +6697,16 @@
       try { canvas.setPointerCapture(event.pointerId); } catch (_) { /* WebView가 캡처를 거부해도 현재 영역 입력은 유지 */ }
     });
     canvas.addEventListener("pointermove", event => {
+      if (propEraser.on) { movePropEraseCursor(event); canvas.style.cursor = "none"; }
+      if (propEraser.active && propEraser.active.pointerId === event.pointerId) {
+        propEraseAt(propEraser.active.prop, canvasPoint(event));
+        requestRender();
+        return;
+      }
       const point = canvasPoint(event);
       if (!dragging) {
-        canvas.style.cursor = resizeHandleHit(state.selected, point) ? "nwse-resize" : selectionFrameContains(state.selected, point) ? "move" : "grab";
+        /* 지우개 중에는 손모양 커서로 되돌리지 않는다 — 동그라미가 가려진다. */
+        if (!propEraser.on) canvas.style.cursor = resizeHandleHit(state.selected, point) ? "nwse-resize" : selectionFrameContains(state.selected, point) ? "move" : "grab";
         return;
       }
       if (event.pointerId !== dragging.pointerId || dragging.target.locked) return;
@@ -6472,6 +6727,16 @@
       requestRender();
     });
     const stop = event => {
+      /* 소품 지우개로 끌던 중이면 여기서 마무리한다(레이어 드래그와 경로가 다르다) */
+      if (propEraser.active && (event?.pointerId == null || event.pointerId === propEraser.active.pointerId)) {
+        const a = propEraser.active;
+        propEraser.active = null;
+        propEraseCommit(a.prop);
+        requestRender();
+        commitMainChange(a.historyBefore);
+        try { if (canvas.hasPointerCapture?.(a.pointerId)) canvas.releasePointerCapture(a.pointerId); } catch (_) {}
+        return;
+      }
       if (!dragging || (event?.pointerId != null && event.pointerId !== dragging.pointerId)) return;
       const completed = dragging;
       try { if (canvas.hasPointerCapture?.(completed.pointerId)) canvas.releasePointerCapture(completed.pointerId); } catch (_) { /* already released */ }
@@ -6491,7 +6756,12 @@
     window.addEventListener("blur", () => {
       if (dragging) stop({ pointerId: dragging.pointerId });
     });
-    canvas.addEventListener("pointerleave", () => { if (!dragging) canvas.style.cursor = "default"; });
+    canvas.addEventListener("pointerleave", () => {
+      hidePropEraseCursor();
+      /* 지우개를 켠 채 잠깐 나갔다 들어와도 'none' 이 유지되게 한다. */
+      if (!dragging) canvas.style.cursor = propEraser.on ? "none" : "default";
+    });
+    canvas.addEventListener("pointerenter", event => { if (propEraser.on) movePropEraseCursor(event); });
     canvas.addEventListener("wheel", event => {
       event.preventDefault();
       const target = selectedTarget();
