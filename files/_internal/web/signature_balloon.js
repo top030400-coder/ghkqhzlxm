@@ -2002,7 +2002,7 @@
       phrase: Object.assign({}, state.phrase),
       num1: Object.assign({}, state.num1),
       num2: Object.assign({}, state.num2),
-      props: state.props.map(prop => Object.assign({}, prop)),
+      props: state.props.map(snapshotProp),
       outputProfiles: cloneOutputProfiles(),
       selected: Object.assign({}, state.selected),
       snapEnabled: state.snapEnabled !== false,
@@ -2011,6 +2011,20 @@
       exportBaseName: String(state.exportBaseName || SIG_DEFAULT_EXPORT_BASE),
       customPropAssets
     };
+  }
+
+  /* 되돌리기용 소품 복사 — '__' 로 시작하는 건 담지 않는다.
+     전부 그리려고 잠깐 들고 있는 것(마스크 캔버스·구운 그림·캐시 키)이라,
+     저장된 값(erase PNG 등)에서 언제든 다시 만들어진다.
+     ⚠ 그냥 얕게 복사하면 지우개가 칠하는 마스크 캔버스를 '같은 물건' 으로 붙잡게 되어,
+        되돌려도 그 안의 자국이 최신 그대로다 → 저장본에 되돌린 자국이 되살아난다(실측). */
+  function snapshotProp(prop) {
+    const out = {};
+    Object.keys(prop || {}).forEach(key => {
+      if (key.charCodeAt(0) === 95 && key.charCodeAt(1) === 95) return;
+      out[key] = prop[key];
+    });
+    return out;
   }
 
   function maskCanvasesEqual(left, right) {
@@ -2062,7 +2076,7 @@
     Object.assign(state.phrase, snapshot.phrase);
     Object.assign(state.num1, snapshot.num1);
     Object.assign(state.num2, snapshot.num2);
-    state.props = snapshot.props.map(prop => Object.assign({}, prop));
+    state.props = snapshot.props.map(snapshotProp);
     state.outputProfiles = cloneOutputProfiles(snapshot.outputProfiles);
     state.selected = Object.assign({}, snapshot.selected);
     state.snapEnabled = snapshot.snapEnabled !== false;
@@ -4486,14 +4500,124 @@
 
     /* 소품에 지운 자국(마스크)이 있으면 그걸 얹은 사본을 만든다.
      마스크는 소품 그림 원본 크기의 캔버스이고, 흰색으로 칠한 곳이 '지운 곳' 이다. */
-  function propEraseMask(prop, raster, make) {
-    if (prop.__mask) return prop.__mask;
-    const w = raster.naturalWidth || raster.width, h = raster.naturalHeight || raster.height;
+  /* 도형이 실제로 차지하는 칸(로컬 단위)을 한 번 그려 보고 잰다.
+     숫자를 손으로 적어 두면 도형을 손볼 때마다 틀어지므로 직접 잰다. 타입당 한 번만 한다.
+     (실측: 날개가 제일 넓어 ±126, 이중 링·방사형이 제일 높아 ±62) */
+  const propVecBoxCache = new Map();
+  function propVecBox(prop) {
+    const type = prop.type;
+    if (propVecBoxCache.has(type)) return propVecBoxCache.get(type);
+    let box = null;
+    try {
+      const S = 640;                     /* ±320 로컬 — 어떤 도형도 넉넉히 담긴다 */
+      const cv = document.createElement("canvas");
+      cv.width = S; cv.height = S;
+      const cx = cv.getContext("2d");
+      cx.setTransform(1, 0, 0, 1, S / 2, S / 2);
+      cx.lineCap = "round"; cx.lineJoin = "round";
+      drawPropShape(cx, prop, "#000000", "#000000");   /* 색은 상관없다 — 칠해진 자리만 본다 */
+      const d = cx.getImageData(0, 0, S, S).data;
+      let minX = S, maxX = -1, minY = S, maxY = -1;
+      for (let y = 0; y < S; y++) {
+        const row = y * S;
+        for (let x = 0; x < S; x++) {
+          if (d[(row + x) * 4 + 3] < 4) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+      if (maxX >= 0) {
+        const pad = 6;                   /* 가장자리 여유 */
+        const halfW = Math.max(S / 2 - minX, maxX + 1 - S / 2) + pad;
+        const halfH = Math.max(S / 2 - minY, maxY + 1 - S / 2) + pad;
+        box = { w: Math.ceil(halfW * 2), h: Math.ceil(halfH * 2) };
+      }
+    } catch (e) { box = null; }
+    propVecBoxCache.set(type, box);      /* 아무것도 안 그려지면 null — 색·지우개를 걸지 않는다 */
+    return box;
+  }
+
+  /* 소품 한 개를 '어느 좌표계에서 지우고 칠할지' 로 정리해 돌려준다.
+     그림 소품은 원본 그림 픽셀, 기본 도형은 그 도형이 차지하는 칸의 2배 해상도.
+     가로·세로 배율을 똑같이 둬야 지우개 붓이 동그랗게 유지된다. */
+  function propSurface(prop) {
+    const raster = propImages[prop.type];
+    if (raster && (raster.naturalWidth || raster.width)) {
+      const w = raster.naturalWidth || raster.width, h = raster.naturalHeight || raster.height;
+      const fit = Math.min(140 / w, 140 / h);
+      return { kind: "raster", raster: raster, w: w, h: h, drawW: w * fit, drawH: h * fit };
+    }
+    const box = propVecBox(prop);
+    if (!box) return null;
+    return { kind: "vec", raster: null, w: Math.round(box.w * 2), h: Math.round(box.h * 2), drawW: box.w, drawH: box.h };
+  }
+
+  /* 기본 도형을 별도 캔버스에 구워서 색·지우개를 먹인다.
+     ⚠ 색 바꾸기('color')와 지우기('destination-out')는 합성이라, 본 캔버스에 바로 걸면
+        소품 밖 배경까지 물든다/뚫린다. 반드시 따로 만든 캔버스에서 한다.
+     해상도는 '지금 그리는 배율' 에 맞춘다 — 저장본은 4배로 그리므로 고정 크기로 구우면 선이 뭉개진다. */
+  const PROP_VEC_MAX_PX = 2400;
+  function propVecRender(c, prop, line, fill) {
+    try {
+      const box = propVecBox(prop);
+      if (!box) return null;
+      const m = (typeof c.getTransform === "function") ? c.getTransform() : null;
+      const scale = m ? (Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)) || 1) : 1;
+      /* 64칸 단위로 끊는다 — 크기 슬라이더를 끄는 동안 매 프레임 다시 굽지 않게 */
+      const pw = Math.min(PROP_VEC_MAX_PX, Math.max(64, Math.ceil(box.w * scale / 64) * 64));
+      const unit = pw / box.w;
+      const ph = Math.max(8, Math.round(box.h * unit));
+      const key = [prop.type, line, fill, prop.recolorTo || "-", prop.__eraseRev || 0, prop.erase ? 1 : 0, pw, ph].join("|");
+      if (prop.__vec && prop.__vecKey === key) return { canvas: prop.__vec, w: box.w, h: box.h };
+
+      const base = document.createElement("canvas");
+      base.width = pw; base.height = ph;
+      const bx = base.getContext("2d");
+      bx.setTransform(unit, 0, 0, unit, pw / 2, ph / 2);
+      bx.lineCap = "round"; bx.lineJoin = "round";
+      drawPropShape(bx, prop, line, fill);
+
+      const out = document.createElement("canvas");
+      out.width = pw; out.height = ph;
+      const ox = out.getContext("2d");
+      ox.drawImage(base, 0, 0);
+      if (prop.recolorTo) {
+        /* 그림 소품과 같은 방식 — 밝고 어두운 결은 두고 색상·채도만 갈아끼운다 */
+        ox.globalCompositeOperation = "color";
+        ox.fillStyle = prop.recolorTo;
+        ox.fillRect(0, 0, pw, ph);
+        /* 'color' 는 투명한 자리까지 칠하므로 원래 모양대로 다시 오린다.
+           ⚠ 도형을 여기서 다시 그리면 안 된다 — destination-in 은 그릴 때마다 교집합이라
+              획이 여러 개인 도형이 서로 깎여 나간다. 한 장으로 합쳐 둔 base 를 쓴다. */
+        ox.globalCompositeOperation = "destination-in";
+        ox.drawImage(base, 0, 0);
+      }
+      const surf = propSurface(prop);
+      const mask = surf ? propEraseMask(prop, surf.w, surf.h, false) : null;
+      if (mask) {
+        ox.globalCompositeOperation = "destination-out";
+        ox.drawImage(mask, 0, 0, pw, ph);
+      }
+      prop.__vec = out;
+      prop.__vecKey = key;
+      return { canvas: out, w: box.w, h: box.h };
+    } catch (e) { return null; }
+  }
+
+  function propEraseMask(prop, w, h, make) {
+    if (prop.__mask && prop.__mask.width === w && prop.__mask.height === h) return prop.__mask;
     if (!w || !h) return null;
+    const ready = !!(prop.__eraseImg && prop.__eraseImg.width);
+    /* ⚠ 저장된 자국이 있는데 그림을 아직 못 읽었으면 마스크를 만들지 않는다.
+       빈 마스크를 만들어 두면 그게 '최신본' 행세를 해서 자국을 영영 안 읽어 오고,
+       불러온 프로젝트의 지운 구멍이 안 뚫린다(2026-09-24 판에서 실측). */
+    if (prop.erase && !ready) return null;
     if (!make && !prop.erase) return null;
     const cv = document.createElement("canvas");
     cv.width = w; cv.height = h;
-    if (prop.erase && prop.__eraseImg && prop.__eraseImg.width) {
+    if (prop.erase && ready) {
       cv.getContext("2d").drawImage(prop.__eraseImg, 0, 0, w, h);
     }
     prop.__mask = cv;
@@ -4501,13 +4625,19 @@
   }
   /* 저장해 둔 지운 자국(문자열)을 그림으로 되살린다 — 프로젝트를 다시 열었을 때 */
   function propEraseRestore(prop) {
-    if (!prop.erase || prop.__eraseImg || prop.__eraseLoading) return;
+    /* ⚠ 이미 마스크를 들고 있으면 그게 지금 화면의 최신본이다. 저장해 둔 PNG 를 다시
+       읽을 이유가 없고, 읽으면 그 결과가 늦게 도착해 마스크를 갈아엎는다 —
+       실제로 연속해서 지울 때 방금 지운 자국이 통째로 날아갔다(2026-09-24 판). */
+    if (!prop.erase || prop.__mask || prop.__eraseImg || prop.__eraseLoading) return;
     prop.__eraseLoading = true;
     const im = new Image();
     im.onload = () => {
       prop.__eraseImg = im;
-      prop.__mask = null;
-      prop.__renderKey = "";
+      /* 읽는 사이에 새로 칠한 마스크가 생겼으면 그쪽이 최신이다 — 건드리지 않는다 */
+      if (!prop.__mask) {
+        prop.__renderKey = "";
+        prop.__vecKey = "";
+      }
       prop.__eraseLoading = false;
       requestRender();
     };
@@ -4575,7 +4705,7 @@
             cv.width = w; cv.height = h;
             const cx = cv.getContext("2d");
             cx.drawImage(pc, 0, 0, w, h);
-            const mask = propEraseMask(prop, raster, false);
+            const mask = propEraseMask(prop, w, h, false);
             if (mask) {
               cx.globalCompositeOperation = "destination-out";
               cx.drawImage(mask, 0, 0, w, h);
@@ -4596,6 +4726,28 @@
       c.restore();
       return;
     }
+    /* ── 기본 도형(벡터) 소품 ──────────────────────────────────────────
+       그림 소품(PNG)과 달리 캔버스에 직접 그리는 12종이다. 여기에도 「소품 색」·
+       「소품 지우개」가 걸리게 한다(고객 문의 2026-09-25: "기본 도형은 색도 지우개도 안 된다").
+       색도 지우개도 안 쓰면 예전처럼 본 캔버스에 곧장 그린다 — 제일 싸고 제일 선명하다. */
+    propEraseRestore(prop);
+    if (prop.recolorTo || prop.__mask || (prop.erase && prop.__eraseImg)) {
+      const baked = propVecRender(c, prop, line, fill);
+      if (baked) {
+        c.drawImage(baked.canvas, -baked.w / 2, -baked.h / 2, baked.w, baked.h);
+        c.restore();
+        return;
+      }
+    }
+    drawPropShape(c, prop, line, fill);
+    c.restore();
+  }
+
+  /* 기본 도형 12종을 그리는 부분만 떼어낸 함수.
+     본 캔버스에도, 색·지우개를 먹이려고 따로 만든 캔버스에도 똑같이 쓴다.
+     ⚠ 여기서는 save()/restore() 를 하지 않는다(원형 링이 setLineDash 를 남긴다).
+        부르는 쪽이 감싸 준다. */
+  function drawPropShape(c, prop, line, fill) {
     switch (prop.type) {
       case "ring":
         c.beginPath();
@@ -4772,7 +4924,6 @@
         c.stroke();
         break;
     }
-    c.restore();
   }
 
   function characterBounds() {
@@ -6032,6 +6183,7 @@
         const before = beginMainChange();
         prop.erase = "";
         prop.__mask = null; prop.__eraseImg = null; prop.__render = null; prop.__renderKey = "";
+        prop.__vec = null; prop.__vecKey = "";
         prop.__eraseRev = (prop.__eraseRev || 0) + 1;
         requestRender();
         commitMainChange(before);
@@ -6559,10 +6711,10 @@
      가장 긴 변이 140 이 되게 맞춰 그려진다(fit). 그 역순으로 계산한다. */
   const propEraser = { on: false, size: 18, active: null };
   function propImageAt(prop, point) {
-    const raster = propImages[prop.type];
-    if (!raster || !(raster.naturalWidth || raster.width)) return null;
-    const w = raster.naturalWidth || raster.width, h = raster.naturalHeight || raster.height;
-    const fit = Math.min(140 / w, 140 / h);
+    /* 그림 소품이든 기본 도형이든 같은 식으로 다룬다 — 어디를 지울지 좌표만 바꿔 주면 된다 */
+    const surf = propSurface(prop);
+    if (!surf) return null;
+    const fit = surf.drawW / surf.w;     /* 가로·세로 같은 배율이라 붓이 동그랗게 유지된다 */
     const sc = prop.scale || 1;
     const rad = -(prop.rot || 0) * Math.PI / 180;
     let dx = point.x - prop.x, dy = point.y - prop.y;
@@ -6570,17 +6722,18 @@
     const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
     const lx = rx / sc, ly = ry / sc;
     return {
-      raster: raster,
-      x: (lx + w * fit / 2) / fit,
-      y: (ly + h * fit / 2) / fit,
+      raster: surf.raster,
+      surf: surf,
+      x: (lx + surf.drawW / 2) / fit,
+      y: (ly + surf.drawH / 2) / fit,
       r: Math.max(1, propEraser.size / (sc * fit)),
-      inside: Math.abs(lx) <= w * fit / 2 + 2 && Math.abs(ly) <= h * fit / 2 + 2
+      inside: Math.abs(lx) <= surf.drawW / 2 + 2 && Math.abs(ly) <= surf.drawH / 2 + 2
     };
   }
   function propEraseAt(prop, point) {
     const p = propImageAt(prop, point);
     if (!p) return false;
-    const mask = propEraseMask(prop, p.raster, true);
+    const mask = propEraseMask(prop, p.surf.w, p.surf.h, true);
     if (!mask) return false;
     const cx = mask.getContext("2d");
     cx.globalCompositeOperation = "source-over";
@@ -7897,6 +8050,11 @@
     const out = {};
     Object.keys(value).forEach(key => {
       if (["__proto__", "prototype", "constructor"].includes(key)) throw new Error(`${path}에 안전하지 않은 키가 있어.`);
+      /* __ 로 시작하는 건 전부 '그리려고 잠깐 들고 있는 것'(캔버스·이미지·되돌리기용 번호)이다.
+         저장할 값이 아니고, 캔버스·이미지는 일반 객체가 아니라 아래에서 "저장할 수 없는 값" 으로
+         막힌다. 실제로 소품을 한 번 지우면 __mask(캔버스)가 붙어 프로젝트 저장이 통째로
+         실패했다(2026-09-24 판). 저장에서는 건너뛰고, 불러올 때도 무시한다. */
+      if (key.charCodeAt(0) === 95 && key.charCodeAt(1) === 95) return;
       const item = value[key];
       if (item !== undefined) out[key] = cloneFiniteJson(item, `${path}.${key}`, depth + 1);
     });
