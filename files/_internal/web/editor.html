@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-25_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-26_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -791,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-25 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-26 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -2938,7 +2938,7 @@ window.gifenc=exports;})();
          (예전엔 "다음에 켤 때도 있어요"라고 알려놓고 실제론 없어지는 경우가 있었다) */
       if (!api || !api.save_png) { alert('폰트를 추가했어요: ' + fam + '\n(이번 실행에서만 쓸 수 있어요)'); return; }
       var manual = '\n\n계속 쓰려면 폰트 파일을 프로그램 폴더의 fonts 안에 직접 넣어 주세요.';
-      api.save_png(JSON.stringify({ dir: dir, name: file.name, b64: b64 })).then(function (res) {
+      api.save_png(JSON.stringify({ dir: dir, name: window.pbkSafeDirName(file.name), b64: b64 })).then(function (res) {
         res = typeof res === 'string' ? JSON.parse(res) : res;
         if (!(res && res.ok)) {
           alert('폰트를 추가했어요 — ' + fam + '\n지금 바로 쓸 수 있어요.\n\n' +
@@ -3552,6 +3552,44 @@ window.gifenc=exports;})();
   /* 파이썬에서 온 실패를 사람 말로 보여준다.
      예전엔 traceback 원문(File "editor.py", line ...)이 그대로 알림창에 떴다 —
      고객에겐 무슨 말인지도, 뭘 해야 할지도 안 보인다. 원문은 지원용으로 콘솔에만 남긴다. */
+  /* ---------- 옛 본체 덮어쓰기 방어 (2026-09-26) ----------
+     배포 중인 본체(APP_BUILD 2026-08-09_v16c)는 폴더에 저장할 때 같은 이름이 있으면
+     말없이 덮어쓴다 — collision·unique 를 아예 모른다(exe 안을 열어 실측).
+     덮어쓰기를 막는 코드는 소스에만 있고 빌드된 적이 없으며, 자동 업데이트는 화면만
+     바꾸므로 본체는 계속 그대로다. 그래서 화면 쪽에서 막는다.
+     판정은 save_sig_project 유무로 한다 — 덮어쓰기 방지와 같은 회차에 들어간 기능이다. */
+  window.pbkBodyOverwrites = function () {
+    var pv = window.pywebview;
+    /* 브라우저(다리 없음)와 미리보기용 흉내 다리(__mock)는 해당 없음 — 실제 파일을 안 쓴다 */
+    if (!pv || pv.__mock || !pv.api) return false;
+    var a = pv.api;
+    /* 다리가 다단계로 붙어 함수가 아직 없을 수 있다. save_png 조차 없으면 저장 자체가
+       안 되는 상태이므로 판정하지 않는다 — '아직 안 붙음' 과 '원래 없음' 을 가른다. */
+    if (typeof a.save_png !== 'function') return false;
+    return typeof a.save_sig_project !== 'function';
+  };
+  /* 폴더에 저장하는 이름 뒤에 날짜·시각을 붙여 겹치지 않게 한다.
+     새 본체에서는 이름을 그대로 둔다(본체가 알아서 "이름 (2)" 로 피한다). */
+  window.pbkSafeDirName = function (name) {
+    try {
+      if (!window.pbkBodyOverwrites()) return name;
+      var d = new Date();
+      var p = function (n) { return (n < 10 ? '0' : '') + n; };
+      var tag = '-' + p(d.getMonth() + 1) + p(d.getDate()) + '-' +
+                p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+      var s = String(name || '');
+      /* .pbsig.json 처럼 두 겹인 확장자는 통째로 지킨다 */
+      var twin = ['.pbsig.json'];
+      for (var k = 0; k < twin.length; k++) {
+        if (s.toLowerCase().slice(-twin[k].length) === twin[k]) {
+          return s.slice(0, s.length - twin[k].length) + tag + s.slice(s.length - twin[k].length);
+        }
+      }
+      var i = s.lastIndexOf('.');
+      return i > 0 ? s.slice(0, i) + tag + s.slice(i) : s + tag;
+    } catch (e) { return name; }
+  };
+
   function apiErr(msg, err) {
     var raw = (err && err.stack) ? err.stack : String(err == null ? '' : err);
     if (raw) console.error('[화보집 키트] ' + msg + '\n' + raw);
@@ -5815,7 +5853,7 @@ window.gifenc=exports;})();
           /* 한 쪽씩 원본 화질로 — 완성본(EXE)과 같은 선명도로 나오게 */
           withHiRes([i], function () {
             return renderPagePNG(i, 2, noBg).then(function (b64) {
-              return api.save_png(JSON.stringify({ dir: dir, name: pngName(i, noBg), b64: b64 }));
+              return api.save_png(JSON.stringify({ dir: dir, name: window.pbkSafeDirName(pngName(i, noBg)), b64: b64 }));
             });
           }).then(function (r) {
             /* 파이썬은 실패해도 예외 대신 {err:...} 를 정상으로 돌려준다 —
@@ -23171,7 +23209,7 @@ window.gifenc=exports;})();
               str += String.fromCharCode.apply(null, t.bytes.subarray(i, i + 32768));
             }
             busy(true, 'GIF 저장 중… ' + (k + 1) + ' / 6');
-            api.save_png(JSON.stringify({ dir: setDir, name: t.name, b64: btoa(str),
+            api.save_png(JSON.stringify({ dir: setDir, name: window.pbkSafeDirName(t.name), b64: btoa(str),
               max_bytes: GIF_BOTTOM6_SPEC.limitBytes })).then(function (r2) {
               r2 = typeof r2 === 'string' ? JSON.parse(r2) : r2;
               if (r2 && r2.ok) {
@@ -23251,7 +23289,7 @@ window.gifenc=exports;})();
              dir 유무만 보면 오류까지 '취소'로 뭉개져 아무 말 없이 끝난다. */
           if (res && res.err) { busy(false); apiErr('저장할 폴더를 열지 못했어요.', res.err); return; }
           if (!res || !res.dir) { busy(false); return; }
-          return api.save_png(JSON.stringify({ dir: res.dir, name: name, b64: b64,
+          return api.save_png(JSON.stringify({ dir: res.dir, name: window.pbkSafeDirName(name), b64: b64,
             max_bytes: GIF.mode === 'bottom' ? GIF_BOTTOM6_SPEC.limitBytes : null })).then(function (r2) {
             busy(false);
             r2 = typeof r2 === 'string' ? JSON.parse(r2) : r2;
@@ -25781,8 +25819,9 @@ window.gifenc=exports;})();
           /* ⚠ 이름이 고정이라 두 번째 배너를 같은 폴더에 저장하면 첫 번째가 사라졌다.
              사용자가 정한 꼬리표를 붙여 겹치지 않게 한다. */
           var reqName = '하단배너' + bnTileTag + '_' + String(nums[i]).padStart(2, '0') + '.' + tiles[i].ext;
-          return api.save_png(JSON.stringify({ dir: res.dir, name: reqName,
-            /* 이름이 겹쳐도 덮어쓰지 말고 새 이름으로 — 파이썬 기본값과 같지만 의도를 분명히 한다 */
+          return api.save_png(JSON.stringify({ dir: res.dir, name: window.pbkSafeDirName(reqName),
+            /* 이름이 겹쳐도 덮어쓰지 말고 새 이름으로 — 파이썬 기본값과 같지만 의도를 분명히 한다.
+               ⚠ 옛 본체는 이 말을 모르고 덮어쓰므로 이름 쪽에서도 막는다(pbkSafeDirName) */
             collision: 'unique', b64: tiles[i].b64 }))
             .then(function (rr) {
               /* 파이썬은 실패해도 예외 대신 {err:...} 를 정상으로 돌려준다 —

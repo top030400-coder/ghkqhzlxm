@@ -8504,15 +8504,21 @@
         for (let i = 0; i < bytes.length; i += 32768) {
           bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
         }
+        /* ⚠ 여기는 저장창을 못 쓴다 — 저장창 경로는 PNG 필터라 이름 끝을 .png 로 바꿔 버린다.
+           그런데 옛 본체는 폴더 저장에서 같은 이름을 말없이 덮어쓴다. 프로젝트 이름이
+           기본값이면 매번 같은 이름이라 **앞서 만든 작업이 통째로 사라졌다**(고객 신고 2026-09-25).
+           그래서 그 본체에서는 이름 뒤에 날짜·시각을 붙인다. */
+        const safeName = typeof window.pbkSafeDirName === "function"
+          ? window.pbkSafeDirName(fallbackName) : fallbackName;
         const result = parseApiResult(await api.save_png(JSON.stringify({
-          dir: picked.dir, name: fallbackName, b64: btoa(bin)
+          dir: picked.dir, name: safeName, b64: btoa(bin), collision: "unique"
         })));
         if (result.err) throw new Error(result.err);
         if (!result.ok) {
           showExportStatus("프로젝트 저장을 취소했어.");
           return { ok: false, cancel: true };
         }
-        currentProjectPath = result.path || fallbackName;
+        currentProjectPath = result.path || safeName;
         setProjectDirty(false);
         showExportStatus(`프로젝트 JSON 저장 완료 · ${currentProjectPath}`);
         return { ok: true, legacyBridge: true, path: currentProjectPath };
@@ -8622,7 +8628,11 @@
       const api = window.pywebview && window.pywebview.api;
       if (api && typeof api.save_png === "function") {
         let dir = null;
-        if (files.length > 1) {
+        /* ⚠ 옛 본체(2026-08-09 판)는 폴더에 저장할 때 같은 이름이 있으면 말없이 덮어쓴다 —
+           collision:"unique" 를 아예 모른다(exe 안을 열어 실측). 그 본체에서는 폴더 모드를
+           쓰지 않고 저장창을 하나씩 띄워, 겹칠 때 윈도우가 물어보게 한다. */
+        const bodyOverwrites = typeof window.pbkBodyOverwrites === "function" && window.pbkBodyOverwrites();
+        if (files.length > 1 && !bodyOverwrites) {
           if (typeof api.pick_dir !== "function") throw new Error("여러 PNG를 저장할 폴더 선택 기능을 사용할 수 없어.");
           setProjectIoBusy(true, "저장 폴더 선택 중…");
           showExportStatus(`${files.length}종을 저장할 폴더를 선택해 줘.`);
@@ -8642,7 +8652,11 @@
           const payload = { name: file.name, b64 };
           if (dir) Object.assign(payload, { dir, collision: "unique" });
           setProjectIoBusy(true, files.length > 1 ? `PNG 저장 중 · ${fileIndex + 1}/${files.length}` : "PNG 저장 위치 선택 중…");
-          showExportStatus(files.length > 1 ? `${fileIndex + 1}/${files.length} · ${file.name} 저장 중…` : `${file.name} 저장 위치를 선택해 줘.`);
+          showExportStatus(dir
+            ? `${fileIndex + 1}/${files.length} · ${file.name} 저장 중…`
+            : (files.length > 1
+              ? `${fileIndex + 1}/${files.length} · ${file.name} 저장 위치를 선택해 줘.`
+              : `${file.name} 저장 위치를 선택해 줘.`));
           await nextPaint();
           const saved = parseApiResult(await api.save_png(JSON.stringify(payload)));
           if (saved.err) throw new Error(saved.err);
@@ -8650,6 +8664,11 @@
             if (!savedResults.length) {
               showExportStatus("PNG 저장을 취소했어.");
               return { cancel: true, saved: [] };
+            }
+            /* 저장창을 하나씩 띄우는 경우엔 중간 취소가 잘못이 아니다 — 거기까지 저장하고 멈춘다 */
+            if (!dir) {
+              showExportStatus(`${savedResults.length}장 저장하고 멈췄어 · ${savedResults.map(item => item.actualName).join(" · ")}`);
+              return { ok: true, partial: true, saved: savedResults };
             }
             throw new Error(`${file.name} 저장을 취소했어.`);
           }
