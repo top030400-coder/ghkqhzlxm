@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 화보집 키트 배포판 · 업데이트 2026-09-26_v1 -->
+<!-- 화보집 키트 배포판 · 업데이트 2026-09-27_v1 -->
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -791,7 +791,7 @@
 <div id="licGate"><div class="licSpin"></div></div>
 
 <header id="top">
-  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-26 v1</span></div>
+  <div class="brand">📖 화보집 키트<span id="kitVer" title="쓰고 있는 버전 — 문의하실 때 알려주세요">2026-09-27 v1</span></div>
   <div class="tgroup" id="modeTabs">
     <button id="tabBook" class="on">📖 화보집</button>
     <button id="tabBanner">🎏 배너</button>
@@ -2671,6 +2671,7 @@ window.gifenc=exports;})();
      ※ 폴더를 열어주는 기능은 프로그램(exe) 쪽에 없어서 못 만든다 —
         대신 파일을 직접 고르게 해서 "폴더에 넣기" 단계 자체를 없앴다. */
   var FONT_ADD = '__addfont';
+  var FONT_NOONNU = '__noonnufont';   /* 글꼴 목록마다 붙는 「눈누 웹폰트 가져오기」 */
   var fontSels = [];            /* 폰트 목록 셀렉트들 — 새 폰트를 넣으면 전부 다시 채운다 */
   function fontSelPrep(sel) {
     if (!sel) return;
@@ -2694,6 +2695,11 @@ window.gifenc=exports;})();
       o.value = FONT_ADD;
       o.textContent = '＋ 폰트 파일 추가…';
       sel.appendChild(o);
+      /* 글꼴 목록은 전부 이 함수를 거치므로, 여기 한 줄이면 모든 글꼴 칸에 같이 생긴다 */
+      var n = document.createElement('option');
+      n.value = FONT_NOONNU;
+      n.textContent = '＋ 눈누 웹폰트 가져오기…';
+      sel.appendChild(n);
     }, 0);
   }
   /* ttf/otf 안의 진짜 글꼴 이름 읽기 — 실패하면 파일명을 쓴다.
@@ -2831,6 +2837,23 @@ window.gifenc=exports;})();
       }
       return btoa(parts.join(''));
     }).catch(function () { return fontFetchTry(fileName, idx + 1); });
+  }
+  /* 눈누 코드를 받아 기존 글꼴 추가 길로 흘려보낸다 */
+  function pbkNoonnuPick() {
+    window.pbkNoonnuAsk().then(function (text) {
+      if (text == null || !String(text).trim()) return;
+      busy(true, '눈누 글꼴 받는 중…');
+      return window.pbkNoonnuFetchAll(text).then(function (files) {
+        busy(false);
+        if (!files.length) return;
+        /* 굵기별로 여러 개일 수 있다 — 폴더째 불러오기와 같은 '모아서 알리기' 로 묶는다 */
+        if (files.length > 1) fontBulkStart(files.length);
+        files.forEach(function (f) { fontAddLoad(f, files.length > 1); });
+      });
+    }).catch(function (e) {
+      busy(false);
+      alert('눈누 글꼴을 가져오지 못했어요.\n\n' + String((e && e.message) || e));
+    });
   }
   function fontAddPick() {
     var inp = document.getElementById('fontAddFile');
@@ -2984,12 +3007,15 @@ window.gifenc=exports;})();
      캡처 단계라 각 셀렉트의 onchange(폰트 적용)보다 먼저 잡아 막을 수 있다. */
   document.addEventListener('change', function (ev) {
     var sel = ev.target;
-    if (!sel || sel.tagName !== 'SELECT' || sel.value !== FONT_ADD) return;
+    if (!sel || sel.tagName !== 'SELECT') return;
+    if (sel.value !== FONT_ADD && sel.value !== FONT_NOONNU) return;
+    var wasNoonnu = sel.value === FONT_NOONNU;
     ev.stopPropagation();
     ev.stopImmediatePropagation();
     ev.preventDefault();
     sel.value = sel.dataset.prevFont || (sel.querySelector('option') || {}).value || '-1';
-    fontAddPick();
+    if (wasNoonnu) pbkNoonnuPick();
+    else fontAddPick();
   }, true);
   /* 되돌릴 값을 기억해 둔다(고르기 전 값) */
   document.addEventListener('mousedown', function (ev) {
@@ -3552,6 +3578,192 @@ window.gifenc=exports;})();
   /* 파이썬에서 온 실패를 사람 말로 보여준다.
      예전엔 traceback 원문(File "editor.py", line ...)이 그대로 알림창에 떴다 —
      고객에겐 무슨 말인지도, 뭘 해야 할지도 안 보인다. 원문은 지원용으로 콘솔에만 남긴다. */
+  /* ---------- 눈누 웹폰트 가져오기 (2026-09-27) ----------
+     눈누에서 「웹폰트로 사용」 코드를 복사해 붙여넣으면 그 안의 폰트 주소를 읽어 받아온다.
+     받아온 바이트는 File 로 만들어 **기존 글꼴 추가 길에 그대로** 넘긴다 —
+     등록·보관·목록 갱신을 새로 짜지 않는다. */
+  var PBK_NOONNU_MAX = 12 * 1024 * 1024;        /* 파일 하나 12MB 까지 */
+  var PBK_NOONNU_EXT = /\.(woff2|woff|ttf|otf)(\?|#|$)/i;
+
+  /* 붙여넣은 글에서 진짜 폰트 파일 주소를 뽑는다.
+     @font-face 코드면 url('…') 안을, 주소만 넣었으면 그대로 쓴다. */
+  /* 받아도 되는 곳만 — 받은 모듈이 정한 네 곳과 같다. 눈누는 jsdelivr 를 쓴다.
+     아무 주소나 받게 두면 고객 PC 를 모르는 서버에 붙이는 통로가 된다. */
+  var PBK_NOONNU_HOSTS = ['cdn.jsdelivr.net', 'fastly.jsdelivr.net', 'fonts.gstatic.com', 'raw.githubusercontent.com'];
+
+  /* 한 덩이(@font-face 하나 또는 주소 하나)에서 쓸 주소를 고른다 */
+  function pbkNoonnuOne(block, whole) {
+    var urls = [], m, re = /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
+    while ((m = re.exec(block))) urls.push(m[1].trim());
+    if (!urls.length) {
+      var bare = block.match(/https?:\/\/[^\s'"()]+/i);
+      if (bare) urls.push(bare[0]);
+    }
+    if (!urls.length) return null;
+    var pick = null;
+    ['woff2', 'woff', 'ttf', 'otf'].forEach(function (ext) {
+      if (pick) return;
+      for (var i = 0; i < urls.length; i++) {
+        if (new RegExp('\\.' + ext + '(\\?|#|$)', 'i').test(urls[i])) { pick = urls[i]; return; }
+      }
+    });
+    if (!pick) pick = urls[0];
+    var fam = '', fm = block.match(/font-family\s*:\s*['"]?([^'";}]+)/i);
+    if (fm) fam = fm[1].trim();
+    if (!fam && whole) { fm = whole.match(/font-family\s*:\s*['"]?([^'";}]+)/i); if (fm) fam = fm[1].trim(); }
+    var wt = '', wm = block.match(/font-weight\s*:\s*(\d{2,3})/i);
+    if (wm) wt = wm[1];
+    var file = '';
+    try { file = decodeURIComponent(pick.split(/[?#]/)[0].split('/').pop() || ''); } catch (e) { file = pick.split('/').pop() || ''; }
+    return { url: pick, family: fam, weight: wt, file: file };
+  }
+
+  /* 주소가 받아도 되는 곳인지 */
+  function pbkNoonnuAllow(u) {
+    var parsed;
+    try { parsed = new URL(u); } catch (e) { return '주소를 읽을 수 없어요: ' + u; }
+    if (parsed.protocol !== 'https:') return '안전한 주소(https://…)만 받을 수 있어요.';
+    if (parsed.username || parsed.password) return '아이디·비밀번호가 든 주소는 받을 수 없어요.';
+    if (PBK_NOONNU_HOSTS.indexOf(parsed.hostname.toLowerCase()) < 0) {
+      return '눈누가 쓰는 곳이 아니라서 받지 않았어요.\n받을 수 있는 곳 — ' + PBK_NOONNU_HOSTS.join(', ') +
+        '\n받은 곳 — ' + parsed.hostname +
+        '\n\n그 글꼴 파일을 내려받으신 뒤 「＋ 폰트 파일 추가…」 로 넣으셔도 됩니다.';
+    }
+    if (!PBK_NOONNU_EXT.test(parsed.pathname)) return 'woff2 · woff · ttf · otf 파일만 받을 수 있어요.\n받은 주소: ' + u;
+    return null;
+  }
+
+  /* 붙여넣은 글에서 받을 것을 **전부** 뽑는다.
+     눈누 「웹폰트로 사용」 박스는 보통 굵기별로 @font-face 가 여러 개다(수트는 9개).
+     하나만 가져오면 고객이 고른 굵기가 아닐 수 있어서 다 가져온다. */
+  window.pbkNoonnuParseAll = function (text) {
+    var raw = String(text == null ? '' : text).trim();
+    if (!raw) return { err: '내용이 비어 있어요.' };
+    if (raw.length > 50000) return { err: '붙여넣은 내용이 너무 길어요.' };
+    if (/noonnu\.cc/i.test(raw) && !PBK_NOONNU_EXT.test(raw)) {
+      return { err: '눈누 소개 페이지 주소로는 못 불러와요.\n그 글꼴 화면의 「웹폰트로 사용」 코드를 복사해 붙여넣어 주세요.' };
+    }
+    var blocks = raw.match(/@font-face\s*\{[^}]*\}/gi);
+    var items = [];
+    if (blocks && blocks.length) {
+      blocks.forEach(function (b) { var one = pbkNoonnuOne(b, raw); if (one) items.push(one); });
+    } else {
+      var one = pbkNoonnuOne(raw, raw);
+      if (one) items.push(one);
+    }
+    if (!items.length) {
+      return { err: '폰트 파일 주소를 찾지 못했어요.\n「웹폰트로 사용」 코드 전체나 코드 안의 https://… 주소를 넣어 주세요.' };
+    }
+    /* 같은 주소는 한 번만 */
+    var seen = {}, uniq = [];
+    items.forEach(function (it) { if (seen[it.url]) return; seen[it.url] = 1; uniq.push(it); });
+    /* 받아도 되는 곳인지 — 하나라도 안 되면 알려 주고 멈춘다 */
+    for (var i = 0; i < uniq.length; i++) {
+      var why = pbkNoonnuAllow(uniq[i].url);
+      if (why) return { err: why };
+    }
+    if (uniq.length > 12) return { err: '한 번에 12개까지만 받을 수 있어요. (찾은 글꼴 ' + uniq.length + '개)' };
+    return { items: uniq };
+  };
+
+  /* 예전 이름 — 첫 한 개만 돌려준다(하위 호환) */
+  window.pbkNoonnuParse = function (text) {
+    var got = window.pbkNoonnuParseAll(text);
+    if (got.err) return { err: got.err };
+    return got.items[0];
+  };
+
+  /* 받아서 File 로 돌려준다. 기존 글꼴 추가 함수들이 File 을 받으므로 그대로 넘길 수 있다. */
+  /* 한 개를 받아 File 로. 기존 글꼴 추가 함수들이 File 을 받으므로 그대로 넘길 수 있다. */
+  function pbkNoonnuGet(it, tagWeight) {
+    var ctl = null, timer = 0;
+    try { ctl = new AbortController(); timer = setTimeout(function () { try { ctl.abort(); } catch (e) {} }, 20000); } catch (e) {}
+    /* redirect:'error' — 받아도 되는 곳을 확인해 놓고 다른 곳으로 넘겨지면 소용이 없다 */
+    var opt = { credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' };
+    if (ctl) opt.signal = ctl.signal;
+    return fetch(it.url, opt).then(function (r) {
+      if (!r.ok) throw new Error('받지 못했어요 (HTTP ' + r.status + ')\n주소가 맞는지 확인해 주세요.');
+      var len = Number(r.headers.get('content-length') || 0);
+      if (len && len > PBK_NOONNU_MAX) {
+        throw new Error('파일이 너무 커요 (' + (len / 1048576).toFixed(1) + 'MB).\n12MB 까지만 받을 수 있어요.');
+      }
+      return r.arrayBuffer();
+    }).then(function (buf) {
+      if (timer) clearTimeout(timer);
+      if (!buf || !buf.byteLength) throw new Error('받은 파일이 비어 있어요.');
+      if (buf.byteLength > PBK_NOONNU_MAX) {
+        throw new Error('파일이 너무 커요 (' + (buf.byteLength / 1048576).toFixed(1) + 'MB).\n12MB 까지만 받을 수 있어요.');
+      }
+      var ext = (it.file.match(PBK_NOONNU_EXT) || [, 'woff'])[1].toLowerCase();
+      var stem = (it.family || it.file.replace(/\.[^.]+$/, '') || '눈누글꼴').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_');
+      if (tagWeight && it.weight) stem += '_' + it.weight;   /* 여러 개일 때만 — 하나뿐이면 이름을 깨끗하게 */
+      var mime = ext === 'woff2' ? 'font/woff2' : ext === 'woff' ? 'font/woff' : ext === 'otf' ? 'font/otf' : 'font/ttf';
+      return new File([buf], stem + '.' + ext, { type: mime });
+    }, function (e) {
+      if (timer) clearTimeout(timer);
+      var msg = String((e && e.message) || e);
+      if (e && e.name === 'AbortError') throw new Error('받는 데 너무 오래 걸려서 멈췄어요.\n잠시 뒤 다시 해 보시거나, 글꼴 파일을 내려받아 「＋ 폰트 파일 추가…」 로 넣어 주세요.');
+      if (/Failed to fetch|NetworkError|network|redirect/i.test(msg)) {
+        throw new Error('인터넷에서 글꼴을 받지 못했어요.\n연결을 확인하시거나, 글꼴 파일을 내려받아 「＋ 폰트 파일 추가…」 로 넣어 주세요.');
+      }
+      throw e;
+    });
+  }
+
+  /* 붙여넣은 것 전부를 받아 File 목록으로 */
+  window.pbkNoonnuFetchAll = function (text) {
+    var got = window.pbkNoonnuParseAll(text);
+    if (got.err) return Promise.reject(new Error(got.err));
+    var files = [];
+    var many = got.items.length > 1;
+    return got.items.reduce(function (chain, it) {
+      return chain.then(function () {
+        return pbkNoonnuGet(it, many).then(function (f) { files.push(f); });
+      });
+    }, Promise.resolve()).then(function () { return files; });
+  };
+
+  /* 예전 이름 — 첫 한 개만 */
+  window.pbkNoonnuFetch = function (text) {
+    return window.pbkNoonnuFetchAll(text).then(function (files) { return files[0]; });
+  };
+
+  /* 코드를 붙여넣는 작은 창. 웹뷰의 prompt() 는 안 뜰 수 있어 화면 안에 직접 만든다.
+     askName 과 같은 모양을 쓰되, 코드가 길어서 여러 줄 입력으로 둔다. */
+  window.pbkNoonnuAsk = function () {
+    return new Promise(function (res) {
+      var ov = document.createElement('div');
+      ov.className = 'askOv';
+      ov.innerHTML = '<div class="askBox" style="max-width:560px">'
+        + '<h3>눈누 웹폰트 가져오기</h3>'
+        + '<p class="askHint" style="white-space:pre-line"></p>'
+        + '<textarea id="nnInp" rows="5" spellcheck="false" style="width:100%;box-sizing:border-box;'
+        + 'font:12px/1.5 Consolas,monospace;resize:vertical"></textarea>'
+        + '<p class="askHint" id="nnWarn" style="margin-top:8px;white-space:pre-line"></p>'
+        + '<div class="askBtns"><button id="nnNo">취소</button>'
+        + '<button id="nnYes" class="pri">가져오기</button></div></div>';
+      ov.querySelector('.askHint').textContent =
+        '눈누에서 쓰실 글꼴을 열고 「웹폰트로 사용」 코드를 복사해 아래에 붙여넣어 주세요.\n'
+        + '코드 대신 그 안의 https://… 파일 주소만 넣으셔도 됩니다.';
+      ov.querySelector('#nnWarn').textContent =
+        '· 글꼴마다 쓸 수 있는 범위가 다릅니다. 방송·영상·상업적 이용이 되는지 그 글꼴 안내에서 확인해 주세요.\n'
+        + '· 받은 글꼴은 이 PC 에만 저장됩니다. 글꼴 파일을 다시 나눠 주는 것은 막는 글꼴이 많습니다 —\n'
+        + '  프로젝트 파일이나 완성본(EXE·HTML)을 남에게 주실 때는 그 글꼴 안내를 먼저 확인해 주세요.\n'
+        + '· 글꼴 사용 책임은 쓰시는 분께 있습니다. 화보집 키트가 권리를 확인해 드리지는 못합니다.\n'
+        + '· 눈누 소개 페이지 주소로는 못 불러옵니다.';
+      document.body.appendChild(ov);
+      var inp = ov.querySelector('#nnInp');
+      function done(v) { if (ov.parentNode) ov.parentNode.removeChild(ov); res(v); }
+      ov.querySelector('#nnNo').onclick = function () { done(null); };
+      ov.querySelector('#nnYes').onclick = function () { done(inp.value); };
+      inp.onkeydown = function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); done(null); }
+        else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); done(inp.value); }
+      };
+      setTimeout(function () { inp.focus(); }, 30);
+    });
+  };
+
   /* ---------- 옛 본체 덮어쓰기 방어 (2026-09-26) ----------
      배포 중인 본체(APP_BUILD 2026-08-09_v16c)는 폴더에 저장할 때 같은 이름이 있으면
      말없이 덮어쓴다 — collision·unique 를 아예 모른다(exe 안을 열어 실측).
@@ -5969,8 +6181,25 @@ window.gifenc=exports;})();
       } else if (!res.cancel) apiErr('완성본을 만들지 못했어요.', res.err);
     }).catch(function (e) { busy(false); apiErr('완성본을 만들지 못했어요.', e); });
   }
-  $('#btnExport').onclick = function () { doExport('exe'); };
-  $('#btnExportHtml').onclick = function () { doExport('html'); };
+  /* 완성본에는 쓰는 글자만 추려 글꼴이 심겨 나간다 — 그걸 팬에게 주면 글꼴을 나눠 주는 셈이다.
+     글꼴 파일의 수정·배포를 막는 글꼴이 많아 먼저 알린다. 한 번 보고 나면 그 실행에선 다시 안 묻는다. */
+  var PBK_FONT_EXPORT_TOLD = false;
+  function pbkFontExportOk() {
+    if (PBK_FONT_EXPORT_TOLD) return true;
+    var mine = (FONTS || []).filter(function (f) { return f && f.src === 'kit'; });
+    if (!mine.length) return true;
+    var names = mine.slice(0, 6).map(function (f) { return f.fam; }).join(', ');
+    if (mine.length > 6) names += ' 외 ' + (mine.length - 6) + '개';
+    var go = confirm('완성본에는 직접 넣으신 글꼴이 함께 심겨 나갑니다.\n(' + names + ')\n\n'
+      + '받는 분 화면에서도 글자가 그대로 보이게 하려는 것입니다.\n'
+      + '다만 글꼴 파일을 고치거나 나눠 주는 것을 막는 글꼴도 있으니,\n'
+      + '이 완성본을 다른 분께 주실 거면 그 글꼴의 사용 범위를 먼저 확인해 주세요.\n\n'
+      + '계속할까요?');
+    if (go) PBK_FONT_EXPORT_TOLD = true;
+    return go;
+  }
+  $('#btnExport').onclick = function () { if (pbkFontExportOk()) doExport('exe'); };
+  $('#btnExportHtml').onclick = function () { if (pbkFontExportOk()) doExport('html'); };
 
   /* ================= 저장 · 열기 · 새 책 =================
      ⚠ '마지막으로 저장한 상태' 를 따로 붙잡아 둔다. 예전엔 저장 뒤 30분을 만지다가

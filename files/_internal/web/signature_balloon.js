@@ -972,6 +972,7 @@
               </div>
               <div class="sig-font-upload">
                 <label class="sig-btn primary" for="sigPhraseFontFile">TTF · OTF · WOFF 추가</label>
+                <button type="button" class="sig-btn" id="sigPhraseFontNoonnu">눈누 웹폰트</button>
                 <span id="sigPhraseFontStatus">프로젝트 저장 시 글꼴도 함께 보관돼.</span>
                 <input id="sigPhraseFontFile" type="file" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2,application/font-woff">
               </div>
@@ -5984,6 +5985,42 @@
     bindToggle("sigPhraseMiddleEnabled", state.phrase, "middleStrokeEnabled", syncPhraseStyleControls);
     bindToggle("sigPhraseOuterEnabled", state.phrase, "outerStrokeEnabled", syncPhraseStyleControls);
     document.getElementById("sigPhraseFontFile").addEventListener("change", loadCustomPhraseFont);
+    /* 눈누에서 받아온 글꼴도 '파일로 넣은 것' 과 같은 길로 보낸다 —
+       받아온 바이트를 file 칸에 얹고 change 를 일으키면 위 핸들러가 그대로 처리한다. */
+    const sigNoonnu = document.getElementById("sigPhraseFontNoonnu");
+    if (sigNoonnu) {
+      sigNoonnu.addEventListener("click", async () => {
+        const status = document.getElementById("sigPhraseFontStatus");
+        const say = (message, warn = false) => {
+          if (!status) return;
+          status.textContent = message;
+          status.classList.toggle("warn", warn);
+        };
+        if (typeof window.pbkNoonnuAsk !== "function") { say("이 화면에서는 눈누 글꼴을 못 불러와.", true); return; }
+        let text = null;
+        try { text = await window.pbkNoonnuAsk(); } catch (e) { return; }
+        if (text == null || !String(text).trim()) return;
+        say("눈누 글꼴 받는 중…");
+        try {
+          /* 눈누 코드엔 굵기별로 여러 개가 들어 있을 수 있다 — 하나씩 차례로 넣는다 */
+          const files = await window.pbkNoonnuFetchAll(text);
+          const input = document.getElementById("sigPhraseFontFile");
+          for (const file of files) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            /* 앞 글꼴이 등록될 때까지 기다린다 — 한꺼번에 넣으면 뒤엣것이 앞을 덮는다 */
+            for (let wait = 0; wait < 60 && input.files.length; wait++) {
+              await new Promise(r => setTimeout(r, 100));
+            }
+          }
+          if (files.length > 1) say(`눈누 글꼴 ${files.length}개를 넣었어. 굵기별로 목록에 있어.`);
+        } catch (e) {
+          say(`눈누 글꼴 실패 · ${(e && e.message) || e}`, true);
+        }
+      });
+    }
     document.getElementById("sigPhraseToProp").addEventListener("click", event => cloneTextLayerToProp("phrase", event.currentTarget));
     /* [A9 규격] 숫자 복제 버튼이 사라져 바인딩도 함께 제거 — 숫자 복제는 cloneTextLayerToProp 안에서도 막는다 */
     bindValue("sigNum1Text", state.num1, "text", value => String(value).replace(/[^\d]/g, "").slice(0, 8));
@@ -8463,6 +8500,22 @@
         confirmLabel: "적용 후 저장"
       }))) return { cancel: true };
       if (!applyMaskStudio()) return { ok: false, err: "마스크를 적용하지 못했어." };
+    }
+    /* 직접 넣은 글꼴은 원본이 통째로 프로젝트에 들어간다 — 그 파일을 남에게 주면
+       글꼴 파일을 나눠 주는 셈이 된다. 막는 글꼴이 많아서 먼저 알린다.
+       (저장되는 내용은 그대로 둔다 — 안 넣고 저장하면 다른 PC 에서 글자가 바뀐다) */
+    const ownFonts = Array.from(customPhraseFonts.values());
+    if (ownFonts.length) {
+      const names = ownFonts.map(font => String(font.label || "").replace(/^내 글꼴 · /, "")).join(", ");
+      if (!(await askSigConfirm(
+        `이 프로젝트 파일에는 직접 넣으신 글꼴 ${ownFonts.length}개의 원본이 함께 들어가.\n` +
+        `(${names})\n\n` +
+        `다른 PC 에서 열어도 글자가 그대로 보이게 하려는 거야. 다만 글꼴 파일을 다시 나눠 주는 걸 ` +
+        `막는 글꼴도 있으니, 이 파일을 남에게 주실 거면 그 글꼴 안내를 먼저 확인해 줘.`, {
+        title: "글꼴이 함께 저장돼",
+        confirmLabel: "확인했어 · 저장",
+        cancelLabel: "그만두기"
+      }))) return { cancel: true };
     }
     setProjectIoBusy(true, "프로젝트 준비 중…");
     try {
