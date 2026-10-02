@@ -1,0 +1,99 @@
+(() => {
+  'use strict';
+  const base=new URL('.',document.currentScript.src),assets=window.PBK_FULL_SIGNATURE_ASSETS||[];
+  const byId=new Map(assets.map(a=>[a.id,a])),pending=new Map(),grids=new Map(),images=new Map();
+  const pageSize=18;let busy=false,mounted=false;
+  function loadBytes(asset){return new Promise((resolve,reject)=>{
+    const script=document.createElement('script');let registered=false;
+    const cleanup=()=>{clearTimeout(timer);pending.delete(asset.id);script.remove();};
+    const timer=setTimeout(()=>{cleanup();reject(new Error('이미지를 읽는 시간이 초과됐어요. 다시 눌러 주세요.'));},20000);
+    pending.set(asset.id,encoded=>{registered=true;cleanup();resolve(encoded);});
+    script.src=new URL(asset.dataFile,base).href;
+    script.onload=()=>{if(!registered){cleanup();reject(new Error('이미지 내용을 확인하지 못했어요.'));}};
+    script.onerror=()=>{cleanup();reject(new Error('이미지 파일을 읽지 못했어요.'));};document.head.appendChild(script);
+  });}
+  async function loadImage(asset){
+    if(images.has(asset.id))return images.get(asset.id);
+    const image=new Image(),encoded=await loadBytes(asset);image.src='data:image/png;base64,'+encoded;await image.decode();
+    images.set(asset.id,image);while(images.size>4)images.delete(images.keys().next().value);return image;
+  }
+  function status(message,error=false){
+    let el=document.getElementById('sigNativeLibraryStatus');
+    if(!el){el=document.createElement('p');el.id='sigNativeLibraryStatus';el.className='sig-upload-note';el.setAttribute('role','status');document.querySelector('#sigView .sig-panel-head')?.append(el);}
+    el.textContent=message;el.classList.toggle('error',error);
+  }
+  async function apply(id,options={}){
+    const asset=byId.get(id),native=window.PBKSignatureNative;if(!asset||!native)throw new Error('시그풍 화면이 아직 준비되지 않았어요.');
+    if(busy)throw new Error('이미지를 불러오는 중이에요. 잠시 후 다시 눌러 주세요.');
+    busy=true;document.getElementById('tabSig')?.click();status(asset.label+' 불러오는 중…');
+    try{
+      const image=await loadImage(asset),mode='background';
+      const result=asset.kind==='background'?native.applyBackground(asset,image,mode):native.applyProp(asset,image);
+      highlight();status(asset.label+(asset.kind==='background'?' 적용됨 · 되돌리기로 이전 구성을 복원할 수 있어요.':' 추가됨 · 클릭하거나 레이어에서 위치·크기·색을 편집하세요.'));
+      return {...result,kind:asset.kind,sourceSha256:asset.sha256};
+    }catch(error){status(error.message||String(error),true);throw error;}finally{busy=false;}
+  }
+  function highlight(){const id=window.PBKSignatureNative?.getSelection();document.querySelectorAll('#sigView [data-asset-id]').forEach(b=>{const on=b.dataset.assetId===id;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});}
+  function createCard(asset,kind){
+    const b=document.createElement('button');b.type='button';b.className=kind==='prop'?'sig-image-prop':'sig-preset'+(kind==='template'?' sig-template':'');
+    b.dataset.assetId=asset.id;b.title=asset.shortCategory+' · '+asset.label;
+    const title=document.createElement('span');title.textContent=asset.label;
+    const img=new Image();if(kind==='prop')img.loading='lazy';img.alt='';
+    if(kind==='prop')b.append(img,title);else{
+      const canvas=document.createElement('canvas');canvas.width=293;canvas.height=164;b.append(canvas,title);
+      img.onload=()=>{if(b.isConnected)window.PBKSignatureNative.thumbnail(canvas,asset,img,kind);};
+    }
+    img.onerror=()=>{b.disabled=true;b.title=asset.label+' 미리보기를 읽지 못했어요.';};img.src=new URL(asset.thumbnail,base).href;
+    b.addEventListener('click',()=>apply(asset.id,{mode:kind}).catch(()=>{}));return b;
+  }
+  function extendNativeGrid(kind,grid){
+    // Added artwork is a background choice; keep the original complete templates intact.
+    if(kind==='template')return;
+    let g=grids.get(kind);
+    const nodes=[...grid.querySelectorAll(':scope > button')].filter(n=>!n.dataset.assetId);
+    if(!g){
+      const controls=document.createElement('div');controls.className='sig-native-controls';
+      const search=document.createElement('input');search.type='search';search.placeholder='이름 · 테마 검색';search.setAttribute('aria-label',kind==='prop'?'그림 소품 검색':kind==='template'?'완성 템플릿 검색':'빠른 배경 검색');
+      const select=document.createElement('select');select.setAttribute('aria-label','배경 분류');
+      if(kind!=='prop'){
+        select.add(new Option('모든 디자인',''));select.add(new Option('기존 기본 디자인','native'));
+        for(const [id,label]of new Map(assets.filter(a=>a.kind==='background').map(a=>[a.categoryId,a.shortCategory])))select.add(new Option(label,String(id)));
+      }
+      const pager=document.createElement('div');pager.className='sig-native-pager';const prev=document.createElement('button'),next=document.createElement('button'),info=document.createElement('span');
+      prev.type=next.type='button';prev.textContent='이전';next.textContent='다음';pager.append(prev,info,next);
+      controls.append(search);if(kind!=='prop')controls.append(select);controls.append(pager);grid.before(controls);
+      g={grid,nodes,controls,search,select,prev,next,info,page:0};grids.set(kind,g);
+      search.addEventListener('input',()=>{g.page=0;render(kind);});select.addEventListener('change',()=>{g.page=0;render(kind);});
+      prev.addEventListener('click',()=>{g.page--;render(kind);});next.addEventListener('click',()=>{g.page++;render(kind);});
+    }else{g.nodes=nodes;g.page=0;}
+    render(kind);
+  }
+  function render(kind){
+    const g=grids.get(kind);if(!g)return;
+    const query=g.search.value.trim().toLocaleLowerCase(),category=kind==='prop'?(document.getElementById('sigPropCategoryFilter')?.value||''):g.select.value;
+    const nativeAllowed=!category||category==='native'||kind==='prop'&&!category.startsWith('full-');
+    const native=nativeAllowed?g.nodes.filter(b=>(b.title+' '+b.textContent).toLocaleLowerCase().includes(query)).map(node=>({node})):[];
+    const library=assets.filter(a=>a.kind===(kind==='prop'?'prop':'background')&&(!category||category===(kind==='prop'?'full-':'')+a.categoryId)&&(a.category+' '+a.label+' '+a.theme).toLocaleLowerCase().includes(query)).map(asset=>({asset}));
+    const rows=[...native,...library],pages=Math.max(1,Math.ceil(rows.length/pageSize));g.page=Math.max(0,Math.min(g.page,pages-1));
+    g.grid.replaceChildren(...rows.slice(g.page*pageSize,(g.page+1)*pageSize).map(r=>r.node||createCard(r.asset,kind)));
+    g.info.textContent=`${rows.length}종 · ${g.page+1} / ${pages}`;g.prev.disabled=g.page===0;g.next.disabled=g.page>=pages-1;highlight();
+  }
+  function mount(){
+    const n=window.PBKSignatureNative,select=document.getElementById('sigPropCategoryFilter');if(!n||!select)return false;
+    if(mounted)return true;mounted=true;
+    for(const [id,label]of new Map(assets.filter(a=>a.kind==='prop').map(a=>[a.categoryId,a.shortCategory])))select.add(new Option(label,'full-'+id));
+    select.options[0].textContent=`전체 ${n.originalCounts.prop+540}종`;
+    const texture=document.getElementById('sigBgTexture');
+    for(const [id,label]of new Map(assets.filter(a=>a.kind==='background').map(a=>[a.categoryId,a.shortCategory]))){
+      const group=document.createElement('optgroup');group.label=label;
+      for(const a of assets.filter(a=>a.categoryId===id))group.append(new Option(a.label,'full-'+a.id));texture.append(group);
+    }
+    const textureLabel=texture.closest('.sig-field')?.querySelector('label');if(textureLabel)textureLabel.textContent=`배경 그림 · ${n.originalCounts.background+150}종`;
+    const heading=document.querySelector('#sigView .sig-panel-head h2');heading.textContent=`완성 템플릿 ${n.originalCounts.template}종 · 빠른 배경 ${n.originalCounts.background+150}종`;
+    const hint=document.querySelector('#sigView .sig-panel-head p');hint.textContent='완성 템플릿은 기존 기본 디자인 8종이에요. 추가 일러스트는 아래 빠른 배경에서 골라요. 선택한 배경 모양과 사진·문구·숫자·직접 편집한 소품은 유지해요. 기본 템플릿의 손대지 않은 장식은 새 그림으로 바뀌고, 기본 외곽선 색은 새 배경에 맞춰져요.';
+    n.refresh();return true;
+  }
+  const css=document.createElement('link');css.rel='stylesheet';css.href=new URL('full_signature.css',base).href;document.head.append(css);
+  window.PBKFullSignature={assets,apply,mount,extendNativeGrid,register(id,encoded){pending.get(id)?.(encoded);},galleryState(kind){const g=grids.get(kind);return g?{page:g.page,query:g.search.value,category:g.select.value}:null;}};
+  if(!mount()){const observer=new MutationObserver(()=>{if(mount())observer.disconnect();});observer.observe(document.documentElement,{subtree:true,childList:true});}
+})();

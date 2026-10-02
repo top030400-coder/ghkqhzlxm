@@ -1,0 +1,357 @@
+/* Native PhotobookKit album layouts. Original art loads on demand, including file://. */
+(function(){
+ 'use strict';
+ if(!window.PBK||!window.PBK_FULL_ALBUM_DATA)throw Error('full_album requires engine.js and full_album_data.js');
+ if(window.PBKFullAlbum)return;
+ var defs=window.PBK_FULL_ALBUM_DATA,esc=PBK.esc,cache={},pending={},index={};
+ defs.forEach(function(d){index[d.id]=index[d.assetId]=d;});
+ function pct(n,b){return(n/b*100).toFixed(5)+'%';}
+ function bounds(o){return'position:absolute;left:'+pct(o.x,1200)+';top:'+pct(o.y,1600)+';width:'+pct(o.w,1200)+';height:'+pct(o.h,1600)+';';}
+ function clip(o){if(o.poly&&o.poly.length>=3)return'clip-path:polygon('+o.poly.map(function(p){return p[0]+'% '+p[1]+'%';}).join(',')+');';return'border-radius:'+(o.shape==='ellipse'?'50%':((o.r||0)/12).toFixed(4)+'cqw')+';';}
+ function prepare(id){var d=index[id];if(!d||cache[d.assetId])return Promise.resolve(d&&cache[d.assetId]);if(pending[d.assetId])return pending[d.assetId];
+  pending[d.assetId]=new Promise(function(ok,no){var script=document.createElement('script'),done=false,timer;
+   function finish(err){if(done)return;done=true;clearTimeout(timer);script.remove();if(err){delete pending[d.assetId];no(err);}else ok(cache[d.assetId]);}
+   script.src=d.module;script.async=true;script.onload=function(){finish(cache[d.assetId]?null:Error('그림을 읽지 못했어요: '+d.name));};script.onerror=function(){finish(Error('그림 파일을 찾지 못했어요: '+d.name));};timer=setTimeout(function(){finish(Error('그림을 불러오는 시간이 초과됐어요: '+d.name));},30000);document.head.appendChild(script);
+  });return pending[d.assetId];
+ }
+ function receive(id,data){cache[id]=data;document.querySelectorAll('.full-album-art[data-full-album="'+id+'"]').forEach(function(el){el.style.backgroundImage='url("'+data+'")';});}
+ function textHTML(c,t){if(!c.raw(t.k).trim())return'';var color=t.white?'#fff':(/^(body|msg|message|sub|date|credit|cap)/.test(t.k)?'var(--ink)':'var(--acc1)');
+  var st=bounds(t)+'z-index:4;display:flex;align-items:'+(t.valign==='middle'?'center':'flex-start')+';justify-content:'+(t.align==='right'?'flex-end':t.align==='center'?'center':'flex-start')+';text-align:'+(t.align||'left')+';font-family:var(--'+(t.font||'sans')+');font-size:'+(t.size/12).toFixed(4)+'cqw;font-weight:'+(t.weight||500)+';line-height:'+(t.lh||1.3)+';letter-spacing:'+(t.ls||0)+'em;color:'+color+';white-space:pre-wrap;overflow-wrap:anywhere;'+(t.white?'text-shadow:0 .12cqw .45cqw #0008;':'');
+  return'<div class="full-album-text" data-full-field="'+esc(t.k)+'" style="'+st+'"><span style="min-width:0;max-width:100%">'+c.t(t.k)+'</span></div>';
+ }
+ defs.forEach(function(d){if(PBK.byId(d.id))return;PBK.LAYOUTS.push({id:d.id,cat:d.cat,n:d.name,cls:'full-album full-album-'+d.categoryId,pnum:false,fullAssetId:d.assetId,
+  ph:d.photos.map(function(p,i){return{n:d.categoryId===10&&i>0?'프로필 사진 '+i:'사진 '+(i+1)};}),
+  tx:d.texts.map(function(t){return{k:t.k,n:t.n,d:t.d,m:!!t.m||t.k==='body'||t.k==='msg'||t.d.indexOf('\n')>=0};}),
+  h:function(c){var out='';d.photos.forEach(function(p,i){out+='<div class="ph full-album-photo" data-full-photo="'+i+'" style="'+bounds(p)+clip(p)+'z-index:1;background:var(--cover);">'+c.img(i)+'</div>';});
+   if(d.scrim)d.photos.forEach(function(p){out+='<div class="full-album-shade" aria-hidden="true" style="'+bounds(p)+clip(p)+'z-index:2;pointer-events:none;background:linear-gradient(180deg,transparent 35%,#0009 100%)"></div>';});
+   (d.panels||[]).forEach(function(p){out+='<div class="full-album-label-paper" style="'+bounds(p)+clip(p)+'z-index:2;background:var(--paper);pointer-events:none"></div>';});
+   var sample=c.img(0).indexOf('class="phS')>=0,src=cache[d.assetId]||d.art;if(!sample&&!cache[d.assetId])prepare(d.assetId).catch(function(e){console.warn(e.message);});
+   out+='<div class="full-album-art" data-full-album="'+d.assetId+'" aria-label="프레임 장식" style="position:absolute;inset:0;z-index:3;pointer-events:none;'+(sample?'':'background-image:url(&quot;'+src+'&quot;);background-size:100% 100%;background-repeat:no-repeat;')+'">'+(sample?'<img loading="lazy" decoding="async" src="'+d.art+'" alt="" style="width:100%;height:100%;pointer-events:none">':'')+'</div>';
+   d.texts.forEach(function(t){out+=textHTML(c,t);});return out;
+  }});
+ });
+ var style=document.createElement('style');style.textContent='body.partsOn .pv .full-album-art{pointer-events:auto!important}';document.head.appendChild(style);
+ function semantic(f){var k=f.k,n=f.n||'';if(/^(mast|title|word|head|headline|koTitle)$/.test(k)||/제호|큰 제목|큰 단어|챕터 제목|^제목/.test(n))return'title';if(/^(number|num|chapter|no)$/.test(k)||/챕터 번호/.test(n))return'number';if(/^(body|msg|message\d*|reply|cap|caption|intro|desc|letter|text)$/.test(k)||/본문|메시지|캡션|답글|소개 글/.test(n))return'body';if(/^(sub|ko|subtitle|season|date|credit|tag)$/.test(k)||/설명|부제|한 줄|시즌|날짜|상단 작은/.test(n))return'sub';return k;}
+ function migrateLegacyPage(pg){
+  var d=pg&&index[pg.layout];if(!d||Number(pg.fullAlbumSchema)>=2)return false;
+  var own=function(o,k){return Object.prototype.hasOwnProperty.call(o,k);},clone=function(v){return JSON.parse(JSON.stringify(v));};
+  var texts=pg.texts&&typeof pg.texts==='object'&&!Array.isArray(pg.texts)?pg.texts:{},snapshot=clone(texts),oldKeys=(d.legacyTextFields||[]).map(function(f){return f.k;}),styles={};pg.texts=texts;
+  ['tfonts','tsizes','tcolors','tfx'].forEach(function(k){if(pg[k]&&typeof pg[k]==='object'&&!Array.isArray(pg[k]))styles[k]=clone(pg[k]);});
+  if(Object.keys(snapshot).length||Object.keys(styles).length)pg.fullAlbumLegacy={schema:1,layout:pg.layout,texts:snapshot,styles:styles};
+  d.texts.forEach(function(f){var from=(d.legacyTextMap||{})[f.k];if(from&&own(snapshot,from)){
+   texts[f.k]=snapshot[from];if(from!==f.k)['tfonts','tsizes','tcolors','tfx'].forEach(function(k){if(styles[k]&&own(styles[k],from)){if(!pg[k]||typeof pg[k]!=='object')pg[k]={};pg[k][f.k]=clone(styles[k][from]);}else if(pg[k])delete pg[k][f.k];});
+  }else if(oldKeys.indexOf(f.k)<0&&own(snapshot,f.k)){
+   /* This key belonged to a different, previously selected layout. Its exact
+      original value stays in fullAlbumLegacy, rather than becoming new text. */
+   delete texts[f.k];['tfonts','tsizes','tcolors','tfx'].forEach(function(k){if(pg[k])delete pg[k][f.k];});
+  }});pg.fullAlbumSchema=2;return true;
+ }
+ function preservePageText(pg,oldDef,newDef){
+  if(pg&&newDef&&window.PBKAlbumDesign)PBKAlbumDesign.select(pg,newDef.id);
+  if(!pg||!oldDef||!newDef||(!index[oldDef.id]&&!index[newDef.id]))return;
+  if(index[oldDef.id])migrateLegacyPage(pg);if(index[newDef.id])pg.fullAlbumSchema=2;
+  var oldFields=oldDef.tx||[],newFields=newDef.tx||[],texts=pg.texts||(pg.texts={}),snapshot=JSON.parse(JSON.stringify(texts)),used={};
+  newFields.forEach(function(nf){var candidates=oldFields.filter(function(of){return semantic(of)===semantic(nf)&&!used[of.k];});
+   var of=candidates.find(function(f){return f.k===nf.k;})||candidates.find(function(f){return Object.prototype.hasOwnProperty.call(snapshot,f.k);});
+   if(!of)return;used[of.k]=1;if(!Object.prototype.hasOwnProperty.call(snapshot,of.k))return;texts[nf.k]=snapshot[of.k];
+   ['tfonts','tsizes','tcolors','tfx'].forEach(function(key){if(of.k===nf.k)return;if(pg[key]&&Object.prototype.hasOwnProperty.call(pg[key],of.k))pg[key][nf.k]=JSON.parse(JSON.stringify(pg[key][of.k]));else if(pg[key])delete pg[key][nf.k];});
+  });
+ }
+ var nativeNewPage=PBK.newPage;PBK.newPage=function(id){var pg=nativeNewPage.apply(PBK,arguments);if(index[id])pg.fullAlbumSchema=2;return pg;};
+ window.PBKFullAlbum={definitions:defs,ids:defs.map(function(d){return d.id;}),prepare:prepare,preservePageText:preservePageText,migrateLegacyPage:migrateLegacyPage,
+  prepareBook:async function(book){(book.pages||[]).forEach(migrateLegacyPage);var ids=Array.from(new Set((book.pages||[]).map(function(p){return p.layout;})));for(var i=0;i<ids.length;i++)await prepare(ids[i]);},
+  apply:async function(id,mode){var d=index[id];if(!d)throw Error('알 수 없는 화보집 시안');await prepare(d.assetId);if(!window.PBKPilotBridge||!PBKPilotBridge.chooseAlbum)throw Error('화보집 편집기가 준비되지 않았어요');PBKPilotBridge.chooseAlbum(d.id,mode==='add'?'add':'replace');return d;},
+  artworkSource:function(id){var d=index[id];return d?(cache[d.assetId]||d.art):null;},_receive:receive,isPrepared:function(id){var d=index[id];return !!(d&&cache[d.assetId]);},loadedCount:function(){return Object.keys(cache).length;}
+ };
+})();
+
+/* Added album designs only. Editable native photos/texts; no old full-page frame art. */
+(function(){
+ 'use strict';
+ var resolver=function(){return'';},cache={};
+ var themes={
+  '살구튤립':['tulip','#F2B39D','#344E3E','#FFF2E6','tulip'],
+  '레몬산책':['lemon','#F3D14A','#4C5E44','#FFF8DA','lemon'],
+  '라일락나비':['butterfly','#BAA5D9','#483C5E','#F0EAF7',''],
+  '민트우편':['mail','#9DCBB7','#305549','#EBF3ED','mail'],
+  '코랄벚꽃':['sakura','#ECA6AD','#6B394C','#FFF0EF','sakura'],
+  '네이비항해':['navy','#A7CADA','#233D54','#EFF5F5',''],
+  '피스타치오티타임':['tea','#AFBD82','#3E4B35','#F7F2DE','tea'],
+  '블루베리기록':['berry','#9BA6D3','#323A5E','#F1F1F9',''],
+  '장미빛새벽':['rose','#D7A3B5','#5E3843','#F8ECEF',''],
+  '라임기하':['lime','#D0DD73','#345B4C','#F4F4DF',''],
+  '살몬조개':['shell','#ECB297','#305158','#FFF1E8','ocean'],
+  '버터소풍':['picnic','#EBD17B','#715338','#FFF5DE',''],
+  '인디고별자리':['cosmic','#A4ADE4','#30345D','#F0F0FC','cosmic'],
+  '테라코타정원':['garden','#C18861','#233022','#F6EADC','garden'],
+  '아쿠아물방울':['aqua','#95D4D8','#2B5B68','#EDF8F6',''],
+  '라벤더뮤직':['music','#B9A5D8','#4C3B58','#F2ECF7','music'],
+  '귤빛리본':['ribbon','#EEA675','#673A37','#FFF0E4','ribbon'],
+  '세이지책갈피':['sage','#ACBBA4','#3C4B3A','#F2F2E7',''],
+  '루비체크':['ruby','#C67C91','#402132','#F9EAEF',''],
+  '페리윙클눈꽃':['winter','#A4B9E7','#3B4964','#F0F5FC','winter']
+ };
+ var simples={'튤립한송이':'살구튤립','레몬한조각':'레몬산책','작은나비':'라일락나비','우편메모':'민트우편','벚꽃한잎':'코랄벚꽃','작은항해':'네이비항해','찻잔여백':'피스타치오티타임','베리한알':'블루베리기록','리본매듭':'귤빛리본','기하한점':'라임기하'};
+ var specs={
+  tulip:{source:'outputs/화보키트-1800종-통합본-2026-09-30/PhotobookKit/_internal/web/full_assets/releases/2026-10-02_v2/root/60-23.png',description:'살구색 튤립 한 송이'},
+  tea:{source:'outputs/화보키트-1800종-통합본-2026-09-30/PhotobookKit/_internal/web/full_assets/releases/2026-10-02_v2/root/60-29.png',description:'찻잔'},
+  garden:{source:'outputs/화보키트-1800종-통합본-2026-09-30/PhotobookKit/_internal/web/full_assets/releases/2026-10-02_v2/root/60-07.png',description:'정원 물뿌리개'},
+  music:{source:'outputs/화보키트-1800종-통합본-2026-09-30/PhotobookKit/_internal/web/full_assets/releases/2026-10-02_v2/root/60-19.png',description:'음악 카세트'},
+  ribbon:{source:'outputs/화보키트-1800종-통합본-2026-09-30/PhotobookKit/_internal/web/full_assets/releases/2026-10-02_v2/root/57-17.png',description:'코랄 리본 매듭'}
+ };
+ ['lemon','mail','sakura','ocean','cosmic','winter'].forEach(function(t){specs[t]={source:'work/theme-assets/'+t+'/'+t+'-prop.png',description:t+' 독립 투명 소품'};});
+ function theme(d){var n=d.theme||'',simple=n.indexOf('심플_')===0,native=simples[n.replace('심플_','')]||n,t=themes[native]||themes['민트우편'];return {key:t[0],accent:t[1],deep:t[2],paper:t[3],asset:t[4],simple:simple,name:native};}
+ function r(x,y,w,h,extra){var a={x:x,y:y,w:w,h:h};if(extra)Object.keys(extra).forEach(function(k){a[k]=extra[k];});return a;}
+ function grid(n,b,cols,gap){var rows=Math.ceil(n/cols),w=(b.w-gap*(cols-1))/cols,h=(b.h-gap*(rows-1))/rows,a=[];for(var i=0;i<n;i++)a.push(r(b.x+i%cols*(w+gap),b.y+Math.floor(i/cols)*(h+gap),w,h));return a;}
+ function mainKey(d){return d.texts.some(function(t){return t.k==='title';})?'title':d.texts.some(function(t){return t.k==='word';})?'word':null;}
+ function field(p,k,b,size,extra){if(!k)return;p.fields[k]=Object.assign({box:b,size:size||34,font:'sans',weight:500,color:'deep',align:'left',lh:1.3},extra||{});}
+ function rest(p,d,b,size,exclude){var ts=d.texts.filter(function(t){return !p.fields[t.k]&&(!exclude||exclude.indexOf(t.k)<0);}),h=b.h/Math.max(1,ts.length);ts.forEach(function(t,i){field(p,t.k,r(b.x,b.y+i*h,b.w,h-Math.min(.7,h*.1)),size||30);});}
+ function surface(p,b,color,extra){p.surfaces.push(Object.assign({box:b,color:color||'accent',kind:'rect'},extra||{}));}
+ function art(p,b){p.art=r(b.x,b.y,b.w,b.h);}
+ function plan(d){
+  if(cache[d.id])return cache[d.id];
+  var n=d.photos.length,t=theme(d),v=(d.variant-1)%8,k=mainKey(d),p={id:d.id,category:d.cat,theme:t,tone:'paper',photos:[],fields:{},surfaces:[],art:null,ui:[],family:''};
+  switch(d.cat){
+   case'cover':
+    if(v%2===0){p.family='분할 활자 커버';p.tone='accent';p.photos=[r(36,0,64,100)];surface(p,r(0,0,36,100),'paper');field(p,k,r(5,25,27,33),96,{font:'serif',weight:800,lh:.95});rest(p,d,r(5,9,25,12),28);art(p,r(4,63,29,28));}
+    else{p.family='풀사진과 하단 제호';p.photos=[r(0,0,100,75)];p.tone='deep';field(p,k,r(7,79,86,12),111,{font:'serif',weight:700,color:'paper',lh:1});rest(p,d,r(7,93,62,5),27);Object.keys(p.fields).forEach(function(q){p.fields[q].color='paper';});art(p,r(75,78,21,19));}break;
+   case'front':
+    if(!n){p.family='컬러 편지';p.tone='deep';surface(p,r(11,9,78,81),'paper',{kind:'paper'});field(p,k,r(18,17,64,14),76,{font:'serif'});if(d.texts.some(function(x){return x.k==='body';}))field(p,'body',r(18,37,58,36),36,{font:'kserif',lh:1.7});rest(p,d,r(18,78,43,7),25);art(p,r(66,68,25,27));}
+    else{p.family='세로 인덱스';p.tone='accent';surface(p,r(0,0,61,100),'paper');p.photos=grid(n,r(65,9,31,75),1,3);field(p,k,r(7,10,48,14),81,{font:'serif'});if(d.texts.some(function(x){return x.k==='body';}))field(p,'body',r(7,31,45,48),36,{font:'kserif',lh:1.7});rest(p,d,r(7,83,44,10),27);art(p,r(67,81,28,18));}break;
+   case'divider':
+    if(v%2===0){p.family='큰 번호와 모티브';p.tone='accent';surface(p,r(0,0,40,100),'deep');field(p,'number',r(6,9,29,25),250,{font:'serif',color:'paper',lh:1});field(p,k,r(47,39,46,29),116,{font:'serif',lh:1.03});rest(p,d,r(47,76,46,12),35);art(p,r(43,4,52,34));}
+    else{p.family='가로 띠 챕터';p.tone='deep';surface(p,r(0,39,100,35),'accent');field(p,'number',r(7,8,40,22),210,{color:'paper',font:'serif'});field(p,k,r(7,43,86,24),150,{font:'serif',lh:1.03});rest(p,d,r(7,82,55,11),36);Object.keys(p.fields).filter(function(x){return x!=='title';}).forEach(function(x){p.fields[x].color='paper';});art(p,r(70,5,26,28));}break;
+   case'collage':
+    p.tone=v%2?'deep':'accent';
+    if(n===2){p.family='엇갈린 두 프린트';p.photos=[r(5,7,64,51,{print:true}),r(42,57,53,35,{print:true})];rest(p,d,r(7,67,29,20),47);art(p,r(71,12,24,23));}
+    else if(n===3){p.family='대형 포트레이트와 두 컷';p.photos=[r(5,8,57,82),r(66,8,29,39),r(66,51,29,39)];rest(p,d,r(5,93,78,5),29);art(p,r(66,85,30,15));}
+    else if(n===4){p.family='세로 한 컷과 사진열';p.photos=[r(4,5,49,79),r(57,5,39,25),r(57,33,39,25),r(57,61,39,25)];rest(p,d,r(5,88,67,8),39);art(p,r(77,83,20,17));}
+    else{p.family='큰 사진과 네 컷';p.photos=[r(5,5,90,45)].concat(grid(n-1,r(5,54,90,33),n-1,3));rest(p,d,r(5,91,72,6),31);art(p,r(80,88,17,11));}
+    if(p.tone==='deep')Object.keys(p.fields).forEach(function(q){p.fields[q].color='paper';});break;
+   case'selfie':
+    if(n===2){p.family='나란한 두 셀카';p.tone='accent';p.photos=grid(2,r(5,16,90,66),2,4);rest(p,d,r(5,87,65,10),31);art(p,r(74,3,22,12));}
+    else if(v%2===0){p.family='풀폭 사진 일기';p.photos=[r(0,0,100,71)];p.tone='accent';surface(p,r(0,71,100,29),'paper');rest(p,d,r(7,78,59,15),43);art(p,r(71,73,25,24));}
+    else{p.family='폰 화면과 세로 메모';p.tone='deep';p.photos=[r(31,6,63,86,{shape:'phone'})];surface(p,r(29,4,67,90),'ink',{kind:'phone'});p.ui.push({kind:'phone',box:r(31,6,63,86)});rest(p,d,r(5,35,20,44),42);Object.keys(p.fields).forEach(function(q){p.fields[q].color='paper';});art(p,r(4,8,23,22));}break;
+   case'column':
+    if(n===2){p.family='사진열과 에세이';p.tone='paper';surface(p,r(58,0,42,100),'accent');p.photos=grid(n,r(61,7,35,84),1,4);if(k)field(p,k,r(6,7,46,17),70,{font:'serif'});field(p,'body',r(6,k?30:10,45,k?58:77),36,{font:'kserif',lh:1.75});rest(p,d,r(6,90,45,7),25);art(p,r(34,3,20,18));}
+    else if(v%2===0){p.family='큰 사진 옆 본문';p.photos=[r(0,0,45,100)];p.tone='paper';surface(p,r(45,0,4,100),'accent');if(k)field(p,k,r(55,8,39,20),73,{font:'serif'});field(p,'body',r(55,k?34:12,38,k?53:73),35,{font:'kserif',lh:1.7});rest(p,d,r(55,91,38,6),25);}
+    else{p.family='사진 아래 편지';p.photos=[r(0,0,100,39)];p.tone='accent';surface(p,r(7,43,86,51),'paper',{kind:'paper'});if(k)field(p,k,r(13,48,72,12),62,{font:'serif'});field(p,'body',r(13,k?64:50,72,k?24:36),36,{font:'kserif',lh:1.7});rest(p,d,r(13,89,59,5),25);art(p,r(77,31,21,17));}break;
+   case'grid':
+    p.tone=v%2?'deep':'paper';surface(p,r(0,0,100,17),'accent');rest(p,d,r(6,4,74,10),51);Object.keys(p.fields).forEach(function(q){p.fields[q].font='serif';});
+    if(n===3){p.family=v%2?'세 장 세로 갤러리':'세 장 가로 갤러리';p.photos=grid(n,r(5,21,90,70),v%2?3:1,4);}
+    else{var cols=n===4?2:n===8?2:n===9?3:v%2?3:2;p.family=n+'컷 · '+cols+'열 갤러리';p.photos=grid(n,r(5,21,90,69),cols,3);}
+    p.ui.push({kind:'grid-index',box:r(5,92,90,5),count:n});art(p,r(81,1,16,14));break;
+   case'feature':
+    if(!n){p.family='테마 타이포 포스터';p.tone='deep';field(p,k,r(6,8,88,35),200,{font:'serif',color:'paper',lh:.97});surface(p,r(0,51,100,49),'accent');rest(p,d,r(7,70,43,22),40);art(p,r(47,48,49,45));}
+    else if(n===2){p.family='사진 사이 큰 단어';p.tone='accent';p.photos=[r(0,0,100,35),r(0,65,100,35)];field(p,k,r(6,39,88,17),177,{font:'serif',lh:1});rest(p,d,r(7,57,86,6),28);}
+    else if(d.texts.some(function(x){return x.k==='body';})){p.family='한 문장과 작은 사진';p.tone='paper';p.photos=[r(62,7,33,35)];field(p,k,r(6,8,49,28),120,{font:'serif',lh:1});field(p,'body',r(6,49,88,37),44,{font:'kserif',lh:1.7});art(p,r(7,83,21,14));}
+    else{p.family='세로 활자와 풀사진';p.tone='accent';p.photos=[r(28,0,72,100)];field(p,k,r(5,8,18,70),143,{font:'serif',vertical:true,lh:1});rest(p,d,r(4,81,21,15),27);art(p,r(2,60,23,19));}break;
+   case'finale':
+    if(!n){p.family='사진 없는 감사 편지';p.tone='deep';surface(p,r(11,12,78,73),'paper',{kind:'paper'});field(p,k,r(18,21,64,14),81,{font:'serif',align:'center'});if(d.texts.some(function(x){return x.k==='body';}))field(p,'body',r(20,42,60,29),39,{font:'kserif',align:'center',lh:1.7});rest(p,d,r(20,74,43,8),27);art(p,r(65,72,32,26));}
+    else if(n===2){p.family='두 장의 마지막 기억';p.tone='accent';p.photos=[r(5,8,56,36),r(40,52,55,38)];field(p,k,r(6,50,28,20),70,{font:'serif'});rest(p,d,r(6,76,29,17),26);art(p,r(71,8,23,26));}
+    else{p.family='작은 사진과 긴 여운';p.tone='paper';surface(p,r(56,0,44,100),'accent');p.photos=[r(7,12,42,44)];field(p,k,r(62,21,32,23),84,{font:'serif'});rest(p,d,r(62,52,32,35),31);art(p,r(16,66,28,25));}break;
+   case'sns':
+    p.tone='accent';
+    if(n===4){p.family='친구들 프로필과 한 장';p.photos=[r(6,27,88,57),r(10,5,17,12.75,{shape:'circle'}),r(41.5,5,17,12.75,{shape:'circle'}),r(73,5,17,12.75,{shape:'circle'})];surface(p,r(3,23,94,72),'paper',{kind:'card'});rest(p,d,r(8,87,74,7),29);}
+    else if(n===2){p.family='프로필 포스트';surface(p,r(5,5,90,90),'paper',{kind:'card'});p.photos=[r(8,21,84,59),r(10,8,14,10.5,{shape:'circle'})];p.ui.push({kind:'post-header',box:r(30,10,57,7)});rest(p,d,r(10,85,76,7),34);}
+    else if(d.texts.some(function(x){return x.k==='reply';})){p.family='사진과 두 답장';p.photos=[r(5,5,90,49)];surface(p,r(5,61,67,13),'paper',{kind:'bubble'});surface(p,r(28,80,67,13),'deep',{kind:'bubble-right'});field(p,'message',r(10,64,57,7),42);field(p,'reply',r(33,83,57,7),42,{color:'paper'});art(p,r(76,59,20,19));}
+    else{p.family='스토리 메모';p.photos=[r(0,0,100,76)];surface(p,r(7,79,86,15),'paper',{kind:'paper'});rest(p,d,r(12,82,71,9),39);art(p,r(74,67,22,18));}break;
+  }
+  expand(p,d,v);
+  if(d.cat==='column'){p.art=null;Object.keys(p.fields).forEach(function(q){if(q==='body'){p.fields[q].size=Math.max(42,p.fields[q].size);p.fields[q].lh=1.6;}});}
+  if(t.key==='rose')p.art=null;
+  if(p.photos.length!==n)throw Error('Added album photo count mismatch: '+d.id);
+  var missing=d.texts.filter(function(x){return!p.fields[x.k];});if(missing.length)rest(p,d,r(7,91,85,7),26);
+  if(t.simple&&p.art){p.art.w*=.65;p.art.h*=.65;}
+  p.familyId=d.cat+'-'+p.family;
+  cache[d.id]=p;return p;
+ }
+ function expand(p,d,v){
+  var keep=['01-01','01-24','02-01','02-06','03-01','03-04','04-01','04-27','05-01','05-22','06-01','06-16','07-01','07-02','08-03','08-06','09-01','09-03','10-01','10-03'];
+  if(keep.indexOf(d.assetId)>=0)return;
+  var n=d.photos.length,k=mainKey(d),has=function(s){return d.texts.some(function(t){return t.k===s;});};
+  function reset(name,tone,photos){p.family=name;p.tone=tone;p.photos=photos||[];p.fields={};p.surfaces=[];p.art=null;p.ui=[];}
+  function title(b,size,ex){field(p,k,b,size||88,Object.assign({font:'serif',lh:1.08},ex||{}));}
+  function extras(b,size){rest(p,d,b,size||30);}
+  function white(){Object.keys(p.fields).forEach(function(q){p.fields[q].color='paper';});}
+  switch(d.cat){
+   case'cover':
+    if(v===0)return;
+    if(v===1){reset('상단 사진 · 하단 컬러 제호','accent',[r(0,0,100,58)]);title(r(7,66,75,20),128);extras(r(7,89,68,7));art(p,r(76,67,23,27));}
+    if(v===2){reset('세로 책등 · 큰 사진','deep',[r(22,0,78,100)]);title(r(5,9,13,66),112,{vertical:true});extras(r(4,80,15,15),26);white();}
+    if(v===3){reset('아치 화보 · 옆 제호','paper',[r(42,9,53,79,{shape:'arch'})]);title(r(6,18,29,35),97);extras(r(6,61,29,16),29);surface(p,r(37,0,63,100),'accent');art(p,r(5,80,25,17));}
+    if(v===4){reset('오벌 포트레이트','deep',[r(15,11,70,65,{shape:'ellipse'})]);title(r(7,81,86,13),93,{align:'center'});extras(r(8,4,60,5),27);white();art(p,r(77,4,19,19));}
+    if(v===5){reset('인쇄 프린트 커버','accent',[r(7,7,86,64)]);surface(p,r(7,71,86,24),'paper');title(r(12,75,76,9),87);extras(r(12,86,66,8),28);}
+    if(v===6){reset('상단 큰 제호 · 바닥 사진','paper',[r(0,30,90,70)]);surface(p,r(90,0,10,100),'deep');title(r(6,6,78,15),132);extras(r(6,24,70,4),28);}
+    if(v===7){reset('풀사진과 좌상단 라벨','deep',[r(0,0,100,100)]);surface(p,r(6,6,64,24),'paper',{kind:'paper',front:true});title(r(10,11,56,11),108);extras(r(10,24,55,4),26);art(p,r(72,72,24,24));}break;
+   case'front':
+    if(!n){reset(v%2?'색면 목차':'책등 편지','accent');surface(p,r(v%2?0:16,v%2?28:0,v%2?100:84,v%2?72:100),'paper');title(r(v%2?7:23,8,70,14),100);field(p,'body',r(v%2?8:23,35,v%2?74:65,45),42,{font:'kserif',lh:1.65});extras(r(v%2?8:23,87,60,7));art(p,r(73,78,23,21));break;}
+    if(n===2){
+     if(v%2){reset('나란한 두 도입 컷','deep',grid(2,r(6,31,88,58),2,5));title(r(6,7,87,13),101);extras(r(6,23,86,6),31);white();}
+     else{reset('대각선 두 도입 컷','paper',[r(6,12,58,37),r(46,56,48,35)]);title(r(70,10,24,30),71);extras(r(7,56,31,33),36);surface(p,r(0,94,100,6),'accent');}break;
+    }
+    if(v===0)return;
+    if(v===1){reset('가로 사진의 편지','accent',[r(0,0,100,35)]);surface(p,r(8,39,84,56),'paper',{kind:'paper'});title(r(14,45,71,12),83);if(has('body'))field(p,'body',r(14,62,70,23),42,{font:'kserif',lh:1.65});extras(r(14,87,60,6),27);}
+    else if(v===2||v===3){reset('세로 사진과 시간의 목차','deep',[r(0,0,36,100)]);title(r(43,9,50,17),89);if(has('body'))field(p,'body',r(44,35,48,44),43,{font:'kserif',lh:1.8});extras(r(44,85,48,9),29);white();surface(p,r(40,35,.5,44),'accent');}
+    else if(v===4||v===5){reset('소개 글과 작은 인물컷','accent',[r(63,57,31,31)]);title(r(7,8,85,20),126);if(has('body'))field(p,'body',r(7,40,48,43),44,{font:'kserif',lh:1.6});extras(r(7,89,77,6),27);}
+    else{reset('사진 위아래 두 텍스트 면','paper',[r(8,30,84,39)]);surface(p,r(0,0,100,24),'accent');title(r(7,6,85,13),101);if(has('body'))field(p,'body',r(8,75,82,16),37,{font:'kserif',lh:1.55});extras(r(8,94,79,4),25);}break;
+   case'divider':
+    if(v===0||v===1)return;
+    if(v===2){reset('넓은 원판 챕터','paper');surface(p,r(7,19,68,51),'accent',{kind:'ellipse'});field(p,'number',r(15,32,51,22),180,{font:'serif',align:'center'});title(r(73,18,18,53),100,{vertical:true});extras(r(7,82,83,11),35);}
+    if(v===3){reset('세로 책갈피 챕터','paper');surface(p,r(67,0,33,100),'deep');field(p,'number',r(72,18,21,60),137,{color:'paper',vertical:true});title(r(7,23,51,34),128);extras(r(7,73,51,15),37);}
+    if(v===4){reset('큰 일러스트로 여는 장','accent');field(p,'number',r(8,8,40,12),119,{font:'serif'});title(r(41,31,53,29),128);extras(r(43,73,51,15),38);art(p,r(2,39,40,50));}
+    if(v===5){reset('극야의 장면','deep');field(p,'number',r(7,7,54,12),121,{font:'serif',color:'paper'});title(r(7,34,85,33),178,{color:'paper'});extras(r(7,81,54,13),36);p.fields.sub.color='paper';art(p,r(72,73,24,24));}
+    if(v===6){reset('노트 카드 챕터','accent');surface(p,r(10,12,80,77),'paper',{kind:'paper'});surface(p,r(6,5,31,16),'deep');field(p,'number',r(10,8,24,10),99,{font:'serif',color:'paper'});title(r(17,34,66,29),141);extras(r(17,72,66,10),37);}
+    if(v===7){reset('세 가지 면의 챕터','deep');surface(p,r(0,24,100,49),'accent');surface(p,r(0,73,100,27),'paper');field(p,'number',r(7,6,84,13),130,{font:'serif',color:'paper'});title(r(7,35,86,27),156);extras(r(7,80,62,13),39);art(p,r(75,75,23,21));}break;
+   case'collage':
+    if(n===2){if(v%3===0)return;if(v%3===1){reset('가로 두 컷 엇갈림','deep',[r(0,7,88,36),r(12,53,88,36)]);extras(r(7,45,85,7),36);white();art(p,r(2,74,9,13));}else{reset('나란한 두 전면 컷','paper',[r(0,13,48,75),r(52,13,48,75)]);surface(p,r(0,0,100,13),'accent');extras(r(6,4,80,6),48);}}else if(n===3){
+     if(v%3===0)return;
+     if(v%3===1){reset('상단 와이드와 두 프린트','accent',[r(5,5,90,43),r(5,53,43,36),r(52,53,43,36)]);extras(r(6,93,71,4),31);art(p,r(78,89,18,10));}
+     else{reset('세 컷 계단','paper',[r(5,6,47,34),r(48,36,47,34),r(5,66,39,29)]);surface(p,r(0,0,12,100),'accent');extras(r(53,77,42,16),45);art(p,r(66,7,26,22));}
+    }else if(n===4&&v%2){reset('두 개의 사진 짝','paper',[r(5,5,43,35),r(52,5,43,35),r(5,60,43,35),r(52,60,43,35)]);surface(p,r(0,43,100,14),'accent');extras(r(7,47,62,6),48);art(p,r(78,40,16,18));}break;
+   case'selfie':
+    if(n===2)return;
+    if(v===0||v===1)return;
+    if(v===2){reset('사진 옆 긴 메모','paper',[r(0,10,73,80)]);surface(p,r(73,0,27,100),'accent');extras(r(79,32,17,46),34);}
+    if(v===3){reset('정사각 셀카와 날짜','deep',[r(8,23,84,63)]);extras(r(8,5,84,14),64);white();art(p,r(74,87,20,11));}
+    if(v===4){reset('다크 인쇄 프린트','deep',[r(8,7,84,74)]);surface(p,r(8,81,84,12),'paper');extras(r(13,83,74,8),31);}
+    if(v===5){reset('한 장짜리 셀카 티켓','accent',[r(10,6,80,65)]);surface(p,r(10,73,80,21),'paper',{kind:'ticket'});extras(r(16,78,67,12),39);art(p,r(76,60,20,19));}
+    if(v===6){reset('반쪽 일기장','paper',[r(40,0,60,100)]);extras(r(6,29,28,40),46);art(p,r(6,73,27,21));surface(p,r(0,0,40,17),'accent');}
+    if(v===7){reset('수평 컷과 테마 노트','accent',[r(0,13,100,56)]);surface(p,r(5,76,65,17),'paper',{kind:'paper'});extras(r(9,80,55,11),37);art(p,r(74,76,23,23));}break;
+   case'column':
+    if(n===2){if(d.variant===17){reset('두 장 사이의 에세이','paper',[r(0,0,100,24),r(0,76,100,24)]);title(r(8,29,84,11),80);field(p,'body',r(8,46,84,23),43,{font:'kserif',lh:1.6});}break;}
+    if(v===0||v===1)return;
+    if(v===2){reset('작은 인물컷의 편지','paper',[r(61,9,33,35)]);if(k)title(r(7,7,46,14),77);field(p,'body',r(7,k?29:10,46,k?58:77),43,{font:'kserif',lh:1.65});extras(r(61,52,33,34),32);surface(p,r(57,0,43,100),'accent');}
+    else if(v===3){reset('하단 사진으로 끝나는 글','accent',[r(8,57,92,43)]);if(k)title(r(7,6,85,13),96);field(p,'body',r(7,k?25:9,85,k?25:41),45,{font:'kserif',lh:1.65});extras(r(7,52,83,4),25);}
+    else if(v===4||v===5){reset('사진 아래 긴 본문','paper',[r(7,6,86,46)]);if(k)title(r(7,57,85,10),81);field(p,'body',r(7,k?73:61,85,k?21:32),44,{font:'kserif',lh:1.6});extras(r(8,96,80,3),23);}
+    else{reset('세로 제목 · 옆 본문','accent',[r(45,8,49,83)]);surface(p,r(0,0,40,100),'paper');if(k)title(r(7,7,27,21),70);field(p,'body',r(7,k?35:12,27,k?56:77),42,{font:'kserif',lh:1.6});extras(r(47,94,45,4),24);}break;
+   case'grid':
+    if(n===3&&v%2){reset('세 장 수직 갤러리','deep',grid(3,r(7,6,86,83),1,4));extras(r(7,93,82,5),31);white();}
+    else if(n===4&&v%3===1){reset('네 컷 필름 열','deep',grid(4,r(28,5,60,90),1,3));extras(r(5,13,17,71),42);white();p.ui.push({kind:'film-edge',box:r(20,5,3,90)});}
+    else if(n===4&&v%3===2){reset('네 칸과 중앙 인덱스','paper',[r(5,5,43,33),r(52,5,43,33),r(5,62,43,33),r(52,62,43,33)]);surface(p,r(0,42,100,16),'accent');extras(r(7,47,86,7),55);}
+    else if(n===6&&v%3===1){reset('두 줄 사이 제목의 6컷','accent',grid(6,r(5,5,90,90),3,4));p.photos.forEach(function(b,i){b.h=34;b.y=i<3?5:61;});extras(r(6,45,85,11),57);}
+    else if(n===9){reset('9컷 색 인덱스','deep',grid(9,r(7,24,86,65),3,3));surface(p,r(0,0,100,19),'accent');extras(r(7,4,85,11),66);}
+    else if(n===8){reset('8컷 아카이브','paper',grid(8,r(17,8,77,82),2,3));surface(p,r(0,0,11,100),'deep');extras(r(17,93,76,4),32);}
+    break;
+   case'feature':
+    if(!n){if(v===7){reset('큰 인용문과 세로 색면','accent');surface(p,r(0,0,12,100),'deep');title(r(18,10,73,45),190);extras(r(18,72,52,21),42);art(p,r(73,73,24,23));}else if(v%2===0){reset('세로 문장의 포스터','accent');title(r(11,9,78,49),175);extras(r(11,75,50,18),41);art(p,r(64,65,29,28));}break;}
+    if(n===2){if(v%2===0){reset('두 사진 사이 세로 단어','deep',[r(0,0,36,100),r(65,0,35,100)]);title(r(42,6,17,71),123,{vertical:true,color:'paper'});extras(r(41,82,19,14),27);white();}break;}
+    if(has('body'))return;
+    if(v%4===0){reset('하단에 놓인 큰 단어','deep',[r(0,0,100,70)]);title(r(7,73,86,15),171,{color:'paper'});extras(r(7,89,77,9),28);white();}
+    else if(v%4===1){reset('두 색면을 가르는 화보','paper',[r(16,31,70,54)]);surface(p,r(43,0,57,100),'accent');title(r(7,7,84,18),170);extras(r(7,91,80,5),27);}
+    else if(v%4===3){reset('풀사진 위 인쇄 라벨','deep',[r(0,0,100,100)]);surface(p,r(5,67,76,25),'paper',{kind:'paper',front:true});title(r(10,71,66,13),139);extras(r(10,86,63,4),27);}break;
+   case'finale':
+    if(!n){if(v%2){reset('밤의 엔딩 노트','deep');title(r(8,17,82,21),121,{color:'paper'});if(has('body'))field(p,'body',r(8,51,65,29),46,{font:'kserif',color:'paper',lh:1.7});extras(r(8,85,54,7),28);white();art(p,r(75,68,21,25));}else{reset('감사의 넓은 띠','paper');surface(p,r(0,25,100,28),'accent');title(r(8,32,84,16),107);if(has('body'))field(p,'body',r(13,63,74,24),43,{font:'kserif',lh:1.65,align:'center'});extras(r(8,12,65,7),28);}break;}
+    if(n===2){if(v%2){reset('나란한 마지막 컷','deep',grid(2,r(8,11,84,49),2,5));title(r(8,68,84,13),111,{color:'paper'});extras(r(8,86,83,8),31);white();}break;}
+    if(v%4===0)return;
+    if(v%4===1){reset('하단의 마지막 장면','paper',[r(0,57,100,43)]);title(r(8,8,84,17),111);extras(r(8,33,78,18),38);}
+    else if(v%4===2){reset('사진 옆 크레딧','deep',[r(0,0,45,100)]);title(r(52,16,42,24),90,{color:'paper'});extras(r(52,58,42,28),39);white();}
+    else{reset('사진과 우편 엔딩','paper',[r(7,8,86,57)]);surface(p,r(0,70,100,30),'accent');title(r(7,74,68,9),84);extras(r(7,85,65,13),31);art(p,r(77,74,19,22));}break;
+   case'sns':
+    if(n===2){if(v===6){reset('프로필 아래 와이드 포스트','paper',[r(0,23,100,55),r(7,5,16,12,{shape:'circle'})]);surface(p,r(0,0,100,21),'deep');extras(r(7,84,85,12),43);p.ui.push({kind:'post-header',box:r(30,7,61,9)});}else if(v%3===0)return;else if(v%3===1){reset('프로필 사이드 포스트','deep',[r(25,6,70,70),r(5,9,14,10.5,{shape:'circle'})]);surface(p,r(22,3,76,94),'paper',{kind:'card'});extras(r(29,83,60,10),42);art(p,r(2,75,17,18));}else{reset('사진 아래 답장 카드','accent',[r(0,0,100,63),r(7,68,15,11.25,{shape:'circle'})]);surface(p,r(4,66,92,30),'paper',{kind:'card'});extras(r(29,73,60,15),45);}}
+    else if(n===4&&v%2){reset('세 프로필의 사이드 피드','paper',[r(33,5,63,83),r(6,11,18,13.5,{shape:'circle'}),r(6,40,18,13.5,{shape:'circle'}),r(6,69,18,13.5,{shape:'circle'})]);surface(p,r(0,0,28,100),'accent');extras(r(33,92,61,5),31);}
+    else if(n===1&&has('reply')&&v%2){reset('대화 위의 사진','paper',[r(9,6,82,40)]);surface(p,r(4,55,66,15),'accent',{kind:'bubble'});surface(p,r(32,78,64,15),'deep',{kind:'bubble-right'});field(p,'message',r(9,59,56,8),44);field(p,'reply',r(37,82,54,8),44,{color:'paper'});}
+    else if(n===1&&!has('reply')&&v%2){reset('사진 옆 포스트 설명','accent',[r(0,7,71,86)]);extras(r(77,24,18,56),45);}
+    break;
+  }
+ }
+ function pos(b){return'left:'+b.x+'%;top:'+b.y+'%;width:'+b.w+'%;height:'+b.h+'%;';}
+ function esc(s){return window.PBK?PBK.esc(s):String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+ function color(n){return n==='ink'?'#202733':'var(--aa4-'+n+')';}
+ function geo(themeKey){
+  if(themeKey==='navy')return'<i class="aa4-sail s1"></i><i class="aa4-sail s2"></i><i class="aa4-hull"></i>';
+  if(themeKey==='butterfly')return'<i class="aa4-wing w1"></i><i class="aa4-wing w2"></i><i class="aa4-wing w3"></i><i class="aa4-wing w4"></i><i class="aa4-body"></i>';
+  if(themeKey==='berry')return'<i class="aa4-berry b1"></i><i class="aa4-berry b2"></i><i class="aa4-berry b3"></i><i class="aa4-leaf"></i>';
+  if(themeKey==='sage')return'<i class="aa4-bookmark"></i><i class="aa4-bookmark-line"></i>';
+  if(themeKey==='ruby'||themeKey==='picnic')return'<i class="aa4-check"></i>';
+  if(themeKey==='aqua')return'<i class="aa4-drop d1"></i><i class="aa4-drop d2"></i><i class="aa4-drop d3"></i>';
+  return'<i class="aa4-square"></i><i class="aa4-circle"></i><i class="aa4-triangle"></i>';
+ }
+ function uiHTML(u){var html='';if(u.kind==='phone')html='<i class="aa4-phone-speaker"></i><i class="aa4-phone-home"></i>';if(u.kind==='post-header')html='<i class="aa4-more">•••</i>';if(u.kind==='grid-index'){for(var i=0;i<u.count;i++)html+='<span>'+String(i+1).padStart(2,'0')+'</span>';}return'<div class="aa4-ui aa4-'+u.kind+'" style="'+pos(u.box)+'">'+html+'</div>';}
+ function nativeMotif(p){var b=p.art,side=Math.min(b.w*12,b.h*16)*.85;return'<div class="aa4-native" style="width:'+(side/(b.w*12)*100)+'%;height:'+(side/(b.h*16)*100)+'%;">'+geo(p.theme.key)+'</div>';}
+ function fitSize(raw,f){var s=f.size,lines=String(raw).split('\n');if(f.vertical)return Math.min(s,f.box.h*16/Math.max(1,Array.from(String(raw).replace(/\s/g,'')).length));var width=f.box.w*12,height=f.box.h*16;
+  function weight(t){return Array.from(t).reduce(function(sum,ch){return sum+(/[\u1100-\uD7FF]/.test(ch)?1.06:ch===' '?.34:/[A-Z]/.test(ch)?.79:/[0-9]/.test(ch)?.65:.64);},0);}
+  var longest=Math.max.apply(null,String(raw).split(/\s+/).map(weight));s=Math.min(s,width*.95/Math.max(1,longest));
+  function rows(size){return lines.reduce(function(total,line){var x=0,count=1;line.split(/\s+/).forEach(function(word){var w=weight(word)*size;if(x&&x+w>width){count++;x=0;}count+=Math.max(0,Math.ceil(w/width)-1);x+=(w>width?w%width:w)+size*.3;});return total+count;},0);}
+  while(s>18&&rows(s)*s*f.lh>height*.86)s-=1;return Math.max(18,s);
+ }
+ function draw(c,d){
+  var p=plan(d),out='<i class="aa4-marker" data-aa4-id="'+esc(d.id)+'" hidden></i>';
+  p.surfaces.forEach(function(s){out+='<div class="aa4-surface aa4-'+s.kind+'" aria-hidden="true" style="'+pos(s.box)+'background:'+color(s.color)+';'+(s.front?'z-index:3;':'')+'"></div>';});
+  p.photos.forEach(function(b,i){out+='<div class="ph aa4-photo'+(b.print?' aa4-print':'')+'" data-added-photo="'+i+'" style="'+pos(b)+(b.shape==='circle'||b.shape==='ellipse'?'border-radius:50%;':b.shape==='phone'?'border-radius:6cqw;':b.shape==='arch'?'border-radius:50% 50% 0 0 / 33% 33% 0 0;':'')+'">'+c.img(i)+'</div>';});
+  if(p.art){var src=p.theme.asset&&resolver(p.theme.asset,d);out+='<div class="art aa4-art aa4-motif-'+p.theme.key+'" data-aa4-asset="'+esc(p.theme.asset||'native-'+p.theme.key)+'" style="'+pos(p.art)+'">'+(src?'<img alt="" draggable="false" src="'+esc(src)+'">':nativeMotif(p))+'</div>';}
+  p.ui.forEach(function(u){out+=uiHTML(u);});
+  d.texts.forEach(function(t){var raw=c.raw(t.k);if(!String(raw).trim())return;var f=p.fields[t.k],font=f.font==='serif'?'var(--serif)':f.font==='kserif'?'var(--kserif)':'var(--sans)',size=fitSize(raw,f);out+='<div class="aa4-text'+(f.vertical?' aa4-vertical':'')+'" data-added-field="'+esc(t.k)+'" style="'+pos(f.box)+'font-size:'+(size/12)+'cqw;font-family:'+font+';font-weight:'+f.weight+';color:'+color(f.color)+';text-align:'+f.align+';line-height:'+f.lh+';"><span>'+c.t(t.k)+'</span></div>';});
+  return out;
+ }
+ function className(d){var p=plan(d);return'aa4-page aa4-cat-'+d.cat+' aa4-theme-'+p.theme.key+' aa4-tone-'+p.tone+(p.theme.simple?' aa4-simple':'');}
+ window.PBKAddedAlbumDesign={version:4,draw:draw,plan:plan,className:className,palette:theme,assetSpecs:specs,assetKeys:Object.keys(specs),setAssetResolver:function(fn){resolver=typeof fn==='function'?fn:function(){return'';};},resetPlans:function(){cache={};}};
+})();
+
+window.PBKAddedAlbumAssets={"tulip":{"art":"full_assets/releases/2026-10-02_v2/album_v4/tulip.png","module":"full_assets/releases/2026-10-02_v2/album_v4/tulip.data.js"},"tea":{"art":"full_assets/releases/2026-10-02_v2/album_v4/tea.png","module":"full_assets/releases/2026-10-02_v2/album_v4/tea.data.js"},"garden":{"art":"full_assets/releases/2026-10-02_v2/album_v4/garden.png","module":"full_assets/releases/2026-10-02_v2/album_v4/garden.data.js"},"music":{"art":"full_assets/releases/2026-10-02_v2/album_v4/music.png","module":"full_assets/releases/2026-10-02_v2/album_v4/music.data.js"},"ribbon":{"art":"full_assets/releases/2026-10-02_v2/album_v4/ribbon.png","module":"full_assets/releases/2026-10-02_v2/album_v4/ribbon.data.js"},"lemon":{"art":"full_assets/releases/2026-10-02_v2/album_v4/lemon.png","module":"full_assets/releases/2026-10-02_v2/album_v4/lemon.data.js"},"mail":{"art":"full_assets/releases/2026-10-02_v2/album_v4/mail.png","module":"full_assets/releases/2026-10-02_v2/album_v4/mail.data.js"},"sakura":{"art":"full_assets/releases/2026-10-02_v2/album_v4/sakura.png","module":"full_assets/releases/2026-10-02_v2/album_v4/sakura.data.js"},"ocean":{"art":"full_assets/releases/2026-10-02_v2/album_v4/ocean.png","module":"full_assets/releases/2026-10-02_v2/album_v4/ocean.data.js"},"cosmic":{"art":"full_assets/releases/2026-10-02_v2/album_v4/cosmic.png","module":"full_assets/releases/2026-10-02_v2/album_v4/cosmic.data.js"},"winter":{"art":"full_assets/releases/2026-10-02_v2/album_v4/winter.png","module":"full_assets/releases/2026-10-02_v2/album_v4/winter.data.js"}};
+/* Added layouts use v4. Existing saved pages keep their recorded renderer. */
+(function(){
+ 'use strict';
+ var B=window.PBK,D=window.PBKAddedAlbumDesign,A=window.PBKFullAlbum;
+ if(!B||!D||!A)throw Error('추가 화보집 디자인을 준비하지 못했어요');
+ var manifest=window.PBKAddedAlbumAssets||{},cache={},pending={},index={},activeOpts=null,usePalette=false;
+ A.definitions.forEach(function(d){index[d.id]=index[d.assetId]=d;});
+ function receive(key,data){
+  if(!manifest[key]||typeof data!=='string'||data.indexOf('data:image/')!==0)return;
+  cache[key]=data;
+  document.querySelectorAll('[data-aa4-asset="'+key+'"] img').forEach(function(img){img.src=data;});
+ }
+ function prepareAsset(key){
+  if(!key||!manifest[key])return Promise.resolve(null);
+  if(cache[key])return Promise.resolve(cache[key]);
+  if(pending[key])return pending[key];
+  pending[key]=new Promise(function(resolve,reject){
+   var script=document.createElement('script'),timer,done=false;
+   function finish(err){if(done)return;done=true;clearTimeout(timer);script.remove();delete pending[key];if(err)reject(err);else resolve(cache[key]);}
+   script.src=manifest[key].module;script.async=true;
+   script.onload=function(){finish(cache[key]?null:Error('추가 디자인 소품을 읽지 못했어요: '+key));};
+   script.onerror=function(){finish(Error('추가 디자인 소품 파일을 찾지 못했어요: '+key));};
+   timer=setTimeout(function(){finish(Error('추가 디자인 소품을 불러오는 시간이 초과됐어요: '+key));},30000);
+   document.head.appendChild(script);
+  });
+  return pending[key];
+ }
+ function prepareAdded(id){var d=index[id],p=d&&D.plan(d);return p&&p.art?prepareAsset(p.theme.asset):Promise.resolve(null);}
+ D.setAssetResolver(function(key){
+  if(!manifest[key])return '';
+  if(!cache[key]&&(!activeOpts||activeOpts.mode!=='sample'))prepareAsset(key).catch(function(e){console.warn(e.message);});
+  return cache[key]||manifest[key].art;
+ });
+ D._receive=receive;D.prepare=prepareAdded;
+ D.isPrepared=function(id){var d=index[id],p=d&&D.plan(d);return !!d&&(!p.art||!p.theme.asset||!!cache[p.theme.asset]);};
+ D.setNativePalette=function(enabled){
+  usePalette=!!enabled;
+  document.querySelectorAll('.aa4-page').forEach(function(el){el.classList.toggle('aa4-custom-palette',usePalette);});
+ };
+ D.nativePaletteEnabled=function(){return usePalette;};
+ var oldPrepare=A.prepare,oldPrepareBook=A.prepareBook,oldApply=A.apply;
+ A.prepare=function(id){return Promise.all([oldPrepare(id),prepareAdded(id)]).then(function(values){return values[0];});};
+ A.prepareBook=async function(book){
+  await oldPrepareBook(book);
+  var ids=Array.from(new Set((book.pages||[]).filter(function(pg){return Number(pg.albumDesignVersion)===4;}).map(function(pg){return pg.layout;})));
+  for(var i=0;i<ids.length;i++)await prepareAdded(ids[i]);
+ };
+ A.apply=async function(id,mode){await prepareAdded(id);return oldApply(id,mode);};
+ B.LAYOUTS.forEach(function(d){if(d.albumOriginalName)d.n=d.albumOriginalName;});
+ var oldNewPage=B.newPage,oldRender=B.render;
+ B.newPage=function(id){var pg=oldNewPage.apply(B,arguments);if(index[id])pg.albumDesignVersion=4;else delete pg.albumDesignVersion;return pg;};
+ B.render=function(page,opts){
+  var a=page&&index[page.layout],d=a&&B.byId(a.id);
+  var defaultAddedSample=opts&&opts.mode==='sample'&&page.albumDesignVersion==null;
+  if(!d||(Number(page.albumDesignVersion)!==4&&!defaultAddedSample))return oldRender.apply(B,arguments);
+  var keep={h:d.h,cls:d.cls,dark:d.dark,pnum:d.pnum,mir:d.mir},prevOpts=activeOpts;
+  try{
+   activeOpts=opts||{};d.h=function(c){return D.draw(c,a);};d.cls=D.className(a)+(usePalette?' aa4-custom-palette':'');d.dark=false;
+   return oldRender.call(B,page,opts);
+  }finally{activeOpts=prevOpts;Object.keys(keep).forEach(function(k){d[k]=keep[k];});}
+ };
+ if(window.PBKAlbumDesign){
+  PBKAlbumDesign.addedVersion=4;
+  PBKAlbumDesign.select=function(page,newId){if(!page)return;var id=newId||page.layout;if(index[id])page.albumDesignVersion=4;else delete page.albumDesignVersion;};
+ }
+})();

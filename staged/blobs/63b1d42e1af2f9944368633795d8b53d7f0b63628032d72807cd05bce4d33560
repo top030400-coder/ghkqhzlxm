@@ -1,0 +1,79 @@
+<!doctype html><meta charset="utf-8"><title>rim zoom</title>
+<body style="background:#0b0b0f;color:#ddd;font:12px monospace;margin:0;padding:4px">
+<div id="v"></div>
+<script src="rim_assets.js"></script>
+<script>
+let BG=null,SUBJ=null,CUT=null,CURW=720,CURH=150;
+function loadImg(u){ return new Promise((ok,no)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=no; i.src=u; }); }
+function makeCut(){
+  const m=document.createElement('canvas'); m.width=420;m.height=420;
+  const g=m.getContext('2d');
+  g.fillStyle='#fff'; g.strokeStyle='#fff'; g.lineJoin='round'; g.lineCap='round';
+  g.beginPath(); g.ellipse(210,158,112,124,0,0,7); g.fill();
+  g.beginPath(); g.moveTo(96,300); g.quadraticCurveTo(60,360,86,420); g.lineTo(140,420); g.quadraticCurveTo(120,350,150,296); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(322,300); g.quadraticCurveTo(360,356,332,420); g.lineTo(276,420); g.quadraticCurveTo(300,350,272,296); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(130,286); g.quadraticCurveTo(210,332,292,286); g.lineTo(330,420); g.lineTo(90,420); g.closePath(); g.fill();
+  g.lineWidth=7;
+  [[118,214,86,268,104,330],[300,206,336,262,318,332],[168,262,150,318,176,372],[252,258,272,314,246,368]]
+   .forEach(p=>{ g.beginPath(); g.moveTo(p[0],p[1]); g.quadraticCurveTo(p[2],p[3],p[4],p[5]); g.stroke(); });
+  const c=document.createElement('canvas'); c.width=420;c.height=420;
+  const q=c.getContext('2d'); q.drawImage(SUBJ,0,0,420,420);
+  q.globalCompositeOperation='destination-in'; q.drawImage(m,0,0);
+  q.globalCompositeOperation='source-over'; return c;
+}
+function subjBox(W,H){ const s=Math.min(H*1.75,W*0.42); return {x:W-s*0.92,y:H-s*0.86,w:s,h:s}; }
+function drawSubj(g,W,H,dx,dy,rot){ const b=subjBox(W,H); g.save(); g.drawImage(CUT,b.x+(dx||0),b.y+(dy||0),b.w,b.h); g.restore(); }
+function paintBG(g,W,H){ g.drawImage(BG,0,0,W,H); }
+function paint(W,H){ const c=document.createElement('canvas'); c.width=W;c.height=H;
+  const g=c.getContext('2d',{willReadFrequently:true}); paintBG(g,W,H); return {c,g}; }
+function restoreBg(g,x,y,w,h){ g.save(); g.beginPath(); g.rect(x,y,w,h); g.clip(); paintBG(g,CURW,CURH); g.restore(); }
+function drawSubject(g,dx,dy,sc,rot){ drawSubj(g,CURW,CURH,dx||0,dy||0,rot||0); }
+const A={draw:function(g,t,W,H){
+  var B={x:W*0.66,y:0,w:W*0.30,h:H};
+  var bw=110,x=B.x-bw+(B.w+bw*2)*t,c=x+bw/2,p=(c-B.x)/B.w;
+  if(p<=0||p>=1) return; var k=Math.sin(Math.PI*p);
+  g.save(); g.beginPath(); g.rect(x,B.y-8,bw,B.h+16); g.clip(); restoreBg(g,x,B.y-8,bw,B.h+16);
+  g.shadowColor='rgba(255,246,214,0.95)'; g.shadowBlur=9; g.globalAlpha=0.9*k;
+  drawSubject(g,0,0,1,0); g.shadowBlur=0; g.globalAlpha=1; drawSubject(g,0,0,1,0); g.restore(); }};
+let _rc=null;
+function rimDraw(g,t,W,H,BW,BLUR,ALPHA){
+  const b=subjBox(W,H),bw=BW,pad=Math.ceil(BLUR*2.4);
+  const span=b.w+bw*2,x=b.x-bw+span*t,c=x+bw/2,p=(c-b.x)/b.w;
+  if(p<=0||p>=1) return; const k=Math.sin(Math.PI*p);
+  const ox=Math.round(x)-pad,oy=-pad,ow=bw+pad*2,oh=H+pad*2;
+  if(!_rc)_rc=document.createElement('canvas');
+  if(_rc.width!==ow||_rc.height!==oh){_rc.width=ow;_rc.height=oh;}
+  const q=_rc.getContext('2d');
+  q.setTransform(1,0,0,1,0,0); q.globalCompositeOperation='source-over'; q.globalAlpha=1;
+  q.clearRect(0,0,ow,oh); q.translate(-ox,-oy);
+  q.shadowColor='rgba(255,246,214,1)'; q.shadowBlur=BLUR; drawSubj(q,W,H,0,0,0);
+  q.shadowBlur=0; q.shadowColor='rgba(0,0,0,0)';
+  q.globalCompositeOperation='destination-out'; drawSubj(q,W,H,0,0,0);
+  q.setTransform(1,0,0,1,0,0); q.globalCompositeOperation='destination-in';
+  const gr=q.createLinearGradient(0,0,ow,0);
+  gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(.5,'rgba(0,0,0,1)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+  q.fillStyle=gr; q.fillRect(0,0,ow,oh);
+  g.save(); g.globalCompositeOperation='lighter'; g.globalAlpha=(ALPHA||0.95)*k; g.drawImage(_rc,ox,oy); g.restore();
+}
+const B110={draw:(g,t,W,H)=>rimDraw(g,t,W,H,110,9,0.95)};
+const NONE={draw:()=>{}};
+function zoom(label,fx,ts){
+  const w=document.createElement('div');
+  w.innerHTML='<div style="color:#8cf;margin:4px 0 2px">'+label+'</div>';
+  ts.forEach(t=>{
+    const {c,g}=paint(720,150); drawSubj(g,720,150,0,0,0);
+    g.save(); fx.draw(g,t,720,150); g.restore();
+    const z=document.createElement('canvas'); z.width=790; z.height=450;
+    const zg=z.getContext('2d'); zg.imageSmoothingEnabled=false;
+    zg.drawImage(c, 456,0,263,150, 0,0,789,450);
+    z.style.cssText='display:block;margin:2px 0'; w.appendChild(z);
+  });
+  document.getElementById('v').appendChild(w);
+}
+(async()=>{
+  BG=await loadImg(ASSET_BG); SUBJ=await loadImg(ASSET_SUBJ); CUT=makeCut();
+  zoom('BASE',NONE,[0]);
+  zoom('A 제안원문 t=.42 / .58',A,[0.42,0.58]);
+  zoom('B 고침 bw110 t=.42 / .58',B110,[0.42,0.58]);
+})();
+</script>
