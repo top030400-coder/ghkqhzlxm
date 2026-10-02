@@ -1,0 +1,152 @@
+window.PBK_PILOT_SIGNATURE_ASSETS = [{"id": "26-01", "categoryId": 26, "category": "배경 · 모던 2D", "shortCategory": "모던 2D", "label": "딸기우유", "kind": "background", "width": 1172, "height": 992, "file": "pilot_assets/signature/26-01.png", "dataFile": "pilot_assets/signature/26-01.data.js", "sha256": "c5d743c727a21bc9aadb714a23cd0ccefb3e0ca726e14b25c18f0ff93ce03fe8", "sourceFile": "06_시그풍/배경/26_배경/c26-v01_딸기우유_1172x992.png"}, {"id": "27-01", "categoryId": 27, "category": "배경 · 시그 숫자 테마", "shortCategory": "시그 숫자 테마", "label": "레몬소다", "kind": "background", "width": 1172, "height": 992, "file": "pilot_assets/signature/27-01.png", "dataFile": "pilot_assets/signature/27-01.data.js", "sha256": "5303c37200e8b32aced42788443e877bb15203ca8f96486518a88f2110461910", "sourceFile": "06_시그풍/배경/27_배경/c27-v01_레몬소다_1172x992.png"}, {"id": "28-21", "categoryId": 28, "category": "배경 · 플랫 컬러", "shortCategory": "플랫 컬러", "label": "달빛찻잔", "kind": "background", "width": 1172, "height": 992, "file": "pilot_assets/signature/28-21.png", "dataFile": "pilot_assets/signature/28-21.data.js", "sha256": "f5a4b62abb76eb532f2ec9f6c5f38ee9af720168224af9d6e41c2cae935c087c", "sourceFile": "06_시그풍/배경/28_배경/심플형/c28-v21_심플_달빛찻잔_1172x992.png"}, {"id": "29-01", "categoryId": 29, "category": "배경 · 리치 일러스트", "shortCategory": "리치 일러스트", "label": "민트우편", "kind": "background", "width": 1172, "height": 992, "file": "pilot_assets/signature/29-01.png", "dataFile": "pilot_assets/signature/29-01.data.js", "sha256": "af4599f0baf437ec0333848b96a68ed7a7bf318e6831723c51ff0773427c880e", "sourceFile": "06_시그풍/배경/29_배경/c29-v01_민트우편_1172x992.png"}, {"id": "30-21", "categoryId": 30, "category": "배경 · 심플", "shortCategory": "심플", "label": "복숭아타르트", "kind": "background", "width": 1172, "height": 992, "file": "pilot_assets/signature/30-21.png", "dataFile": "pilot_assets/signature/30-21.data.js", "sha256": "2654bcb9c70417a926ee17bdb6840f442857fea6f461bbbac0645eaf12092bb9", "sourceFile": "06_시그풍/배경/30_배경/심플형/c30-v21_심플_복숭아타르트_1172x992.png"}, {"id": "31-01", "categoryId": 31, "category": "소품 · 리치 일러스트 / 판타지", "shortCategory": "판타지", "label": "날개마법책", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/31-01.png", "dataFile": "pilot_assets/signature/31-01.data.js", "sha256": "a48f2fe690cf7f09345867f5d37265836a5e7158146520f9289fc2a2e5966d58", "sourceFile": "06_시그풍/소품/01_리치_판타지/31_01_날개마법책.png"}, {"id": "32-01", "categoryId": 32, "category": "소품 · 리치 일러스트 / 러블리", "shortCategory": "러블리", "label": "하트선물함", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/32-01.png", "dataFile": "pilot_assets/signature/32-01.data.js", "sha256": "e8569c9b9a789447f9d5ed531dcf3765e2c68c245d42912c6c1975886e1f2359", "sourceFile": "06_시그풍/소품/02_리치_러블리/32_01_하트선물함.png"}, {"id": "33-01", "categoryId": 33, "category": "소품 · 리치 일러스트 / 프레임", "shortCategory": "프레임", "label": "하트리본틀", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/33-01.png", "dataFile": "pilot_assets/signature/33-01.data.js", "sha256": "5994bb385aec9a5b56cf9be08fd96ed88ed51fc656667751390fb2a912be6ebd", "sourceFile": "06_시그풍/소품/03_리치_프레임/33_01_하트리본틀.png"}, {"id": "34-01", "categoryId": 34, "category": "소품 · 리치 일러스트 / 에너지", "shortCategory": "에너지", "label": "번개고리", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/34-01.png", "dataFile": "pilot_assets/signature/34-01.data.js", "sha256": "e1575e172ca27d21b93ef38ad1d0c80b5fe3803a3019ddd428aed11c822c0062", "sourceFile": "06_시그풍/소품/04_리치_에너지/34_01_번개고리.png"}, {"id": "35-01", "categoryId": 35, "category": "소품 · 시그 테마 / 33 룰렛", "shortCategory": "33 룰렛", "label": "네잎룰렛", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/35-01.png", "dataFile": "pilot_assets/signature/35-01.data.js", "sha256": "2ebcc47096aef6e4e6780d68d443de8621f6fffd86d0eb531ed79ca40173923f", "sourceFile": "06_시그풍/소품/05_시그33_룰렛/35_01_네잎룰렛.png"}, {"id": "36-01", "categoryId": 36, "category": "소품 · 시그 테마 / 330 대왕룰렛", "shortCategory": "330 대왕룰렛", "label": "왕별룰렛", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/36-01.png", "dataFile": "pilot_assets/signature/36-01.data.js", "sha256": "a29ec8a60421714e4635905fbbfec273d717f31fca94ff9f9255af8f5fac27f8", "sourceFile": "06_시그풍/소품/06_시그330_대왕룰렛/36_01_왕별룰렛.png"}, {"id": "37-01", "categoryId": 37, "category": "소품 · 시그 테마 / 1xx 기본 시그", "shortCategory": "1xx 기본 시그", "label": "둥근대화창", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/37-01.png", "dataFile": "pilot_assets/signature/37-01.data.js", "sha256": "4cf67d9e7cec489dad87dfcf4c42246476f441b4c66b44041f824affd3507170", "sourceFile": "06_시그풍/소품/07_시그1xx_기본시그/37_01_둥근대화창.png"}, {"id": "38-01", "categoryId": 38, "category": "소품 · 시그 테마 / 486 사랑해", "shortCategory": "486 사랑해", "label": "하트쪽지", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/38-01.png", "dataFile": "pilot_assets/signature/38-01.data.js", "sha256": "277d7807aead76b4e391fa542c7add84fc6062c0309ccffe878bcaeff6684902", "sourceFile": "06_시그풍/소품/08_시그486_사랑해/38_01_하트쪽지.png"}, {"id": "39-01", "categoryId": 39, "category": "소품 · 시그 테마 / 14xx 천사", "shortCategory": "14xx 천사", "label": "천사하트", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/39-01.png", "dataFile": "pilot_assets/signature/39-01.data.js", "sha256": "3ab17814d399658307dcf7a604623a469a2ad3ee1c7dd14afe414129f6bc10e6", "sourceFile": "06_시그풍/소품/09_시그14xx_천사/39_01_천사하트.png"}, {"id": "40-01", "categoryId": 40, "category": "소품 · 시그 테마 / 28xx 이쁜", "shortCategory": "28xx 이쁜", "label": "하트손거울", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/40-01.png", "dataFile": "pilot_assets/signature/40-01.data.js", "sha256": "d4f401a7c317845e203dfe50e8a89604518b39736165de653d91247c2ba684f5", "sourceFile": "06_시그풍/소품/10_시그28xx_이쁜/40_01_하트손거울.png"}, {"id": "41-01", "categoryId": 41, "category": "소품 · 시그 테마 / 57xx 오직", "shortCategory": "57xx 오직", "label": "하트열쇠한쌍", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/41-01.png", "dataFile": "pilot_assets/signature/41-01.data.js", "sha256": "5cbc2ee927626977ed3712cbf5baedc26ba09d1f332039bda0bade8f40ed70b5", "sourceFile": "06_시그풍/소품/11_시그57xx_오직/41_01_하트열쇠한쌍.png"}, {"id": "42-01", "categoryId": 42, "category": "소품 · 시그 테마 / 12486 많이 사랑해", "shortCategory": "12486 많이 사랑해", "label": "하트분수", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/42-01.png", "dataFile": "pilot_assets/signature/42-01.data.js", "sha256": "32d7a0933183bbf6526c160a14ec4caea7d02292b4e342f9947a0121fd9bc8a4", "sourceFile": "06_시그풍/소품/12_시그12486_많이사랑해/42_01_하트분수.png"}, {"id": "43-01", "categoryId": 43, "category": "소품 · 플랫 컬러 / 핑크", "shortCategory": "핑크", "label": "핑크리본핀", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/43-01.png", "dataFile": "pilot_assets/signature/43-01.data.js", "sha256": "da325b4ecf1873b9dd92e018214e6d7e06d509fc413422e1291a0a21e3f8321b", "sourceFile": "06_시그풍/소품/13_플랫핑크/43_01_핑크리본핀.png"}, {"id": "44-01", "categoryId": 44, "category": "소품 · 플랫 컬러 / 흑백", "shortCategory": "흑백", "label": "체커별", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/44-01.png", "dataFile": "pilot_assets/signature/44-01.data.js", "sha256": "07761d7410620d773ba57c00259e727d60d319889bd0b090650745e0d452faa8", "sourceFile": "06_시그풍/소품/14_플랫흑백/44_01_체커별.png"}, {"id": "45-01", "categoryId": 45, "category": "소품 · 플랫 컬러 / 블루", "shortCategory": "블루", "label": "블루물방울", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/45-01.png", "dataFile": "pilot_assets/signature/45-01.data.js", "sha256": "fe83ef807054d9601f025c6e4e737f8549de4b74678999a8d250934fc08d7ae0", "sourceFile": "06_시그풍/소품/15_플랫블루/45_01_블루물방울.png"}, {"id": "46-01", "categoryId": 46, "category": "소품 · 플랫 컬러 / 오렌지", "shortCategory": "오렌지", "label": "오렌지햇살", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/46-01.png", "dataFile": "pilot_assets/signature/46-01.data.js", "sha256": "af9adfe1b2f3cb6889fa062de29cdf5f1c68767c3a201ab299fde5f0a2928c19", "sourceFile": "06_시그풍/소품/16_플랫오렌지/46_01_오렌지햇살.png"}, {"id": "47-01", "categoryId": 47, "category": "소품 · 플랫 컬러 / 그린", "shortCategory": "그린", "label": "그린잎사귀", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/47-01.png", "dataFile": "pilot_assets/signature/47-01.data.js", "sha256": "298dd3410cd371c438ae3cf219cf98a866a4cfc2e284a925aeae38ecc1128ecb", "sourceFile": "06_시그풍/소품/17_플랫그린/47_01_그린잎사귀.png"}, {"id": "48-01", "categoryId": 48, "category": "소품 · 플랫 컬러 / 퍼플", "shortCategory": "퍼플", "label": "퍼플리본링", "kind": "prop", "width": 1024, "height": 1024, "file": "pilot_assets/signature/48-01.png", "dataFile": "pilot_assets/signature/48-01.data.js", "sha256": "27f8572c1b4d86926fd449bcabd84926c9fda97cf22da82ee67d2f63f529c6a3", "sourceFile": "06_시그풍/소품/18_플랫퍼플/48_01_퍼플리본링.png"}];
+(() => {
+  'use strict';
+  const base = new URL('.', document.currentScript.src);
+  const assets = window.PBK_PILOT_SIGNATURE_ASSETS || [];
+  const bytes = new Map();
+  const pending = new Map();
+  let busy = false;
+  const byId = new Map(assets.map(a => [a.id, a]));
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  function loadBytes(asset) {
+    if (bytes.has(asset.id)) return Promise.resolve(bytes.get(asset.id));
+    if (pending.has(asset.id)) return pending.get(asset.id);
+    const promise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = new URL(asset.dataFile, base).href;
+      script.onload = () => bytes.has(asset.id) ? resolve(bytes.get(asset.id)) : reject(new Error('이미지 파일 내용을 확인하지 못했어요.'));
+      script.onerror = () => reject(new Error('시안 파일을 읽지 못했어요. 검수본 폴더 전체를 다시 확인해 주세요.'));
+      document.head.appendChild(script);
+    }).catch(error => { pending.delete(asset.id); throw error; });
+    pending.set(asset.id, promise);
+    return promise;
+  }
+
+  function pngFile(encoded, name) {
+    const raw = atob(encoded);
+    const data = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) data[i] = raw.charCodeAt(i);
+    return new File([data], name, { type: 'image/png' });
+  }
+
+  function status(kind, text, error = false) {
+    const note = document.getElementById('pilotSigStatus-' + kind);
+    if (note) { note.textContent = text; note.classList.toggle('error', error); }
+  }
+
+  async function apply(id) {
+    const asset = byId.get(id);
+    if (!asset) throw new Error('등록되지 않은 검수 시안이에요.');
+    if (busy) throw new Error('앞의 시안을 불러오는 중이에요. 잠시 뒤 다시 눌러 주세요.');
+    const input = document.getElementById(asset.kind === 'background' ? 'sigBgFile' : 'sigPropFile');
+    if (!input) throw new Error('시그풍 화면이 아직 준비되지 않았어요.');
+    busy = true;
+    document.querySelectorAll('.pilot-sig-card').forEach(button => button.disabled = true);
+    status(asset.kind, asset.label + ' 불러오는 중…');
+    try {
+      const encoded = await loadBytes(asset);
+      const file = pngFile(encoded, '검수_' + asset.id + '_' + asset.label + '.png');
+      // The native upload commits the matching border setting in the same undo step.
+      if (asset.kind === 'background') file.pbkOriginalBorder = true;
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      const started = performance.now();
+      while (input.files.length) {
+        if (performance.now() - started > 20000) throw new Error('불러오기가 끝나지 않았어요. 시그풍 화면의 오류 안내를 확인해 주세요.');
+        await delay(40);
+      }
+      const nativeStatus = document.getElementById(asset.kind === 'background' ? 'sigBgUploadName' : 'sigPropUploadStatus')?.textContent || '';
+      if (/실패/.test(nativeStatus)) throw new Error(nativeStatus);
+      document.querySelectorAll('.pilot-sig-card[data-kind="' + asset.kind + '"]').forEach(button => {
+        button.classList.toggle('selected', button.dataset.assetId === id);
+        button.setAttribute('aria-pressed', String(button.dataset.assetId === id));
+      });
+      status(asset.kind, asset.label + (asset.kind === 'background' ? ' 적용됨 · 캐릭터와 문구는 그대로 유지돼요.' : ' 추가됨 · 선택한 소품의 위치·크기·회전·색을 아래에서 바꿀 수 있어요.'));
+      return { id, kind: asset.kind, sourceSha256: asset.sha256 };
+    } catch (error) {
+      status(asset.kind, error.message || String(error), true);
+      throw error;
+    } finally {
+      busy = false;
+      document.querySelectorAll('.pilot-sig-card').forEach(button => button.disabled = false);
+    }
+  }
+
+  function gallery(kind, target) {
+    if (document.getElementById('pilotSig-' + kind)) return;
+    const list = assets.filter(a => a.kind === kind);
+    const details = document.createElement('details');
+    details.className = 'pilot-sig';
+    details.id = 'pilotSig-' + kind;
+    details.open = kind === 'background';
+    const title = document.createElement('summary');
+    title.textContent = '검수 시안 · ' + (kind === 'background' ? '배경 5종' : '소품 18종');
+    details.appendChild(title);
+    const help = document.createElement('p');
+    help.className = 'pilot-sig-help';
+    help.textContent = kind === 'background'
+      ? '분류마다 한 가지씩 추가했어요. 카드 내부는 채우고 상단 84px와 카드 밖은 투명하게 유지해요. 원본에 포함된 테두리를 사용하므로 추가 테두리는 꺼져요.'
+      : '각 분류의 시안을 하나씩 넣었어요. 원하는 그림을 누르면 독립 소품으로 추가돼요. 레이어에서 선택·삭제하고 기존 지우개와 색 변경도 사용할 수 있어요.';
+    details.appendChild(help);
+    const grid = document.createElement('div');
+    grid.className = 'pilot-sig-grid ' + kind;
+    list.forEach(asset => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'pilot-sig-card';
+      button.dataset.assetId = asset.id;
+      button.dataset.kind = kind;
+      button.setAttribute('aria-pressed', 'false');
+      button.title = asset.category + ' · ' + asset.label;
+      const visual = document.createElement('span');
+      visual.className = 'pilot-sig-image';
+      const img = new Image();
+      img.src = new URL(asset.file, base).href;
+      img.alt = '';
+      img.loading = 'lazy';
+      visual.appendChild(img);
+      button.appendChild(visual);
+      const category = document.createElement('small');
+      category.textContent = asset.shortCategory;
+      button.appendChild(category);
+      const label = document.createElement('span');
+      label.textContent = asset.label;
+      button.appendChild(label);
+      button.addEventListener('click', () => { apply(asset.id).catch(() => {}); });
+      grid.appendChild(button);
+    });
+    details.appendChild(grid);
+    const note = document.createElement('p');
+    note.id = 'pilotSigStatus-' + kind;
+    note.className = 'pilot-sig-status';
+    note.setAttribute('role', 'status');
+    note.textContent = kind === 'background' ? '배경 시안을 눌러 적용하세요.' : '소품 시안을 눌러 추가하세요.';
+    details.appendChild(note);
+    const heading = target.querySelector('.sig-section-title');
+    if (heading) heading.after(details); else target.prepend(details);
+  }
+
+  function mount() {
+    const bg = document.getElementById('sigBgFile')?.closest('.sig-section');
+    const props = document.getElementById('sigPropFile')?.closest('.sig-section');
+    if (!bg || !props) return false;
+    gallery('background', bg); gallery('prop', props);
+    return true;
+  }
+  window.PBKPilotSignature = {
+    assets: assets.map(({ id, category, label, kind, sha256, file }) => ({ id, category, label, kind, sha256, file })),
+    register(id, encoded) { if (byId.has(id)) bytes.set(id, encoded); },
+    apply,
+    mount
+  };
+  const css = document.createElement('link');
+  css.rel = 'stylesheet'; css.href = new URL('pilot_signature.css', base).href;
+  document.head.appendChild(css);
+  if (!mount()) {
+    const observer = new MutationObserver(() => { if (mount()) observer.disconnect(); });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+})();

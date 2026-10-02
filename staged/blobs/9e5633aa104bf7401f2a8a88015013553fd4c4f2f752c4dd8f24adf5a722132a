@@ -1,0 +1,11 @@
+.pilot-sig{margin:10px 0 16px;padding:10px;border:1px solid #ded8cd;border-radius:9px;background:#fffdf8}
+.pilot-sig summary{font-size:13px;font-weight:700;cursor:pointer;color:#60513f;line-height:1.6}
+.pilot-sig-help,.pilot-sig-status{font-size:11px;line-height:1.6;margin:8px 0;color:#736858}
+.pilot-sig-status{margin-bottom:0;color:#476459}.pilot-sig-status.error{color:#a12e2e}
+.pilot-sig-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.pilot-sig-card{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:0;padding:5px;border:1px solid #e3dfd5;border-radius:7px;background:white;cursor:pointer;font:inherit;color:#413e37;text-align:left}
+.pilot-sig-card:hover{border-color:#99836a;background:#fff8ed}.pilot-sig-card.selected{border-color:#87714f;box-shadow:0 0 0 1px #87714f}.pilot-sig-card:disabled{opacity:.6;cursor:wait}
+.pilot-sig-card:focus-visible{outline:2px solid #405c99;outline-offset:2px}.pilot-sig-card small{font-size:9px;color:#857765;line-height:1.3}.pilot-sig-card>span:last-child{font-size:10px;line-height:1.4;overflow-wrap:anywhere}
+.pilot-sig-image{display:block;aspect-ratio:1;overflow:hidden;border-radius:4px;background:repeating-conic-gradient(#ece9e3 0% 25%,#f8f6f1 0% 50%) 0/12px 12px}
+.pilot-sig-image img{display:block;width:100%;height:100%;object-fit:contain}
+.pilot-sig-grid.background .pilot-sig-image{aspect-ratio:293/164}.pilot-sig-grid.background .pilot-sig-image img{height:auto;object-fit:initial;transform:translateY(-33.8709677%)}

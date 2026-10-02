@@ -1,0 +1,410 @@
+/* PhotobookKit staged updater. Builder injects PBK_STAGED_CONFIG before this file.
+ * Uses the deployed native updater's hash checks and rollback, without changing
+ * licensing, user preferences, project storage, or the native update endpoint.
+ */
+(function (host) {
+  'use strict';
+  var MiB = 1048576, MAX_BATCH = 300 * MiB, MAX_FILE = 260 * MiB;
+  var MAX_MANIFEST = 4 * MiB, PREFIX = '_internal/web/';
+  var EDITOR = PREFIX + 'editor.html', VERSION = PREFIX + 'version.json';
+  var encoder = new TextEncoder();
+
+  function parsed(value) { return typeof value === 'string' ? JSON.parse(value) : value; }
+  function encoded(value) { return JSON.stringify(value); }
+  function fail(message) { throw new Error(message); }
+  function versionKey(value) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})_v(\d+)$/.exec(value || '');
+    if (!match) fail('업데이트 버전 형식이 올바르지 않아요.');
+    return match.slice(1).map(Number);
+  }
+  function compareVersions(a, b) {
+    var aa = versionKey(a), bb = versionKey(b);
+    for (var i = 0; i < aa.length; i++) if (aa[i] !== bb[i]) return aa[i] > bb[i] ? 1 : -1;
+    return 0;
+  }
+  function secureUrl(value, origin) {
+    var u;
+    try { u = new URL(value); } catch (_) { fail('업데이트 주소가 올바르지 않아요.'); }
+    var local = /^(127\.0\.0\.1|localhost|\[::1\])$/.test(u.hostname);
+    if ((u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) ||
+        u.username || u.password || u.hash || (origin && u.origin !== origin)) {
+      fail('업데이트 파일이 허용되지 않은 서버를 가리켜요.');
+    }
+    return u;
+  }
+  function safePath(path) {
+    if (typeof path !== 'string' || path.indexOf(PREFIX) !== 0 || path.indexOf('\\') >= 0 ||
+        /[\x00-\x1f\x7f]/.test(path)) fail('업데이트 파일 경로가 올바르지 않아요.');
+    var parts = path.split('/');
+    if (parts.some(function (part) { return !part || part === '.' || part === '..' ||
+      /[:?#%<>"|*]/.test(part) || part.trim() !== part || /[. ]$/.test(part) ||
+      /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(part); })) {
+      fail('업데이트 파일 경로가 올바르지 않아요.');
+    }
+    if (/^(update_config\.json|license_config\.json|kit_prefs\.json)$/i.test(parts[parts.length - 1]) ||
+        /\.pbkold$/i.test(path)) fail('사용자 설정이나 인증 파일은 업데이트할 수 없어요.');
+    return path;
+  }
+  function hashString(value) { return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value); }
+  function count(value) { return Number.isSafeInteger(value) && value >= 0; }
+  function validateManifest(input, config) {
+    var nativeUrl = secureUrl(config.nativeManifestUrl), channelUrl = secureUrl(config.channelUrl, nativeUrl.origin);
+    if (!input || input.schema !== 1 || input.kind !== 'photobook-staged-release' ||
+        !Array.isArray(input.batches) || !input.batches.length || input.batches.length > 128) {
+      fail('순차 업데이트 목록 형식이 올바르지 않아요.');
+    }
+    if (input.bootstrapVersion !== config.bootstrapVersion ||
+        compareVersions(input.version, input.bootstrapVersion) <= 0) fail('준비 업데이트 버전이 맞지 않아요.');
+    var assetRoot = PREFIX + 'full_assets/releases/' + input.version + '/';
+    if (input.assetRoot !== assetRoot) fail('그림은 해당 버전 전용 경로에 설치해야 해요.');
+    if (encoder.encode(encoded(input)).byteLength > MAX_MANIFEST) fail('업데이트 목록이 너무 커요.');
+    var seen = new Set(), ids = new Set(), files = [], total = 0;
+    var batches = input.batches.map(function (batch, index) {
+      if (!batch || typeof batch.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(batch.id) || ids.has(batch.id) ||
+          !Array.isArray(batch.files) || !batch.files.length ||
+          batch.kind !== (index === input.batches.length - 1 ? 'activate' : 'assets')) {
+        fail('순차 업데이트 묶음 순서가 올바르지 않아요.');
+      }
+      ids.add(batch.id);
+      var bytes = 0;
+      var entries = batch.files.map(function (entry) {
+        if (!entry || !hashString(entry.h) || !count(entry.s) || entry.s > MAX_FILE) fail('파일 검증 정보가 올바르지 않아요.');
+        var path = safePath(entry.p);
+        if (seen.has(path.toLowerCase())) fail('중복된 업데이트 파일이 있어요.');
+        seen.add(path.toLowerCase());
+        if (batch.kind === 'assets' && path.indexOf(assetRoot) !== 0) {
+          fail('그림 묶음에 프로그램 변경 파일이 들어 있어요.');
+        }
+        var out = { p: path, h: entry.h, s: entry.s, u: secureUrl(entry.u, nativeUrl.origin).href };
+        if (entry.parts !== undefined) {
+          if (!Array.isArray(entry.parts) || !entry.parts.length || entry.parts.length > 64) fail('파일 조각 목록이 올바르지 않아요.');
+          var partBytes = 0;
+          out.parts = entry.parts.map(function (part) {
+            if (!part || !hashString(part.h) || !count(part.s) || !part.s || part.s > MAX_FILE) fail('파일 조각 검증 정보가 올바르지 않아요.');
+            partBytes += part.s;
+            return { h: part.h, s: part.s, u: secureUrl(part.u, nativeUrl.origin).href };
+          });
+          if (partBytes !== entry.s) fail('파일 조각의 합계 크기가 맞지 않아요.');
+        }
+        bytes += entry.s; total += entry.s; files.push(out);
+        return out;
+      });
+      if (bytes > MAX_BATCH) fail('업데이트 묶음이 300 MiB 제한을 넘어요.');
+      return { id: batch.id, kind: batch.kind, files: entries, bytes: bytes };
+    });
+    var last = batches[batches.length - 1].files;
+    if (last.length < 2 || last[last.length - 2].p !== EDITOR || last[last.length - 1].p !== VERSION ||
+        files.length > 20000) fail('화면과 버전 파일은 마지막에 적용해야 해요.');
+    if (input.page) secureUrl(input.page);
+    return { schema: 1, kind: input.kind, version: input.version, bootstrapVersion: input.bootstrapVersion,
+      assetRoot: assetRoot, notes: String(input.notes || '').slice(0, 6000), page: String(input.page || ''), batches: batches,
+      files: files, bytes: total, channelUrl: channelUrl.href };
+  }
+
+  function createBridge(environment, config) {
+    var env = environment, native = env.native, doc = env.document;
+    var active = false, pending = null, checkPromise = null, legacyPending = false, restartRequired = false;
+    var activationUnverified = false;
+    var progress = { phase: '', done: 0, total: 0, bytes: 0, totalBytes: 0 };
+    var completed = 0, completedBytes = 0, inBatch = false;
+    var lastFailure = null;
+    var configOrigin = secureUrl(config.nativeManifestUrl).origin;
+    secureUrl(config.channelUrl, configOrigin);
+    versionKey(config.bootstrapVersion);
+    if (config.schema !== 1) fail('업데이트 연결 설정 버전이 올바르지 않아요.');
+
+    async function read(url, limit, allowMissing) {
+      var controller = new AbortController();
+      var timer = env.setTimeout(function () { controller.abort(); }, 30000);
+      try {
+        var response = await env.fetch(url, { cache: 'no-store', redirect: 'error', signal: controller.signal });
+        if (allowMissing && response.status === 404) return null;
+        if (!response.ok || response.redirected) fail('업데이트 파일을 읽지 못했어요 (' + response.status + ').');
+        var length = Number(response.headers && response.headers.get('content-length'));
+        if (length > limit) fail('파일 크기가 허용 범위를 넘어요.');
+        if (!response.body || typeof response.body.getReader !== 'function') {
+          var buffer = await response.arrayBuffer();
+          if (buffer.byteLength > limit) fail('파일 크기가 허용 범위를 넘어요.');
+          return new Uint8Array(buffer);
+        }
+        var reader = response.body.getReader(), chunks = [], size = 0;
+        try {
+          for (;;) {
+            var next = await reader.read();
+            if (next.done) break;
+            size += next.value.byteLength;
+            if (size > limit) fail('파일 크기가 허용 범위를 넘어요.');
+            chunks.push(next.value);
+          }
+        } catch (error) { try { await reader.cancel(); } catch (_) {} throw error; }
+        var bytes = new Uint8Array(size), offset = 0;
+        chunks.forEach(function (chunk) { bytes.set(chunk, offset); offset += chunk.byteLength; });
+        return bytes;
+      } catch (error) {
+        if (error && error.name === 'AbortError') fail('업데이트 파일 확인 시간이 초과됐어요. 다시 시도해 주세요.');
+        throw error;
+      } finally { env.clearTimeout(timer); }
+    }
+    function localUrl(path) {
+      safePath(path);
+      var relative = path.slice(PREFIX.length).split('/').map(encodeURIComponent).join('/');
+      var base = new URL('.', doc.baseURI);
+      var url = new URL(relative, base);
+      if (url.origin !== base.origin || url.href.indexOf(base.href) !== 0) fail('설치 파일 경로가 올바르지 않아요.');
+      return url.href;
+    }
+    async function localJson(name) {
+      var bytes = await read(new URL(name, new URL('.', doc.baseURI)).href, 64 * 1024, false);
+      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    }
+    async function hash(bytes) {
+      var digest = new Uint8Array(await env.crypto.subtle.digest('SHA-256', bytes));
+      return Array.from(digest).map(function (value) { return value.toString(16).padStart(2, '0'); }).join('');
+    }
+    async function inspect(entry) {
+      var bytes = await read(localUrl(entry.p), MAX_FILE, true);
+      if (bytes === null) return { exists: false, matches: false };
+      if (bytes.byteLength !== entry.s) return { exists: true, matches: false };
+      return { exists: true, matches: (await hash(bytes)) === entry.h };
+    }
+    async function remaining(batch, progressScan) {
+      var missing = [];
+      for (var i = 0; i < batch.files.length; i++) {
+        var entry = batch.files[i], status = await inspect(entry);
+        // Asset batches are constrained to this release's unique future namespace.
+        // Incomplete copies left by a hard shutdown can safely be downloaded again.
+        if (!status.matches) missing.push(entry);
+        if (progressScan) progressScan(entry);
+      }
+      return missing;
+    }
+    async function verify(entries) {
+      for (var i = 0; i < entries.length; i++) {
+        if (!(await inspect(entries[i])).matches) fail('설치한 파일 검증에 실패했어요: ' + entries[i].p);
+      }
+    }
+    async function guardInstalledVersion(manifest) {
+      var current = await localJson('version.json');
+      var comparison = compareVersions(current.version, manifest.version);
+      if (comparison > 0 || (comparison === 0 && !activationUnverified)) {
+        fail('다른 창에서 이미 같은 버전이나 새 버전을 적용했어요. 다시 시작한 뒤 업데이트를 확인해 주세요.');
+      }
+      if (compareVersions(current.version, manifest.bootstrapVersion) < 0) {
+        fail('준비 업데이트를 먼저 설치해야 해요.');
+      }
+    }
+    function busyProject() { return !!(doc.querySelector && doc.querySelector('#sigProjectState.is-busy')); }
+    function dirtyProject() {
+      if (env.isDirty && env.isDirty()) return true;
+      if (doc.querySelector && doc.querySelector('#sigProjectState.is-dirty')) return true;
+      // Existing beforeunload listeners also cover signature mask editing.
+      if (env.beforeUnloadPrevented && env.beforeUnloadPrevented()) return true;
+      return false;
+    }
+    function dirtyGuard(action) {
+      if (busyProject()) fail('파일을 불러오거나 저장하는 중이에요. 완료 후 다시 시도해 주세요.');
+      if (dirtyProject() && !env.confirm('저장하지 않은 작업이 있어요. 먼저 저장하는 것을 권해요. 그래도 ' + action + '할까요?')) {
+        fail('저장하지 않은 작업을 보존하려고 업데이트를 취소했어요. 저장 후 다시 시도해 주세요.');
+      }
+    }
+    async function checkNow() {
+      if (active && pending) return pending.info;
+      var original = parsed(await native.upd_check());
+      if (!original || !original.enabled) { legacyPending = true; pending = null; return original; }
+      var localConfig = await localJson('update_config.json');
+      if (localConfig.dev) { legacyPending = true; pending = null; return original; }
+      if (localConfig.manifest !== config.nativeManifestUrl) fail('설치된 업데이트 서버 설정이 준비판과 달라요.');
+      var current = await localJson('version.json');
+      versionKey(current.version);
+      // A newer bootstrap is always installed by the original native flow first.
+      if (original.ok && (original.mode === 'auto' || original.mode === 'manual') &&
+          original.latest && compareVersions(original.latest, current.version) > 0) {
+        legacyPending = true; pending = null; return original;
+      }
+      if (!original.ok) fail(original.err || '기존 업데이트 상태를 확인하지 못했어요.');
+      legacyPending = false;
+      var raw = await read(config.channelUrl, MAX_MANIFEST, false);
+      var manifest = validateManifest(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)), config);
+      var info = { ok: true, enabled: true, have: current.version, latest: manifest.version, notes: manifest.notes,
+        page: manifest.page || original.page || '', files: [], delete: [], bytes: 0, mode: 'none' };
+      var comparison = compareVersions(manifest.version, current.version);
+      if (comparison < 0 || (comparison === 0 && !activationUnverified)) { pending = null; return info; }
+      if (compareVersions(current.version, manifest.bootstrapVersion) < 0) fail('준비 업데이트를 먼저 설치하고 다시 시작해 주세요.');
+      var missing = [];
+      for (var i = 0; i < manifest.batches.length; i++) missing = missing.concat(await remaining(manifest.batches[i]));
+      info.files = missing;
+      info.bytes = missing.reduce(function (sum, entry) { return sum + entry.s; }, 0);
+      info.mode = 'auto'; info.needRestart = true;
+      info.reason = '작은 묶음으로 순서대로 받은 뒤 다시 시작하면 적용돼요.';
+      pending = { manifest: manifest, info: info, expected: encoded({ files: missing, delete: [] }) };
+      lastFailure = null;
+      return info;
+    }
+    async function updCheck() {
+      if (!checkPromise) checkPromise = checkNow().catch(function (error) {
+        pending = null; legacyPending = false;
+        return { ok: false, enabled: true, err: error.message || String(error) };
+      }).finally(function () { checkPromise = null; });
+      return encoded(await checkPromise);
+    }
+    async function updApply(payload) {
+      if (active) return encoded({ ok: false, err: '이미 업데이트를 받고 있어요.', touched: false });
+      if (legacyPending) return native.upd_apply(payload);
+      var operation = pending, touched = false, applied = 0;
+      try {
+        if (!operation) fail('업데이트 목록을 다시 확인해 주세요.');
+        var request = parsed(payload);
+        if (!request || encoded({ files: request.files, delete: request.delete || [] }) !== operation.expected) {
+          fail('확인한 업데이트 목록과 요청이 달라요. 다시 확인해 주세요.');
+        }
+        dirtyGuard('업데이트');
+        active = true; completed = 0; completedBytes = 0;
+        progress = { phase: 'verify', done: 0, total: operation.manifest.files.length,
+          bytes: 0, totalBytes: operation.manifest.bytes };
+        var run = async function () {
+          var staged = [];
+          await guardInstalledVersion(operation.manifest);
+          for (var i = 0; i < operation.manifest.batches.length; i++) {
+            var batch = operation.manifest.batches[i];
+            progress.phase = 'verify';
+            if (batch.kind === 'activate') {
+              // Do not activate even one catalog entry until every asset is verified.
+              await verify(staged);
+              dirtyGuard('업데이트 적용');
+            }
+            await guardInstalledVersion(operation.manifest);
+            var todo = await remaining(batch);
+            var unchanged = batch.files.length - todo.length;
+            var todoBytes = todo.reduce(function (sum, entry) { return sum + entry.s; }, 0);
+            completed += unchanged; completedBytes += batch.bytes - todoBytes;
+            progress.done = completed; progress.bytes = completedBytes;
+            if (todo.length) {
+              inBatch = true;
+              var result;
+              if (batch.kind === 'activate') activationUnverified = true;
+              try { result = parsed(await native.upd_apply(encoded({ files: todo, delete: [] }))); }
+              finally { inBatch = false; }
+              if (!result || !result.ok) {
+                if (batch.kind === 'activate' && result && !result.restoreFailed) activationUnverified = false;
+                lastFailure = result || { err: '업데이트 응답이 없어요.' };
+                var error = new Error(lastFailure.err || '업데이트를 완료하지 못했어요.');
+                error.nativeResult = lastFailure;
+                throw error;
+              }
+              touched = true; applied += result.applied === undefined ? todo.length : result.applied;
+              await verify(batch.files);
+              completed += todo.length; completedBytes += todoBytes;
+              progress.done = completed; progress.bytes = completedBytes;
+            }
+            if (batch.kind === 'assets') staged = staged.concat(batch.files);
+          }
+          var installed = await localJson('version.json');
+          if (installed.version !== operation.manifest.version) fail('마지막 버전 파일 검증에 실패했어요.');
+          await verify(operation.manifest.batches[operation.manifest.batches.length - 1].files);
+          progress.phase = 'done'; restartRequired = true; activationUnverified = false;
+          return { ok: true, applied: applied, removed: 0, needRestart: true, staged: true };
+        };
+        // A non-waiting browser lock prevents duplicate installers in this origin.
+        // Native updater remains responsible for its own process lock and rollback.
+        var locks = env.navigator && env.navigator.locks;
+        var result;
+        if (locks && typeof locks.request === 'function') {
+          result = await locks.request('photobookkit-staged-update', { mode: 'exclusive', ifAvailable: true }, function (lock) {
+            if (!lock) fail('다른 창에서 업데이트 중이에요. 그 작업이 끝난 뒤 다시 시도해 주세요.');
+            return run();
+          });
+        } else result = await run();
+        return encoded(result);
+      } catch (error) {
+        var nativeFailure = error.nativeResult || {};
+        // Successful data batches are deliberately retained for verified resume.
+        // They are not an activated partial update. Never claim they were reverted.
+        return encoded({ ok: false, err: (error.message || String(error)) +
+          (activationUnverified ? '\n화면 파일 적용 후 검증을 마치지 못했어요. 다시 시작하지 말고 다시 시도해 설치 파일을 복구해 주세요.' : '') +
+          (touched ? '\n먼저 받은 그림 묶음은 보관했어요. 다시 시도하면 실제 파일을 확인하고 이어받아요.' : ''),
+          touched: !!nativeFailure.touched, restoreFailed: nativeFailure.restoreFailed || 0,
+          backup: nativeFailure.backup, stagedRetained: touched, restartRequired: restartRequired,
+          activationUnverified: activationUnverified });
+      } finally { active = false; inBatch = false; }
+    }
+    async function updProgress() {
+      if (legacyPending) return native.upd_progress();
+      var out = Object.assign({}, progress);
+      if (active && inBatch) {
+        try {
+          var value = parsed(await native.upd_progress());
+          if (value) {
+            out.phase = value.phase || 'download';
+            out.done = Math.min(out.total, completed + Math.max(0, Number(value.done) || 0));
+            out.bytes = Math.min(out.totalBytes, completedBytes + Math.max(0, Number(value.bytes) || 0));
+          }
+        } catch (_) {}
+      }
+      return encoded(out);
+    }
+    async function updRestart() {
+      if (active) return encoded({ ok: false, err: '업데이트가 끝난 뒤 다시 시작해 주세요.' });
+      if (activationUnverified) return encoded({ ok: false, err: '적용한 화면 파일 검증이 끝나지 않았어요. 다시 시도해 복구한 뒤 다시 시작해 주세요.' });
+      try { dirtyGuard('다시 시작'); return await native.upd_restart(); }
+      catch (error) { return encoded({ ok: false, err: error.message || String(error) }); }
+    }
+    return { upd_check: updCheck, upd_apply: updApply, upd_progress: updProgress, upd_restart: updRestart,
+      inspect: inspect, getState: function () { return { active: active, restartRequired: restartRequired, activationUnverified: activationUnverified,
+        plannedVersion: pending && pending.manifest.version, lastFailure: lastFailure }; } };
+  }
+
+  function browserEnvironment(api) {
+    return { native: { upd_check: api.upd_check.bind(api), upd_apply: api.upd_apply.bind(api),
+      upd_progress: api.upd_progress.bind(api), upd_restart: api.upd_restart.bind(api) },
+      document: host.document, navigator: host.navigator, crypto: host.crypto,
+      fetch: host.fetch.bind(host), setTimeout: host.setTimeout.bind(host), clearTimeout: host.clearTimeout.bind(host),
+      confirm: host.confirm.bind(host), isDirty: function () { return !!host.dirty; },
+      beforeUnloadPrevented: function () {
+        var event = new Event('beforeunload', { cancelable: true });
+        host.dispatchEvent(event);
+        return event.defaultPrevented;
+      } };
+  }
+  var installedApis = new WeakMap();
+  function install(api) {
+    if (!host.PBK_STAGED_CONFIG || !api || !host.pywebview || host.pywebview.__mock) return false;
+    var names = ['upd_check', 'upd_apply', 'upd_progress', 'upd_restart'];
+    if (names.some(function (name) { return typeof api[name] !== 'function'; })) return false;
+    var installed = installedApis.get(api);
+    if (!installed) {
+      var environment = browserEnvironment(api);
+      installed = { environment: environment, bridge: createBridge(environment, host.PBK_STAGED_CONFIG) };
+      installedApis.set(api, installed);
+    } else {
+      // Native bridge self-repair may replace only one generated method. Retain
+      // the active plan and update that captured native function, without nesting.
+      names.forEach(function (name) {
+        if (api[name] !== installed.bridge[name] && !api[name].__pbkStaged) {
+          installed.environment.native[name] = api[name].bind(api);
+        }
+      });
+    }
+    var bridge = installed.bridge;
+    names.forEach(function (name) {
+      bridge[name].__pbkStaged = true;
+      api[name] = bridge[name];
+    });
+    host.PBK_STAGED_UPDATER.instance = bridge;
+    return true;
+  }
+  var exports = { createBridge: createBridge, validateManifest: validateManifest, compareVersions: compareVersions,
+    install: install, limits: { batch: MAX_BATCH, file: MAX_FILE, manifest: MAX_MANIFEST } };
+  if (typeof module === 'object' && module.exports) module.exports = exports;
+  if (host && host.document) {
+    host.PBK_STAGED_UPDATER = exports;
+    var attach = function () {
+      try { install(host.pywebview && host.pywebview.api); }
+      catch (error) { exports.installError = error.message || String(error); }
+    };
+    host.addEventListener('pywebviewready', attach);
+    host.document.addEventListener('DOMContentLoaded', attach);
+    attach();
+    // The old editor can repair or replace the native API after initial startup.
+    host.setInterval(attach, 250);
+  }
+})(typeof window === 'object' ? window : globalThis);
