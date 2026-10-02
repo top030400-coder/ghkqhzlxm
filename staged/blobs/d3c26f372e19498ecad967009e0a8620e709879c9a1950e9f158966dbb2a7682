@@ -1,0 +1,95 @@
+<!doctype html><meta charset="utf-8"><title>rim look</title>
+<body style="background:#0b0b0f;color:#ddd;font:12px/1.5 monospace;margin:0;padding:6px">
+<pre id="info">…</pre>
+<div id="v"></div>
+<script src="rim_assets.js"></script>
+<script>
+let BG=null,SUBJ=null;
+function loadImg(u){ return new Promise((ok,no)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=no; i.src=u; }); }
+function subjBox(W,H){ const s=Math.min(H*1.75, W*0.42); return {x:W-s*0.92, y:H-s*0.86, w:s, h:s}; }
+function drawSubj(g,W,H,dx,dy,rot){ const b=subjBox(W,H); g.save();
+  if(rot){ g.translate(b.x+b.w/2,b.y+b.h); g.rotate(rot); g.translate(-(b.x+b.w/2),-(b.y+b.h)); }
+  g.drawImage(SUBJ,b.x+(dx||0),b.y+(dy||0),b.w,b.h); g.restore(); }
+function paint(W,H){ const c=document.createElement('canvas'); c.width=W;c.height=H;
+  const g=c.getContext('2d',{willReadFrequently:true});
+  g.drawImage(BG,0,0,W,H); return {c,g}; }
+function restoreBg(g,x,y,w,h){ g.save(); g.beginPath(); g.rect(x,y,w,h); g.clip(); g.drawImage(BG,0,0,720,150); g.restore(); }
+function drawSubject(g,dx,dy,sc,rot){ drawSubj(g,720,150,dx||0,dy||0,rot||0); }
+
+const A={draw:function(g,t,W,H){
+  var B={x:W*0.66,y:0,w:W*0.30,h:H};
+  var bw=110, x=B.x-bw+(B.w+bw*2)*t, c=x+bw/2, p=(c-B.x)/B.w;
+  if(p<=0||p>=1) return;
+  var k=Math.sin(Math.PI*p);
+  g.save(); g.beginPath(); g.rect(x,B.y-8,bw,B.h+16); g.clip();
+  restoreBg(g,x,B.y-8,bw,B.h+16);
+  g.shadowColor='rgba(255,246,214,0.95)'; g.shadowBlur=9; g.globalAlpha=0.9*k;
+  drawSubject(g,0,0,1,0);
+  g.shadowBlur=0; g.globalAlpha=1; drawSubject(g,0,0,1,0);
+  g.restore(); }};
+
+let _rc=null;
+function rimDraw(g,t,W,H,BW,BLUR,ALPHA){
+  const b=subjBox(W,H), bw=BW, pad=Math.ceil(BLUR*2.2);
+  const span=b.w+bw*2, x=b.x-bw+span*t, c=x+bw/2, p=(c-b.x)/b.w;
+  if(p<=0||p>=1) return;
+  const k=Math.sin(Math.PI*p);
+  const ox=Math.round(x)-pad, oy=-pad, ow=bw+pad*2, oh=H+pad*2;
+  if(!_rc) _rc=document.createElement('canvas');
+  if(_rc.width!==ow||_rc.height!==oh){_rc.width=ow;_rc.height=oh;}
+  const q=_rc.getContext('2d');
+  q.setTransform(1,0,0,1,0,0); q.globalCompositeOperation='source-over'; q.globalAlpha=1;
+  q.clearRect(0,0,ow,oh); q.translate(-ox,-oy);
+  q.shadowColor='rgba(255,246,214,1)'; q.shadowBlur=BLUR; drawSubj(q,W,H,0,0,0);
+  q.shadowBlur=0; q.shadowColor='rgba(0,0,0,0)';
+  q.globalCompositeOperation='destination-out'; drawSubj(q,W,H,0,0,0);
+  q.setTransform(1,0,0,1,0,0); q.globalCompositeOperation='destination-in';
+  const gr=q.createLinearGradient(0,0,ow,0);
+  gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(.5,'rgba(0,0,0,1)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+  q.fillStyle=gr; q.fillRect(0,0,ow,oh);
+  g.save(); g.globalCompositeOperation='lighter'; g.globalAlpha=(ALPHA||0.95)*k; g.drawImage(_rc,ox,oy); g.restore();
+}
+const B60={draw:(g,t,W,H)=>rimDraw(g,t,W,H,60,9,0.95)};
+
+function strip(label, fx, ts, amp){
+  const wrap=document.createElement('div');
+  wrap.innerHTML='<div style="color:#8cf;margin:6px 0 2px">'+label+'</div>';
+  const {c:bc,g:bg}=paint(720,150); drawSubj(bg,720,150,0,0,0);
+  const base=bg.getImageData(0,0,720,150).data;
+  ts.forEach(t=>{
+    const {c,g}=paint(720,150); drawSubj(g,720,150,0,0,0);
+    g.save(); fx.draw(g,t,720,150); g.restore();
+    c.style.cssText='display:block;margin:1px 0';
+    wrap.appendChild(c);
+    if(amp){ const d=g.getImageData(0,0,720,150); const a=d.data;
+      for(let i=0;i<a.length;i+=4){ a[i]=Math.min(255,Math.abs(a[i]-base[i])*6); a[i+1]=Math.min(255,Math.abs(a[i+1]-base[i+1])*6); a[i+2]=Math.min(255,Math.abs(a[i+2]-base[i+2])*6); }
+      const c2=document.createElement('canvas'); c2.width=720;c2.height=150;
+      c2.getContext('2d').putImageData(d,0,0); c2.style.cssText='display:block;margin:1px 0 8px;outline:1px solid #444';
+      wrap.appendChild(c2); }
+  });
+  document.getElementById('v').appendChild(wrap);
+}
+
+(async()=>{
+  BG=await loadImg(ASSET_BG); SUBJ=await loadImg(ASSET_SUBJ);
+  // SUBJ 알파 통계
+  const sc=document.createElement('canvas'); sc.width=SUBJ.width; sc.height=SUBJ.height;
+  const sg=sc.getContext('2d',{willReadFrequently:true}); sg.drawImage(SUBJ,0,0);
+  const sd=sg.getImageData(0,0,sc.width,sc.height).data;
+  let a0=0,a255=0,amid=0;
+  for(let i=3;i<sd.length;i+=4){ if(sd[i]===0)a0++; else if(sd[i]===255)a255++; else amid++; }
+  // BG 밝기
+  const bc=document.createElement('canvas'); bc.width=720;bc.height=150;
+  const bgx=bc.getContext('2d',{willReadFrequently:true}); bgx.drawImage(BG,0,0,720,150);
+  const bd=bgx.getImageData(0,0,720,150).data; let lum=0;
+  for(let i=0;i<bd.length;i+=4) lum+=(bd[i]*0.299+bd[i+1]*0.587+bd[i+2]*0.114);
+  lum/=(720*150);
+  document.getElementById('info').textContent=
+    'SUBJ '+sc.width+'x'+sc.height+'  알파0='+(100*a0/(a0+a255+amid)).toFixed(1)+'%  알파255='+(100*a255/(a0+a255+amid)).toFixed(1)+'%  반투명='+(100*amid/(a0+a255+amid)).toFixed(1)+'%'
+    +'   → '+(a0>0.02*(a0+a255+amid)?'누끼(투명영역 있음)':'⚠ 사각 사진(투명 없음) — 실루엣 글로우가 안 생김')
+    +'\nBG 평균밝기='+lum.toFixed(0)+'/255  subjBox='+JSON.stringify(subjBox(720,150));
+  strip('BASE (효과 없음)', {draw:()=>{}}, [0], false);
+  strip('A 제안원문  t=0.30 / 0.42 / 0.50 / 0.58 / 0.70  (각 아래줄=차이 6배 증폭)', A, [0.30,0.42,0.50,0.58,0.70], true);
+  strip('B 고침 bw60  같은 t', B60, [0.30,0.42,0.50,0.58,0.70], true);
+})();
+</script>

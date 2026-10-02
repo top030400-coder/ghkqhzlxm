@@ -1,0 +1,122 @@
+/* Keep the review designs discoverable in each native editing panel. */
+(function () {
+  'use strict';
+  var items = window.PBKPilotRootData || [];
+  var scheduled = false;
+  var typeLabels = {top:'상단 배너',bottom:'하단 이름판',side:'사이드 배너',thumb:'썸네일',bot6:'하단 6분할',bot3:'하단 3분할',edit:'편집 프레임'};
+  var gifLabels = {avatar:'움짤 프사',bottom:'움짤 하단 배너',bottom6:'움짤 하단 6분할',side:'움짤 사이드 배너'};
+  function element(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text) node.textContent = text;
+    return node;
+  }
+  function modeOf(item) { return item.categoryId === 22 ? 'avatar' : item.categoryId === 24 ? 'bottom6' : item.categoryId === 25 ? 'side' : 'bottom'; }
+  function gifMode() {
+    var active = document.querySelector('#gifModeRow button.on');
+    return active ? active.getAttribute('data-m') : 'free';
+  }
+  function card(item, selected, apply) {
+    var button = element('button', 'pilot-theme-card');
+    button.type = 'button';
+    button.dataset.pilotTheme = item.id;
+    button.setAttribute('aria-pressed', String(selected));
+    button.title = item.category + ' · ' + item.theme + ' · ' + item.width + '×' + item.height + 'px';
+    var image = element('img');
+    image.src = item.data;
+    image.alt = item.theme + ' 미리보기';
+    var label = element('span', 'pilot-theme-label');
+    label.appendChild(element('b', '', item.theme));
+    label.appendChild(element('small', '', item.category + ' · ' + item.width + '×' + item.height + 'px'));
+    label.appendChild(element('small', 'pilot-theme-action', selected ? '적용 중 · 다시 적용' : '이 디자인 적용'));
+    button.appendChild(image);
+    button.appendChild(label);
+    button.addEventListener('click', async function () {
+      button.disabled = true;
+      try { await apply(item.id); }
+      catch (error) { alert('디자인을 적용하지 못했어요: ' + error.message); }
+      finally { button.disabled = false; schedule(); }
+    });
+    return button;
+  }
+  function bannerPanel() {
+    var box = document.getElementById('bnInspector');
+    if (!box || !window.PBKPilotBridge || !window.PBKPilot || !document.body.classList.contains('bannerOn')) return;
+    var selected = document.querySelector('.bnItem.sel');
+    var type = document.body.classList.contains('editOn') ? 'edit' : selected && selected.getAttribute('data-bn');
+    if (!type || !typeLabels[type]) return;
+    var list = items.filter(function (item) { return item.type === type; });
+    var old = box.querySelector('#pilotThemeBanner');
+    if (!list.length) { if (old) old.remove(); return; }
+    var state = PBKPilotBridge.get(type);
+    var selectedId = state.layout && state.layout.indexOf('pilot-') === 0 ? state.layout.slice(6) : '';
+    var key = type + ':' + selectedId;
+    if (old && old.dataset.key === key) return;
+    if (old) old.remove();
+    var section = element('section', 'pilot-theme-section');
+    section.id = 'pilotThemeBanner';
+    section.dataset.key = key;
+    section.appendChild(element('div', 'insSec', '배경 테마 · 새 디자인'));
+    section.appendChild(element('p', 'pilot-theme-note', typeLabels[type] + ' — 프레임과 사진칸을 함께 적용해요. 사진은 기존 사진 선택에서 넣을 수 있어요.'));
+    var grid = element('div', 'pilot-theme-grid');
+    list.forEach(function (item) { grid.appendChild(card(item, selectedId === item.id, function (id) { return PBKPilot.apply(id); })); });
+    section.appendChild(grid);
+    // The old background palette stays intact, including its page controls.
+    var heading = Array.from(box.children).find(function (node) { return node.classList.contains('insSec') && /^테마 배경 /.test(node.textContent); });
+    if (!heading) heading = Array.from(box.children).find(function (node) { return node.classList.contains('insSec') && /^사진$/.test(node.textContent); });
+    box.insertBefore(section, heading || box.firstChild);
+  }
+  function gifPanel() {
+    var anchor = document.getElementById('gifModeRow');
+    if (!anchor || !window.PBKPilotGif) return;
+    var mode = gifMode();
+    var list = items.filter(function (item) { return item.categoryId >= 22 && item.categoryId <= 25 && modeOf(item) === mode; });
+    var section = document.getElementById('pilotThemeGif');
+    if (!section) {
+      section = element('section', 'pilot-theme-section');
+      section.id = 'pilotThemeGif';
+      anchor.parentNode.insertBefore(section, anchor.nextSibling);
+    }
+    section.hidden = !list.length;
+    if (!list.length) return;
+    var selected = PBKPilotGif.state()[mode];
+    var key = mode + ':' + (selected || '');
+    if (section.dataset.key === key) return;
+    section.dataset.key = key;
+    section.replaceChildren();
+    section.appendChild(element('div', 'insSec', '배경 테마 · ' + gifLabels[mode]));
+    section.appendChild(element('p', 'pilot-theme-note', mode === 'avatar' ? '캐릭터 장면부터 같은 테두리가 유지돼요. 원형 프사를 꽉 채우며 아래 인트로에서 글자·전환을 조절하세요.' : '지금 선택한 배너 규격에 맞는 디자인이에요. 사진·영상은 프레임 안쪽에 표시돼요.'));
+    var grid = element('div', 'pilot-theme-grid');
+    list.forEach(function (item) { grid.appendChild(card(item, selected === item.id, function (id) { return PBKPilotGif.apply(id); })); });
+    section.appendChild(grid);
+    var reset = element('button', 'pilot-theme-clear', '현재 배경 테마 해제');
+    reset.type = 'button';
+    reset.disabled = !selected;
+    reset.onclick = function () { PBKPilotGif.clear(mode); schedule(); };
+    section.appendChild(reset);
+  }
+  function schedule() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(function () { scheduled = false; bannerPanel(); gifPanel(); });
+  }
+  function init() {
+    var style = element('style');
+    style.textContent = '#pilotGifPanel{display:none!important}.pilot-theme-section{margin:6px 0 12px;padding:10px;border:1px solid #d7d0e5;border-radius:10px;background:#faf8ff}.pilot-theme-section[hidden]{display:none!important}.pilot-theme-section .insSec{margin:0 0 7px}.pilot-theme-note{margin:0 0 8px;font-size:11px;line-height:1.55;color:#696173}.pilot-theme-grid{display:grid;grid-template-columns:1fr;gap:7px}.pilot-theme-card{width:100%;padding:7px;border:1px solid #d8d0e3;border-radius:8px;background:white;cursor:pointer;text-align:left;display:flex;gap:9px;align-items:center}.pilot-theme-card:hover{border-color:#797093}.pilot-theme-card[aria-pressed=true]{border-color:#72618d;background:#f0eafa;box-shadow:0 0 0 1px #72618d}.pilot-theme-card:disabled{cursor:wait;opacity:.65}.pilot-theme-card img{display:block;width:100px;height:70px;object-fit:contain;background:repeating-conic-gradient(#f8f5ef 0% 25%,#e9e5dd 0% 50%) 50%/12px 12px;border-radius:4px;flex-shrink:0}.pilot-theme-label{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px}.pilot-theme-label b{font-size:12px;line-height:1.35}.pilot-theme-label small{font-size:10px;color:#71687b;line-height:1.4}.pilot-theme-label .pilot-theme-action{color:#665385}.pilot-theme-clear{margin-top:8px;width:100%;font-size:11px;padding:6px}';
+    document.head.appendChild(style);
+    var inspector = document.getElementById('bnInspector');
+    if (inspector) new MutationObserver(schedule).observe(inspector, {childList:true});
+    var modes = document.getElementById('gifModeRow');
+    if (modes) new MutationObserver(schedule).observe(modes, {attributes:true,subtree:true,attributeFilter:['class','style']});
+    var gifStatePanel = document.getElementById('pilotGifPanel');
+    if (gifStatePanel) new MutationObserver(schedule).observe(gifStatePanel, {attributes:true,subtree:true,attributeFilter:['aria-pressed']});
+    document.addEventListener('click', function (event) {
+      if (event.target.closest('#tabBanner,#tabEdit,#tabGif,#tabGifBn,.bnItem,#gifModeRow,.pilot-card,#pilotThemeGif')) schedule();
+    });
+    var background = document.getElementById('giBgMode');
+    if (background) background.addEventListener('change', schedule);
+    window.PBKPilotThemePicker = {refresh:schedule};
+    schedule();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
