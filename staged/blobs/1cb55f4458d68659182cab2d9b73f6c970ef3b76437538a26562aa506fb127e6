@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>psd dump</title>
+<link rel="stylesheet" href="fonts_embed.css">
+<link rel="stylesheet" href="engine.css">
+<style>
+  html,body{margin:0;background:transparent}
+  #canvas{width:1200px;height:1600px;position:relative;overflow:hidden}
+  #canvas .sheet{position:absolute;inset:0}
+  /* 격리 모드에서 비유지 요소의 가상요소 칠 제거(인라인으로 못 만지는 부분) */
+  body.iso .pg *:not(.psd-keep)::before,
+  body.iso .pg *:not(.psd-keep)::after{
+    background:transparent !important;border-color:transparent !important;box-shadow:none !important}
+  /* 사진칸 플레이스홀더(회색 클리핑용) */
+  .psd-photo-fill{position:absolute;inset:0;background:#d2d2d0}
+</style>
+</head>
+<body>
+<div id="canvas"></div>
+<script src="engine.js"></script>
+<script>
+(function () {
+  'use strict';
+  var canvas = document.getElementById('canvas');
+  var LAYERS = [];
+  var undoStyles = [];
+
+  function textName(el) {
+    var t = (el.textContent || '').trim().replace(/\s+/g, ' ');
+    return t.slice(0, 14) || '장식';
+  }
+  function ratioName(el) {
+    var r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return '';
+    var ar = r.width / r.height;
+    var nice = [[1,1],[4,3],[3,4],[3,2],[2,3],[16,9],[9,16],[5,4],[4,5],[2,1],[1,2],[21,9]];
+    var best = nice[0], bd = 1e9;
+    nice.forEach(function (n) {
+      var d = Math.abs(Math.log(ar / (n[0] / n[1])));
+      if (d < bd) { bd = d; best = n; }
+    });
+    return best[0] + 'x' + best[1];
+  }
+  function allEls() {
+    /* .sheet(종이 배경)부터 포함해야 격리 캡처가 진짜 투명해진다 */
+    var root = canvas.querySelector('.sheet');
+    var out = [root];
+    root.querySelectorAll('*').forEach(function (e) { out.push(e); });
+    return out;
+  }
+  function clearIso() {
+    undoStyles.forEach(function (u) {
+      if (u[1] === null) u[0].removeAttribute('style');
+      else u[0].setAttribute('style', u[1]);
+    });
+    undoStyles = [];
+    allEls().forEach(function (e) { e.classList.remove('psd-keep'); });
+    document.body.classList.remove('iso');
+  }
+  /* keepEl과 그 자손만 원래 칠 유지, 나머지는 투명화(레이아웃은 유지) */
+  function isoExcept(keepEl) {
+    var keep = [keepEl];
+    keepEl.querySelectorAll('*').forEach(function (e) { keep.push(e); });
+    keep.forEach(function (e) { e.classList.add('psd-keep'); });
+    allEls().forEach(function (e) {
+      if (keep.indexOf(e) >= 0) return;
+      undoStyles.push([e, e.getAttribute('style')]);
+      e.style.setProperty('background', 'transparent', 'important');
+      e.style.setProperty('box-shadow', 'none', 'important');
+      e.style.setProperty('border-color', 'transparent', 'important');
+      e.style.setProperty('text-shadow', 'none', 'important');
+      e.style.setProperty('-webkit-text-stroke-color', 'transparent', 'important');
+    });
+    document.body.classList.add('iso');
+  }
+
+  window.PSD = {
+    count: PBK.LAYOUTS.length,
+    meta: function (i) {
+      var d = PBK.LAYOUTS[i];
+      return { id: d.id, name: d.n, cat: d.cat };
+    },
+    load: function (i) {
+      var d = PBK.LAYOUTS[i];
+      var pg = { layout: d.id, photos: [], texts: {}, mir: false };
+      canvas.innerHTML = PBK.render(pg, { mode: 'edit', pnum: i + 2 });
+      undoStyles = [];
+      document.body.classList.remove('iso');
+      LAYERS = [];
+      var root = canvas.querySelector('.pg');
+
+      var phN = 0;
+      root.querySelectorAll('.ph').forEach(function (el) {
+        if (el.parentElement && el.parentElement.closest('.ph')) return;
+        phN++;
+        el.innerHTML = '<div class="psd-photo-fill"></div>';
+        LAYERS.push({ el: el, kind: 'photo', name: '사진' + phN + ' (' + ratioName(el) + ')' });
+      });
+
+      root.querySelectorAll('.pol,.snap,.polaroid,.card,.frame,.inframe,.band,.strip,.dv-band').forEach(function (el) {
+        if (el.closest('.ph')) return;
+        LAYERS.push({ el: el, kind: 'card', name: '카드/프레임' });
+      });
+
+      root.querySelectorAll('.scrim').forEach(function (el) {
+        LAYERS.push({ el: el, kind: 'deco', name: '그라데이션' });
+      });
+
+      root.querySelectorAll('*').forEach(function (el) {
+        if (el.closest('.ph')) return;
+        if (el.classList.contains('psd-photo-fill')) return;
+        var direct = false;
+        for (var c = el.firstChild; c; c = c.nextSibling) {
+          if (c.nodeType === 3 && c.textContent.trim()) { direct = true; break; }
+        }
+        if (!direct) return;
+        LAYERS.push({ el: el, kind: 'text', name: textName(el) });
+      });
+
+      root.querySelectorAll('.rule,.bars,.tape').forEach(function (el) {
+        LAYERS.push({ el: el, kind: 'deco', name: el.classList.contains('bars') ? '바코드' : (el.classList.contains('tape') ? '테이프' : '괘선') });
+      });
+
+      var seen = [];
+      LAYERS = LAYERS.filter(function (L) {
+        if (seen.indexOf(L.el) >= 0) return false;
+        seen.push(L.el);
+        return true;
+      });
+      LAYERS.sort(function (a, b) {
+        var p = a.el.compareDocumentPosition(b.el);
+        return (p & 4) ? -1 : 1;
+      });
+
+      return LAYERS.map(function (L, k) {
+        var r = L.el.getBoundingClientRect();
+        return { k: k, kind: L.kind, name: L.name,
+          x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+      });
+    },
+    /* k번 레이어만 표시(-1 = 배경) */
+    show: function (k) {
+      clearIso();
+      LAYERS.forEach(function (L, i) {
+        L.el.style.visibility = (i === k) ? 'visible' : 'hidden';
+      });
+      if (k >= 0) isoExcept(LAYERS[k].el);
+    },
+    showAll: function () {
+      clearIso();
+      LAYERS.forEach(function (L) { L.el.style.visibility = 'visible'; });
+    },
+    /* 텍스트 레이어들의 타이포 정보(Photopea 텍스트 레이어 변환용) */
+    textData: function () {
+      var out = [];
+      LAYERS.forEach(function (L, k) {
+        if (L.kind !== 'text') return;
+        var el = L.el;
+        var cs = getComputedStyle(el);
+        /* 직접 텍스트 노드만(자식 레이어 텍스트 제외), br → 줄바꿈 */
+        var content = '';
+        for (var c = el.firstChild; c; c = c.nextSibling) {
+          if (c.nodeType === 3) content += c.textContent;
+          else if (c.nodeType === 1 && c.tagName === 'BR') content += '\n';
+        }
+        content = content.replace(/[ \t]+/g, ' ').replace(/^\s+|\s+$/g, '');
+        if (!content) return;
+        if (cs.textTransform === 'uppercase') content = content.toUpperCase();
+        var fam = cs.fontFamily || '';
+        var famKey = fam.indexOf('PBDisplay') >= 0 ? 'disp'
+          : (fam.indexOf('PBBody') >= 0 ? 'body' : 'sans');
+        var m = cs.color.match(/(\d+)[, ]+(\d+)[, ]+(\d+)/) || [0, 21, 21, 21];
+        var ls = parseFloat(cs.letterSpacing);
+        var r = el.getBoundingClientRect();
+        var vertical = cs.writingMode && cs.writingMode.indexOf('vertical') === 0;
+        out.push({
+          k: k, content: content, famKey: famKey,
+          fontPx: parseFloat(cs.fontSize),
+          weight: parseInt(cs.fontWeight, 10) || 400,
+          italic: cs.fontStyle === 'italic',
+          colR: +m[1], colG: +m[2], colB: +m[3],
+          trackingPx: isNaN(ls) ? 0 : ls,
+          lineHeightPx: parseFloat(cs.lineHeight) || 0,
+          align: cs.textAlign,
+          vertical: vertical,
+          multiline: content.indexOf('\n') >= 0,
+          x: r.left, y: r.top, w: r.width, h: r.height
+        });
+      });
+      return out;
+    }
+  };
+})();
+</script>
+</body>
+</html>
