@@ -1,0 +1,100 @@
+/* Four selected assets for this separate review copy; native image bytes unchanged. */
+(function(){
+  'use strict';
+  var KEY='pbk.review.gif-art.v1', saved={avatar:null,bottom:null,bottom6:null,side:null};
+  var cache={}, loading={}, restoreBusy=false;
+  var data=(window.PBKPilotRootData||[]).filter(function(x){return x.categoryId>=22&&x.categoryId<=25;});
+  function find(id){return data.find(function(x){return x.id===id;});}
+  function mode(item){return item.categoryId===22?'avatar':item.categoryId===24?'bottom6':item.categoryId===25?'side':'bottom';}
+  function loadImg(src){return new Promise(function(resolve,reject){var im=new Image();im.onload=function(){resolve(im);};im.onerror=function(){reject(new Error('시안 이미지를 읽지 못했어요.'));};im.src=src;});}
+  function prepareAvatarFrame(p){
+    if(p.item.categoryId!==22||!p.item.fullBleed)return;
+    // The connected cream centre is the photo window; all illustration stays in front.
+    // Build this once when selecting the asset, never once per animation frame.
+    var W=p.item.width,H=p.item.height,c=document.createElement('canvas');c.width=W;c.height=H;
+    var g=c.getContext('2d',{willReadFrequently:true});g.drawImage(p.img,0,0,W,H);
+    var pixels=g.getImageData(0,0,W,H),a=pixels.data,seen=new Uint8Array(W*H),queue=new Int32Array(W*H),head=0,tail=0;
+    function add(i){if(i<0||i>=seen.length||seen[i])return;var k=i*4;if(a[k]<190||a[k+1]<175||a[k+2]<135||a[k]-a[k+2]<6)return;seen[i]=1;queue[tail++]=i;}
+    add(Math.floor(H/2)*W+Math.floor(W/2));
+    while(head<tail){var i=queue[head++],x=i%W;if(x)add(i-1);if(x<W-1)add(i+1);add(i-W);add(i+W);}
+    if(tail<W*H*.4||tail>W*H*.85)throw new Error('프사 사진 영역을 확인하지 못했어요.');
+    var mask=document.createElement('canvas');mask.width=W;mask.height=H;var mg=mask.getContext('2d'),m=mg.createImageData(W,H);
+    for(var j=0;j<seen.length;j++){var k=j*4;m.data[k]=m.data[k+1]=m.data[k+2]=255;m.data[k+3]=seen[j]?255:0;}
+    mg.putImageData(m,0,0);g.globalCompositeOperation='destination-out';g.drawImage(mask,0,0);g.globalCompositeOperation='source-over';
+    p.avatarFrame=c;p.avatarWindow=mask;p.transitionCanvases=[];
+  }
+  function load(item){
+    if(cache[item.id])return Promise.resolve(cache[item.id]);
+    if(loading[item.id])return loading[item.id];
+    return loading[item.id]=Promise.all([loadImg(item.data),item.mask?loadImg(item.mask):null,item.body?loadImg(item.body):null]).then(function(all){
+      var r={item:item,img:all[0],mask:all[1],body:all[2]};
+      if(r.body){var cv=document.createElement('canvas');cv.width=item.width;cv.height=item.height;var g=cv.getContext('2d');g.drawImage(r.body,0,0);g.globalCompositeOperation='source-in';g.fillStyle='#fff7ef';g.fillRect(0,0,cv.width,cv.height);r.body=cv;}
+      prepareAvatarFrame(r);cache[item.id]=r;return r;
+    }).catch(function(e){delete loading[item.id];throw e;});
+  }
+  function persist(){var s=JSON.stringify(saved);try{localStorage.setItem(KEY,s);}catch(e){}if(window.PBKPilotGifBridge)window.PBKPilotGifBridge.persist(s);return s;}
+  function read(s){try{var o=JSON.parse(s||'{}');Object.keys(saved).forEach(function(k){saved[k]=find(o[k])&&mode(find(o[k]))===k?o[k]:null;});}catch(e){} }
+  function refresh(){if(window.PBKPilotGifBridge)window.PBKPilotGifBridge.refresh();updateUI();}
+  function updateUI(){document.querySelectorAll('[data-pilot-gif]').forEach(function(b){var it=find(b.dataset.pilotGif);b.setAttribute('aria-pressed',saved[mode(it)]===it.id?'true':'false');});}
+  async function apply(id){
+    var item=find(id);if(!item)throw new Error('지원하는 시안이 아니에요.');
+    if(!window.PBKPilotGifBridge)throw new Error('움짤 편집기를 준비하고 있어요. 잠시 뒤 다시 선택해 주세요.');
+    await load(item);saved[mode(item)]=id;persist();
+    window.PBKPilotGifBridge.activate(item);refresh();return{id:id,mode:mode(item),width:item.width,height:item.height};
+  }
+  function clear(which){if(which&&which in saved)saved[which]=null;else Object.keys(saved).forEach(function(k){saved[k]=null;});if(!saved.avatar&&window.PBKPilotGifBridge)window.PBKPilotGifBridge.clearCard();persist();refresh();}
+  function card(bgm){return typeof bgm==='string'&&bgm.indexOf('pilot:')===0&&!!find(bgm.slice(6))&&find(bgm.slice(6)).categoryId===22;}
+  function drawCard(g,W,bgm,ring,ringWidth){
+    if(!card(bgm))return false;var id=bgm.slice(6),p=cache[id];if(!p)return false;
+    // Avatar backgrounds fill the native circle. Their ornaments are drawn inside it.
+    if(p.item.fullBleed){g.save();g.drawImage(p.img,0,0,W,W);g.restore();return true;}
+    var fit=p.item.circleFit||.86;
+    // Native sketch ring can reach farther inward than the regular circle.
+    if(ring==='sketch')fit*=Math.max(.65,1-(+ringWidth||12)*2/420);
+    var s=W*fit;
+    g.save();g.fillStyle='#eaf1ff';g.fillRect(0,0,W,W);g.drawImage(p.img,(W-s)/2,(W-s)/2,s,s);g.restore();return true;
+  }
+  function compose(g,W,H,currentMode){
+    if(!['bottom','bottom6','side'].includes(currentMode))return false;
+    var p=cache[saved[currentMode]];if(!p||!p.mask)return false;
+    g.save();g.globalCompositeOperation='destination-in';g.drawImage(p.mask,0,0,W,H);
+    g.globalCompositeOperation='destination-over';if(p.body)g.drawImage(p.body,0,0,W,H);
+    g.globalCompositeOperation='source-over';g.drawImage(p.img,0,0,W,H);g.restore();return true;
+  }
+  function activeAvatar(){return window.PBKPilotGifBridge&&window.PBKPilotGifBridge.mode()==='avatar'&&cache[saved.avatar];}
+  function composeAvatar(g,W,ph){
+    var p=activeAvatar();if(!p||!p.avatarFrame)return false;
+    g.save();window.PBKPilotGifBridge.clipAvatar(g,W,ph);g.drawImage(p.avatarFrame,0,0,W,W);
+    // Moving transitions may reveal an empty part of the photo window: keep its cream backing.
+    g.globalCompositeOperation='destination-over';g.drawImage(p.img,0,0,W,W);g.restore();return true;
+  }
+  function transitionSources(A,B,W){
+    var p=activeAvatar();if(!p||!p.avatarWindow)return null;
+    return [A,B].map(function(src,i){var c=p.transitionCanvases[i];if(!c){c=document.createElement('canvas');p.transitionCanvases[i]=c;}if(c.width!==W||c.height!==W){c.width=c.height=W;}var g=c.getContext('2d');g.clearRect(0,0,W,W);g.drawImage(src,0,0,W,W);g.globalCompositeOperation='destination-in';g.drawImage(p.avatarWindow,0,0,W,W);g.globalCompositeOperation='source-over';return c;});
+  }
+  async function restoreSaved(){
+    if(restoreBusy)return;restoreBusy=true;
+    try{
+      var s=window.PBKPilotGifBridge&&window.PBKPilotGifBridge.saved();if(!s)try{s=localStorage.getItem(KEY);}catch(e){}
+      if(s)read(s);
+      await Promise.all(Object.keys(saved).filter(function(k){return saved[k];}).map(function(k){return load(find(saved[k]));}));
+      updateUI();
+    }finally{restoreBusy=false;}
+  }
+  function init(){
+    var sel=document.getElementById('giBgMode');data.filter(function(x){return x.categoryId===22;}).forEach(function(x){
+      if(sel&&!Array.from(sel.options).some(function(o){return o.value==='pilot:'+x.id;})){var o=document.createElement('option');o.value='pilot:'+x.id;o.textContent='검수 시안 · '+x.theme;sel.appendChild(o);}
+    });
+    var anchor=document.getElementById('gifModeRow');if(!anchor)return;
+    var panel=document.createElement('section');panel.id='pilotGifPanel';panel.className='bnRec';panel.style.cssText='margin:12px 0;border:1px solid #cdd4ed;background:#f5f7ff;';
+    var title=document.createElement('b');title.textContent='새 디자인 · 분류별 1종';panel.appendChild(title);
+    var note=document.createElement('p');note.style.cssText='font-size:11px;line-height:1.55;margin:5px 0 8px';note.textContent='사진·영상은 틀 안쪽에 맞춰지고 장식은 그대로 남아요. 이름·자막·영상 움직임은 기존 설정으로 조절하세요.';panel.appendChild(note);
+    data.forEach(function(x){var b=document.createElement('button');b.type='button';b.dataset.pilotGif=x.id;b.style.cssText='display:block;width:100%;text-align:left;margin:4px 0;padding:7px 8px';b.textContent=x.category+' · '+x.theme;b.onclick=function(){apply(x.id).catch(function(e){alert(e.message);});};panel.appendChild(b);});
+    var reset=document.createElement('button');reset.type='button';reset.textContent='현재 크기의 시안 해제';reset.style.marginTop='7px';reset.onclick=function(){clear(window.PBKPilotGifBridge?window.PBKPilotGifBridge.mode():undefined);};panel.appendChild(reset);
+    anchor.parentNode.insertBefore(panel,anchor.nextSibling);
+    sel&&sel.addEventListener('change',function(){if(card(sel.value)){var x=find(sel.value.slice(6));load(x).then(function(){saved.avatar=x.id;persist();refresh();});}else if(saved.avatar){saved.avatar=null;persist();updateUI();}});
+    restoreSaved().catch(function(e){console.warn(e.message);});
+  }
+  window.PBKPilotGif={apply:apply,clear:clear,composeBanner:compose,composeAvatar:composeAvatar,transitionSources:transitionSources,isCardPreset:card,drawCardBackground:drawCard,restoreSaved:restoreSaved,persistence:function(){return JSON.stringify(saved);},state:function(){return Object.assign({},saved);},assets:function(){return data.map(function(x){return{id:x.id,categoryId:x.categoryId,width:x.width,height:x.height};});}};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
