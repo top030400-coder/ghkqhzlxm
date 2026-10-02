@@ -1,0 +1,239 @@
+<!doctype html><meta charset="utf-8"><title>rim measure</title>
+<body style="background:#101015;color:#ddd;font:12px/1.6 monospace;padding:10px">
+<pre id="out">running…</pre>
+<div id="gifs"></div>
+<div id="frames"></div>
+<script src="gifenc.js"></script>
+<script src="rim_assets.js"></script>
+<script>
+const GE = window.gifenc;
+let BG=null, SUBJ=null;
+let CURW=720, CURH=150;
+
+/* ── 시안 원본에서 그대로 가져온 부분 ── */
+function encode(frames, W, H, fps, colors, fuzz){
+  const enc=GE.GIFEncoder(), delay=Math.round(1000/fps);
+  const step=Math.max(1,Math.floor(frames.length/6)), pick=[];
+  for(let i=0;i<frames.length;i+=step) pick.push(frames[i]);
+  const big=new Uint8ClampedArray(pick.length*W*H*4);
+  pick.forEach((f,i)=>big.set(f,i*W*H*4));
+  const pal=GE.quantize(big, Math.max(2,colors-1), {format:'rgb565'});
+  pal.push([0,0,0]); const TI=pal.length-1;
+  let prev=null;
+  for(const f of frames){
+    let x0=0,y0=0,x1=W-1,y1=H-1;
+    if(prev){ x0=W;y0=H;x1=-1;y1=-1;
+      for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const o=(y*W+x)*4;
+        if(Math.abs(f[o]-prev[o])>fuzz||Math.abs(f[o+1]-prev[o+1])>fuzz||Math.abs(f[o+2]-prev[o+2])>fuzz){
+          if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } }
+      if(x1<0){x0=0;y0=0;x1=0;y1=0;} }
+    const w=x1-x0+1, h=y1-y0+1;
+    const sub=new Uint8ClampedArray(w*h*4);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){ const s=((y+y0)*W+(x+x0))*4, d=(y*w+x)*4;
+      sub[d]=f[s];sub[d+1]=f[s+1];sub[d+2]=f[s+2];sub[d+3]=255; }
+    const idx=GE.applyPalette(sub,pal,'rgb565');
+    if(prev){ for(let y=0;y<h;y++)for(let x=0;x<w;x++){ const s=((y+y0)*W+(x+x0))*4;
+      if(Math.abs(f[s]-prev[s])<=fuzz&&Math.abs(f[s+1]-prev[s+1])<=fuzz&&Math.abs(f[s+2]-prev[s+2])<=fuzz)
+        idx[y*w+x]=TI; } }
+    enc.writeFrame(idx,w,h,{palette:prev?undefined:pal, first:!prev, x:x0,y:y0,
+      delay, repeat:0, dispose:1, transparent:!!prev, transparentIndex:TI});
+    prev=f;
+  }
+  enc.finish();
+  return enc.bytes();
+}
+function paint(W,H){
+  const c=document.createElement('canvas'); c.width=W;c.height=H;
+  const g=c.getContext('2d',{willReadFrequently:true});
+  const cols=Math.max(1,Math.round(W/720)), rows=Math.max(1,Math.round(H/150));
+  for(let r=0;r<rows;r++)for(let cc=0;cc<cols;cc++) g.drawImage(BG, cc*(W/cols), r*(H/rows), W/cols, H/rows);
+  return {c,g};
+}
+function subjBox(W,H){ const s=Math.min(H*1.75, W*0.42); return {x:W-s*0.92, y:H-s*0.86, w:s, h:s}; }
+function drawSubj(g,W,H,dx,dy,rot){
+  const b=subjBox(W,H);
+  g.save();
+  if(rot){ g.translate(b.x+b.w/2, b.y+b.h); g.rotate(rot); g.translate(-(b.x+b.w/2), -(b.y+b.h)); }
+  g.drawImage(SUBJ, b.x+(dx||0), b.y+(dy||0), b.w, b.h); g.restore();
+}
+function build(fx, W, H, N){
+  const {c,g}=paint(W,H);
+  drawSubj(g,W,H,0,0,0);
+  const base=g.getImageData(0,0,W,H);
+  const b=subjBox(W,H);
+  const api={ redrawSubject(gg,dx,dy,rot){
+    gg.save(); gg.beginPath(); gg.rect(b.x-8,Math.max(0,b.y-8),b.w+16,b.h+16); gg.clip();
+    const cols=Math.max(1,Math.round(W/720)), rows=Math.max(1,Math.round(H/150));
+    for(let r=0;r<rows;r++)for(let cc=0;cc<cols;cc++) gg.drawImage(BG, cc*(W/cols), r*(H/rows), W/cols, H/rows);
+    gg.restore(); drawSubj(gg,W,H,dx,dy,rot); } };
+  const out=[];
+  for(let i=0;i<N;i++){
+    g.putImageData(base,0,0);
+    g.save();
+    try{ fx.draw(g, i/N, W, H, api); }catch(e){ g.restore(); throw e; }
+    g.restore();
+    out.push(g.getImageData(0,0,W,H).data);
+  }
+  return out;
+}
+
+/* ── 제안 코드가 쓰는 이름들의 shim (실제 시안엔 없음 — 그래서 원문 그대로는 못 돌아감) ── */
+function restoreBg(g,x,y,w,h){
+  g.save(); g.beginPath(); g.rect(x,y,w,h); g.clip();
+  const W=CURW,H=CURH, cols=Math.max(1,Math.round(W/720)), rows=Math.max(1,Math.round(H/150));
+  for(let r=0;r<rows;r++)for(let cc=0;cc<cols;cc++) g.drawImage(BG, cc*(W/cols), r*(H/rows), W/cols, H/rows);
+  g.restore();
+}
+function drawSubject(g,dx,dy,sc,rot){ drawSubj(g,CURW,CURH,dx||0,dy||0,rot||0); }
+let SUBJECT_BOX = null;   // 제안 코드의 폴백 박스를 쓰게 둠
+
+/* ── A: 제안 원문 그대로 (shim 위에서) ── */
+const A = { draw:function(g, t, W, H){
+  var B = (typeof SUBJECT_BOX!=='undefined' && SUBJECT_BOX) || {x:W*0.66, y:0, w:W*0.30, h:H};
+  var bw = 110;
+  var x  = B.x - bw + (B.w + bw * 2) * t;
+  var c  = x + bw / 2, p = (c - B.x) / B.w;
+  if (p <= 0 || p >= 1) return;
+  var k = Math.sin(Math.PI * p);
+  g.save();
+  g.beginPath(); g.rect(x, B.y - 8, bw, B.h + 16); g.clip();
+  restoreBg(g, x, B.y - 8, bw, B.h + 16);
+  g.shadowColor = 'rgba(255,246,214,0.95)';
+  g.shadowBlur  = 9;
+  g.globalAlpha = 0.9 * k;
+  drawSubject(g, 0, 0, 1, 0);
+  g.shadowBlur = 0; g.globalAlpha = 1;
+  drawSubject(g, 0, 0, 1, 0);
+  g.restore();
+}};
+
+/* ── A2: 제안 원문 + 실제 인물박스 좌표 사용 ── */
+const A2 = { draw:function(g,t,W,H){ SUBJECT_BOX = subjBox(W,H); A.draw(g,t,W,H); SUBJECT_BOX=null; } };
+
+/* ── A3: 제안 원문 + shadowBlur 15 (위험 항목 검증) ── */
+const A3 = { draw:function(g, t, W, H){
+  var B = subjBox(W,H);
+  var bw = 110;
+  var x  = B.x - bw + (B.w + bw * 2) * t;
+  var c  = x + bw / 2, p = (c - B.x) / B.w;
+  if (p <= 0 || p >= 1) return;
+  var k = Math.sin(Math.PI * p);
+  g.save();
+  g.beginPath(); g.rect(x, B.y - 8, bw, B.h + 16); g.clip();
+  restoreBg(g, x, B.y - 8, bw, B.h + 16);
+  g.shadowColor='rgba(255,246,214,0.95)'; g.shadowBlur=15; g.globalAlpha=0.9*k;
+  drawSubject(g,0,0,1,0);
+  g.shadowBlur=0; g.globalAlpha=1; drawSubject(g,0,0,1,0);
+  g.restore();
+}};
+
+/* ── B: 고친 안 — 오프스크린 + 가로 그라데이션 마스크 + 본체 도려내기 ── */
+let _rimC=null;
+function rimDraw(g,t,W,H,BW,BLUR){
+  const b=subjBox(W,H);
+  const bw=BW, pad=Math.ceil(BLUR*2.2);
+  const span=b.w+bw*2, x=b.x-bw+span*t, c=x+bw/2, p=(c-b.x)/b.w;
+  if(p<=0||p>=1) return;
+  const k=Math.sin(Math.PI*p);
+  const ox=Math.round(x)-pad, oy=-pad, ow=bw+pad*2, oh=H+pad*2;
+  if(ox>W||ox+ow<0) return;
+  if(!_rimC){ _rimC=document.createElement('canvas'); }
+  if(_rimC.width!==ow||_rimC.height!==oh){ _rimC.width=ow; _rimC.height=oh; }
+  const q=_rimC.getContext('2d');
+  q.setTransform(1,0,0,1,0,0);
+  q.globalCompositeOperation='source-over'; q.globalAlpha=1;
+  q.clearRect(0,0,ow,oh);
+  q.translate(-ox,-oy);
+  q.shadowColor='rgba(255,246,214,1)'; q.shadowBlur=BLUR;
+  drawSubj(q,W,H,0,0,0);
+  q.shadowBlur=0; q.shadowColor='rgba(0,0,0,0)';
+  q.globalCompositeOperation='destination-out';
+  drawSubj(q,W,H,0,0,0);
+  q.setTransform(1,0,0,1,0,0);
+  q.globalCompositeOperation='destination-in';
+  const gr=q.createLinearGradient(0,0,ow,0);
+  gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(.5,'rgba(0,0,0,1)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+  q.fillStyle=gr; q.fillRect(0,0,ow,oh);
+  g.save(); g.globalCompositeOperation='lighter'; g.globalAlpha=0.95*k;
+  g.drawImage(_rimC,ox,oy); g.restore();
+}
+const B60  = { draw:(g,t,W,H)=>rimDraw(g,t,W,H,60,9) };
+const B110 = { draw:(g,t,W,H)=>rimDraw(g,t,W,H,110,9) };
+const B40  = { draw:(g,t,W,H)=>rimDraw(g,t,W,H,40,7) };
+
+/* ── 기준선 ── */
+const NONE = { draw:()=>{} };
+const BOB3 = { draw:(g,t,W,H,api)=>api.redrawSubject(g,0,Math.round(Math.sin(t*Math.PI*2)*3)) };
+
+function stats(frames,W,H,fuzz){
+  let tot=0, peak=0, zero=0, per=[], bboxTot=0;
+  for(let i=1;i<frames.length;i++){
+    const a=frames[i-1], b=frames[i]; let d=0, x0=W,x1=-1,y0=H,y1=-1;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const o=(y*W+x)*4;
+      if(Math.abs(b[o]-a[o])>fuzz||Math.abs(b[o+1]-a[o+1])>fuzz||Math.abs(b[o+2]-a[o+2])>fuzz){
+        d++; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } }
+    if(d===0) zero++; else bboxTot+=(x1-x0+1)*(y1-y0+1);
+    tot+=d; peak=Math.max(peak,d); per.push(d);
+  }
+  // 루프 이음새
+  let seam=0; { const a=frames[frames.length-1], b=frames[0];
+    for(let i=0;i<a.length;i+=4) if(Math.abs(b[i]-a[i])>fuzz||Math.abs(b[i+1]-a[i+1])>fuzz||Math.abs(b[i+2]-a[i+2])>fuzz) seam++; }
+  return {avg:tot/(frames.length-1), peak, zero, seam, per, bboxAvg:bboxTot/Math.max(1,frames.length-1-zero)};
+}
+
+const out=[], gifs=[];
+function line(s){ out.push(s); document.getElementById('out').textContent=out.join('\n'); }
+
+function test(name, fx, N, opts){
+  opts=opts||{};
+  const W=opts.W||720, H=opts.H||150;
+  CURW=W; CURH=H;
+  let frames;
+  try{ frames=build(fx,W,H,N); }catch(e){ line(name+'  ▶ 실행 실패: '+e.message); return; }
+  const st=stats(frames,W,H,2);
+  const px=W*H;
+  const r=[];
+  for(const [cols,fz] of [[128,2],[255,2],[128,0]]){
+    const bytes=encode(frames,W,H,N/3,cols,fz);
+    r.push(cols+'색/fz'+fz+'='+(bytes.length/1024).toFixed(0)+'KB'+(bytes.length<=204800?'':' ✕'));
+    if(cols===128&&fz===2) gifs.push([name, bytes]);
+  }
+  line(name+'  N='+N+'  평균변화='+Math.round(st.avg)+'px ('+(100*st.avg/px).toFixed(2)+'%)'
+    +'  피크='+st.peak+' ('+(100*st.peak/px).toFixed(2)+'%)'
+    +'  무변화프레임='+st.zero+'/'+(N-1)
+    +'  이음새='+st.seam+'px  변화프레임bbox평균='+Math.round(st.bboxAvg)+'px'
+    +'\n    '+r.join('  |  '));
+}
+
+function loadImg(u){ return new Promise((ok,no)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=no; i.src=u; }); }
+(async()=>{
+  BG=await loadImg(ASSET_BG); SUBJ=await loadImg(ASSET_SUBJ);
+  line('BG '+BG.width+'x'+BG.height+'  SUBJ '+SUBJ.width+'x'+SUBJ.height+'  subjBox='+JSON.stringify(subjBox(720,150)));
+  test('0 기준선 none         ', NONE, 50);
+  test('  기준선 bob3(50f)    ', BOB3, 50);
+  test('A 제안원문(폴백박스)  ', A,   50);
+  test('A2 제안원문(실제박스) ', A2,  50);
+  test('A3 제안+blur15        ', A3,  50);
+  test('B 고침 bw60/blur9     ', B60, 50);
+  test('B 고침 bw110/blur9    ', B110,50);
+  test('B 고침 bw40/blur7     ', B40, 50);
+  // 6칸(1440x450) — 오른쪽 열 타일이 최악
+  const gd=document.getElementById('gifs');
+  gifs.forEach(([n,b])=>{ const d=document.createElement('div');
+    d.innerHTML='<div>'+n+'</div>'; const im=new Image();
+    im.src=URL.createObjectURL(new Blob([b],{type:'image/gif'}));
+    d.appendChild(im); gd.appendChild(d); });
+  // 대표 프레임 4장(밴드가 인물 위를 지날 때) 확대 비교
+  CURW=720; CURH=150;
+  const showFrames=(label,fx,ts)=>{
+    const wrap=document.createElement('div'); wrap.innerHTML='<div>'+label+'</div>';
+    ts.forEach(t=>{ const {c,g}=paint(720,150); drawSubj(g,720,150,0,0,0);
+      g.save(); fx.draw(g,t,720,150,null); g.restore();
+      c.style.cssText='display:block;margin:2px 0;border:1px solid #333'; wrap.appendChild(c); });
+    document.getElementById('frames').appendChild(wrap);
+  };
+  showFrames('A 제안원문 t=.40/.50/.56/.62', A, [0.40,0.50,0.56,0.62]);
+  showFrames('B 고침 bw60  t=.40/.50/.56/.62', B60, [0.40,0.50,0.56,0.62]);
+  line('완료');
+})();
+</script>

@@ -1,0 +1,153 @@
+/* 780 lazy assets; native editing models, undo and PNG export are retained. */
+(function(){
+ 'use strict';
+ var data=window.PBKFullRootData||[], bridge=window.PBKPilotBridge, q=window.__pbkQA;
+ if(!bridge)return;
+ var base=new URL('.',document.currentScript.src), esc=PBK.esc, byId={},pending={},loaded={};
+ data.forEach(function(a){byId[a.id]=a;a.mask=a.maskPath;a.body=a.bodyPath;});
+ function masked(uri){return '-webkit-mask-image:url('+uri+');mask-image:url('+uri+');-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;';}
+ function photo(c,a){
+   var html=c.img(0).replace('class="phX"','class="phX" style="background:transparent"');
+   if(!a||!a.bounds||html.indexOf('class="bglay ')<0)return html;
+   var B=a.bounds,dx=(B[0]+B[2]-a.width)/2,dy=(B[1]+B[3]-a.height)/2;
+   // Keep the native scale/drag model intact; only align its origin with the
+   // content window. A one-sided rail must not crop away half a centered face.
+   return '<div style="position:absolute;inset:0;transform:translate('+dx+'px,'+dy+'px)">'+html+'</div>';
+ }
+ function mainText(c,a){
+   if(a.type==='edit')return '';
+   var B=a.bounds,key=a.type==='side'?'word':'title';
+   var fs=a.type==='side'?11:Math.min(62,Math.max(18,(B[3]-B[1])*.29));
+   if(a.type==='bottom')fs=24;
+   return '<div class="pilot-main-text" style="position:absolute;left:'+((B[0]+B[2])/2)+'px;top:'+((B[1]+B[3])/2)+'px;transform:translate(-50%,-50%);width:'+((B[2]-B[0])*.78)+'px;text-align:center;z-index:8;font-size:'+fs+'px;line-height:1.3;color:#57455d;font-weight:800;white-space:pre-wrap;word-break:keep-all;pointer-events:none">'+c.t(key)+'</div>';
+ }
+ function receive(id,payload){
+   var a=byId[id];if(!a)return;Object.assign(a,payload);loaded[id]=true;
+ }
+ function load(id){
+   var a=byId[id];if(!a)return Promise.reject(new Error('등록되지 않은 디자인: '+id));
+   if(loaded[id])return Promise.resolve(a);
+   if(pending[id])return pending[id];
+   pending[id]=new Promise(function(resolve,reject){
+     var script=document.createElement('script');script.src=new URL(a.dataFile,base).href;
+     script.onload=function(){script.remove();loaded[id]?resolve(a):reject(new Error('디자인 데이터가 비어 있어요.'));};
+     script.onerror=function(){script.remove();delete pending[id];reject(new Error('디자인 파일을 읽지 못했어요. 압축을 모두 풀었는지 확인해 주세요.'));};
+     document.head.appendChild(script);
+   });return pending[id];
+ }
+ data.filter(function(a){return a.type;}).forEach(function(a){
+  var def=bridge.defs[a.type];
+  if(def.layouts.some(function(x){return x.id==='full-'+a.id;}))return;
+  def.layouts.push({id:'full-'+a.id,n:a.category+' · '+a.theme,pilot:true,fullAlias:true,
+   ph:[{n:'프레임 안 사진 · 위치/확대 조절'}],tpl:function(c){
+    if(!a.data)load(a.id).then(function(){bridge.refresh();}).catch(function(){});
+    var b=bridge.get(a.type),f=(b.chars||[]).find(function(x){return x.uid===b.pilotFrameUid;});
+    alignUnmovedDefaultCaption(b,a);
+    // A deleted or hidden frame must not leave its invisible crop behind.
+    // Keep the photo and text as native editable layers when the frame is off.
+    if(!f||f.hide)return '<div class="bph bg">'+photo(c,null)+'</div>'+c.chars()+mainText(c,a);
+    var out='', B=a.bounds, bw=def.w,bh=def.h;
+    if(a.categoryId===12){
+     // An opaque nameplate needs the optional photo ABOVE its original cream fill.
+     // Follow the native frame's transform and z-order; no extra rectangle behind it.
+     var pf=f||{x:50,y:50,sc:100,rot:0,flip:false};
+     var ps=bh*(pf.sc||100)/100/a.height;
+     var pz=f?10+(b.zorder||[]).indexOf('c'+f.uid):11;
+     var pp='position:absolute;left:calc('+pf.x+'% - '+(a.width/2)+'px);top:calc('+pf.y+'% - '+(a.height/2)+'px);width:'+a.width+'px;height:'+a.height+'px;transform-origin:center;transform:rotate('+(pf.rot||0)+'deg) scale('+ps+') scaleX('+(pf.flip?-1:1)+');';
+     var hasPhoto=!!(b.photos&&b.photos[0]&&b.photos[0].id);
+     out=c.chars();
+     out+='<div class="pilot-plane pilot-plaque-overlay" style="'+pp+'z-index:'+pz+';pointer-events:none">';
+     if(hasPhoto)out+='<div class="bph bg" style="position:absolute;inset:0;background:transparent;pointer-events:auto;'+masked(a.mask)+'">'+photo(c,a)+'</div>';
+     out+='<div class="pilot-main-text" style="position:absolute;left:'+((B[0]+B[2])/2)+'px;top:'+((B[1]+B[3])/2)+'px;transform:translate(-50%,-50%);max-width:'+(B[2]-B[0]-32)+'px;z-index:20;text-align:center;font-size:24px;line-height:1.2;color:#57455d;font-weight:800;white-space:pre-wrap;word-break:keep-all;pointer-events:none;'+(hasPhoto?'background:rgba(255,250,244,.90);border-radius:12px;padding:2px 12px;':'')+'">'+c.t('title')+'</div></div>';
+     return out;
+    }
+    if(true){
+     f=f||{x:50,y:50,sc:100,rot:0,flip:false};
+     var scale=bh*(f.sc||100)/100/a.height;
+     // Center with layout offsets, not a fractional translate: foreignObject rasterizes
+     // translate(-50%) at half a pixel for the native 80 x 209 side banner.
+     var pos='position:absolute;left:calc('+f.x+'% - '+(a.width/2)+'px);top:calc('+f.y+'% - '+(a.height/2)+'px);width:'+a.width+'px;height:'+a.height+'px;transform-origin:center;transform:rotate('+(f.rot||0)+'deg) scale('+scale+') scaleX('+(f.flip?-1:1)+');';
+     var color=b.deco&&b.deco.bg||'#fff6ed';
+     out+='<div class="pilot-plane" style="'+pos+'z-index:0">';
+     if(a.closed)out+='<div class="full-root-body" style="position:absolute;inset:0;background:'+esc(color)+';'+masked(a.body)+'"></div>';
+     out+='<div class="bph bg" style="position:absolute;inset:0;background:transparent;'+masked(a.mask)+'">'+photo(c,a)+'</div></div>';
+    }else out+='<div class="bph bg">'+photo(c,a)+'</div>';
+    out+=c.chars();
+    out+=mainText(c,a);
+    return out;
+   }});
+ });
+
+ // Old review projects used pilot-<id>. Keep those IDs loadable without adding
+ // duplicate cards to the native layout gallery (fullAlias is filtered there).
+ data.filter(function(a){return a.type;}).forEach(function(a){
+   var defs=bridge.defs[a.type].layouts;
+   if(!defs.some(function(l){return l.id==='pilot-'+a.id;})){
+     var full=defs.find(function(l){return l.id==='full-'+a.id;});
+     defs.push(Object.assign({},full,{id:'pilot-'+a.id,fullAlias:true}));
+   }
+ });
+ if(bridge.registerFrames)bridge.registerFrames(data.filter(function(a){return a.type==='edit';}).map(function(a){return['full-'+a.id,a.theme,({17:'fr',18:'fw',19:'cd',20:'cw',21:'sns'})[a.categoryId],{id:a.id,path:a.path,width:a.width,height:a.height}];}));
+ window.BN_ART=window.BN_ART||{themes:{}};BN_ART.themes=BN_ART.themes||{};
+ // Banner illustrations use the original background-photo layer and its controls.
+ // The old layout definitions above remain only for opening existing projects.
+ data.filter(function(a){return a.type&&a.type!=='edit';}).forEach(function(a){
+   BN_ART.themes['full-bg-'+a.id]={n:a.theme+(a.simple?' · 심플':''),type:a.type,bg:a.path,props:[],fullBackgroundId:a.id};
+ });
+ data.filter(function(a){return a.categoryId>=49;}).forEach(function(a){
+   var key='full-props-'+a.categoryId;
+   if(!BN_ART.themes[key])BN_ART.themes[key]={n:a.category,type:'prop',props:[]};
+   if(!BN_ART.themes[key].props.some(function(p){return p.id==='full-prop-'+a.id;}))BN_ART.themes[key].props.push({id:'full-prop-'+a.id,n:a.theme,url:a.path});
+ });
+ async function apply(id){
+   var a=await load(id);
+   if(a.type){
+     if(a.type==='edit'){
+       if(!bridge.addFrame)throw Error('프레임 편집 도구가 준비되지 않았어요.');
+       document.getElementById('tabEdit').click();q.showTab('edit');q.showBnItem('edit');
+       await bridge.addFrame('full-'+id);
+       return {id:id,type:'edit'};
+     }
+     document.getElementById('tabBanner').click();q.showTab('banner');q.showBnItem(a.type);
+     q.histPushNow();
+     var b=bridge.get(a.type),legacy=/^(full|pilot)-(\d{2}-\d{2})$/.exec(b.layout||'');
+     if(legacy&&byId[legacy[2]]&&byId[legacy[2]].type===a.type){
+       // Replacing an old generated layout with a background must not leave its
+       // generated frame prop on top. User-added props and text remain intact.
+       var uid=b.pilotFrameUid;
+       b.chars=(b.chars||[]).filter(function(ch){return !(ch.pilotFrame&&(ch.uid===uid||ch.id==='pilot-frame-'+legacy[2]));});
+       b.layout=a.type+'_none';delete b.els;delete b.pilotId;delete b.pilotFrameUid;
+     }
+     await q.setThemeBg('full-bg-'+id);
+     // The native image measurement completes asynchronously. Commit the known
+     // source dimensions with the edit so measurement cannot create a second
+     // history step and make Undo appear to do nothing.
+     var bg=bridge.get(a.type).photos[0];
+     if(bg&&bg.art===a.path){bg.iw=a.pixelWidth||a.width;bg.ih=a.pixelHeight||a.height;}
+     bridge.touch();
+     return {id:id,type:a.type,kind:'background'};
+   }
+   if(a.categoryId>=49){
+     var key='full-props-'+a.categoryId,propId='full-prop-'+id;
+     document.getElementById('tabEdit').click();q.showTab('edit');await q.addProp(key,propId);
+     bridge.touch();return {id:id,type:'prop'};
+   }
+   if(window.PBKFullGif&&PBKFullGif.apply)return PBKFullGif.apply(id);
+   throw Error('움짤 배너 도구를 먼저 열어 주세요.');
+ }
+ var entries=data.filter(function(a){return a.type||a.categoryId>=49;}).map(function(a){return {id:a.id,categoryId:a.categoryId,category:a.category,theme:a.theme,label:a.theme,img:a.path,path:a.path,width:a.width,height:a.height,simple:a.simple,group:a.categoryId>=49?'공용 소품':a.type==='edit'?'편집':'배너',apply:function(){return apply(a.id);}};});
+ function alignUnmovedDefaultCaption(b,a){
+   var old=a.previousDefaultCaption,now=a.caption;if(!old||!now)return;
+   if(b.layout!=='full-'+a.id&&b.layout!=='pilot-'+a.id)return;
+   (b.txts||[]).forEach(function(t){
+     // A saved, manually moved/scaled/rotated caption is the user's placement.
+     // Only migrate the exact former automatic placement, preserving its text.
+     if(!t.pilotCaption||t.pilotCaptionGuideVersion===1)return;
+     if(Math.abs(t.x-old.x)<.001&&Math.abs(t.y-old.y)<.001&&Math.abs(t.sc-old.size)<.001&&!(t.rot||0)){
+       t.x=now.x;t.y=now.y;t.sc=now.size;
+     }
+     t.pilotCaptionGuideVersion=1;
+   });
+ }
+ window.PBKFullRoot={entries:entries,assets:data,apply:apply,load:load,receive:receive,ready:function(){return Promise.all(Object.keys(bridge.defs).map(function(t){var b=bridge.get(t),layout=b.layout,id=layout&&layout.replace(/^(full|pilot)-/,'');return id&&byId[id]?load(id).then(function(a){if(bridge.get(t)===b&&b.layout===layout)alignUnmovedDefaultCaption(b,a);return a;}):null;}));}};
+})();
