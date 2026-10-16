@@ -1,0 +1,159 @@
+/* Additive visual catalog. All selections use the existing editor controls;
+ * photo, text content, crop, positions and manually chosen timings are untouched.
+ */
+(function () {
+  'use strict';
+  var studio = window.PBKProfileStudio, bridge = window.PBKProfileBridge, looks = window.PBKProfileLooks;
+  if (!studio || !bridge || !looks || !document.getElementById('profQuick')) return;
+  var page = 0, filter = 'all', perPage = 6, busyBackground = 0, thumbKey = '', fields = [], artImages = {};
+  var backgrounds = looks.backgrounds.map(function (b) { return {id: 'simple:' + b.id, name: b.label, type: 'simple', source: b}; });
+  Object.keys(studio.art).forEach(function (id) { backgrounds.push({id: id, name: studio.art[id].name || id, type: 'art', source: studio.art[id]}); });
+  function el(id) { return document.getElementById(id); }
+  function state() { return window.PBKPilotGifBridge.state(); }
+  function allowed() { return state().mode === 'avatar' && !state().busy && (!PBKPilotGifBridge.prefsReady || PBKPilotGifBridge.prefsReady()); }
+  function node(tag, text, attrs) {
+    var n = document.createElement(tag); if (text != null) n.textContent = text;
+    Object.keys(attrs || {}).forEach(function (k) { if (k === 'class') n.className = attrs[k]; else n.setAttribute(k, attrs[k]); }); return n;
+  }
+  function button(label, fn, attrs) { var b = node('button', label, Object.assign({type: 'button'}, attrs || {})); b.addEventListener('click', fn); return b; }
+  function say(text) { if (el('profStatus')) el('profStatus').textContent = text; }
+  function put(id, value, event) {
+    var e = el(id); if (!e) return;
+    if (e.type === 'checkbox') e.checked = !!value; else e.value = String(value);
+    e.dispatchEvent(new Event(event || 'change', {bubbles: true}));
+  }
+  function commit(restart) { bridge.commit(); if (restart) bridge.restart(); sync(); }
+  function changeNative(id, value, restart) { if (!allowed()) { sync(); return; } put(id, value); commit(restart); }
+  function title(text) { return node('div', text, {class: 'prof-label'}); }
+  function row() { return node('div', null, {class: 'prof-row'}); }
+  function mirror(id, nativeId, label, type) {
+    var native = el(nativeId), wrapper = node('label', label, {class: 'prof-row'}), input = node('input', null, {id: id, type: type, 'aria-label': label});
+    ['min', 'max', 'step'].forEach(function (k) { if (native.hasAttribute(k)) input.setAttribute(k, native.getAttribute(k)); });
+    wrapper.appendChild(input); fields.push({id: id, native: nativeId});
+    input.addEventListener(type === 'checkbox' ? 'change' : 'input', function () { if (!allowed()) { sync(); return; } put(nativeId, type === 'checkbox' ? input.checked : input.value, type === 'checkbox' ? 'change' : 'input'); commit(false); });
+    return wrapper;
+  }
+  function nativeSelect(id, nativeId, label) {
+    var wrapper = node('label', label, {class: 'prof-row'}), select = node('select', null, {id: id, 'aria-label': label});
+    wrapper.appendChild(select); fields.push({id: id, native: nativeId});
+    select.addEventListener('change', function () { changeNative(nativeId, select.value, true); }); return wrapper;
+  }
+  function cloneOptions(dst, src) {
+    var selected = dst.value; while (dst.firstChild) dst.removeChild(dst.firstChild);
+    Array.from(src.children).forEach(function (n) { dst.appendChild(n.cloneNode(true)); }); dst.value = selected || src.value;
+  }
+  function applyRing(id) {
+    if (!allowed()) return;
+    var target = Array.from(el('gifRingRow').querySelectorAll('[data-r]')).find(function (n) { return n.getAttribute('data-r') === id; });
+    if (!target) { say('테두리 효과를 준비하지 못했어요. 앱을 다시 열어 주세요.'); return; }
+    target.click(); commit(false); say('테두리 효과를 적용했어요. 색과 굵기를 바로 조절할 수 있어요.');
+  }
+  function mountRings() {
+    var box = node('section', null, {id: 'profRingCatalog', class: 'prof-catalog-section'});
+    box.appendChild(title('테두리 효과'));
+    box.appendChild(node('div', '색이 흐르고 윤광이 도는 원형 효과예요. 장식 프레임과 따로 고를 수 있어요.', {class: 'prof-note'}));
+    var grid = node('div', null, {class: 'prof-ring-grid', id: 'profRingGallery'});
+    looks.rings.forEach(function (r) {
+      var original = Array.from(el('gifRingRow').querySelectorAll('[data-r]')).find(function (n) { return n.getAttribute('data-r') === 'profile_' + r.id; }); if (original) original.textContent = r.label;
+      var b = button(null, function () { applyRing('profile_' + r.id); }, {'data-prof-ring': 'profile_' + r.id, 'aria-label': r.label, 'aria-pressed': 'false'}), c = node('canvas', null, {width: '84', height: '84', 'aria-hidden': 'true'});
+      b.appendChild(c); b.appendChild(node('span', r.label)); grid.appendChild(b);
+    }); box.appendChild(grid);
+    var selectRow = node('label', '전체 테두리', {class: 'prof-row'}), select = node('select', null, {id: 'profRingChoice', 'aria-label': '전체 테두리 효과'});
+    Array.from(el('gifRingRow').querySelectorAll('[data-r]')).forEach(function (n) { select.appendChild(node('option', n.textContent.trim(), {value: n.getAttribute('data-r')})); });
+    select.addEventListener('change', function () { applyRing(select.value); }); selectRow.appendChild(select); box.appendChild(selectRow);
+    var colors = node('div', null, {class: 'prof-two-controls'}); colors.appendChild(mirror('profRingColor1', 'gifRc1', '색 1', 'color')); colors.appendChild(mirror('profRingColor2', 'gifRc2', '색 2', 'color')); box.appendChild(colors);
+    var width = mirror('profRingWidth', 'gifRw', '굵기', 'range'); width.appendChild(node('output', '', {id: 'profRingWidthValue'})); box.appendChild(width);
+    box.appendChild(mirror('profRingMotion', 'gifRingAnim', '테두리 움직임', 'checkbox'));
+    var frameLabel = el('profFrame').closest('label'); frameLabel.before(box);
+    // Clarify existing frame controls without removing or hiding them.
+    if (frameLabel.firstChild && frameLabel.firstChild.nodeType === 3) frameLabel.firstChild.textContent = '장식 프레임 ';
+    el('profFrame').setAttribute('aria-label', '장식 프레임');
+    var first = el('profFrame').querySelector('option[value=""]'); if (first) first.textContent = '장식 프레임 없음';
+    var presetTitle = el('profPresets').previousElementSibling; if (presetTitle && presetTitle.classList.contains('prof-label')) presetTitle.textContent = '장식 프레임 + 배경 조합';
+    var light = el('giProfRimLight'); if (light && light.parentElement) Array.from(light.parentElement.childNodes).forEach(function (n) { if (n.nodeType === 3) n.textContent = ' 장식 프레임 윤광'; });
+  }
+  function filtered() { return backgrounds.filter(function (b) { return filter === 'all' || b.type === filter; }); }
+  function bgThumb(item, canvas, stamp) {
+    var g = canvas.getContext('2d'); g.clearRect(0, 0, canvas.width, canvas.height);
+    if (item.type === 'simple') { item.source.draw(g, canvas.width, .20, item.source.colors[0], item.source.colors[1]); return; }
+    var saved = artImages[item.id];
+    if (saved) { g.drawImage(saved, 0, 0, canvas.width, canvas.height); return; }
+    g.fillStyle = '#f5edf7'; g.fillRect(0, 0, canvas.width, canvas.height); g.fillStyle = '#8e7a98'; g.font = '12px sans-serif'; g.textAlign = 'center'; g.fillText('불러오는 중', canvas.width / 2, canvas.height / 2);
+    studio.loadArt(item.id).then(function (im) { artImages[item.id] = im; if (!canvas.isConnected || canvas.dataset.bgStamp !== stamp) return; g.clearRect(0, 0, canvas.width, canvas.height); g.drawImage(im, 0, 0, canvas.width, canvas.height); }).catch(function () { if (!canvas.isConnected) return; g.clearRect(0, 0, canvas.width, canvas.height); g.fillStyle = '#f5edf7'; g.fillRect(0, 0, canvas.width, canvas.height); g.fillStyle = '#8e7a98'; g.fillText('다시 선택해 주세요', canvas.width / 2, canvas.height / 2); });
+  }
+  function renderBackgrounds() {
+    var items = filtered(), pages = Math.max(1, Math.ceil(items.length / perPage)); page = Math.min(Math.max(0, page), pages - 1);
+    var grid = el('profBackgrounds'); while (grid.firstChild) grid.removeChild(grid.firstChild);
+    items.slice(page * perPage, page * perPage + perPage).forEach(function (item) {
+      var b = button(null, async function () {
+        if (!allowed()) return; var request = ++busyBackground;
+        say('배경을 불러오는 중…'); b.setAttribute('aria-busy', 'true');
+        try { await studio.chooseBackground(item.id); } finally { if (request === busyBackground) sync(); b.removeAttribute('aria-busy'); }
+      }, {'data-prof-bg': item.id, 'aria-label': item.name, 'aria-pressed': 'false'});
+      var c = node('canvas', null, {width: '144', height: '144', 'aria-hidden': 'true'}), stamp = item.id + ':' + page; c.dataset.bgStamp = stamp;
+      b.appendChild(c); b.appendChild(node('span', item.name)); grid.appendChild(b); bgThumb(item, c, stamp);
+    });
+    el('profBgPage').textContent = (page + 1) + ' / ' + pages;
+    el('profBgCount').textContent = items.length + '종 · 한 번에 6개씩';
+    el('profBgPrevious').disabled = page === 0 || state().busy; el('profBgNext').disabled = page === pages - 1 || state().busy;
+    el('profBgTabs').querySelectorAll('[data-prof-bg-filter]').forEach(function (b) { var on = b.dataset.profBgFilter === filter; b.classList.toggle('selected', on); b.setAttribute('aria-pressed', String(on)); });
+    markBackground();
+  }
+  function markBackground() {
+    var id = el('giProfArt').value;
+    el('profBackgrounds').querySelectorAll('[data-prof-bg]').forEach(function (b) { var on = b.dataset.profBg === id; b.classList.toggle('selected', on); b.setAttribute('aria-pressed', String(on)); });
+    var chosen = backgrounds.find(function (b) { return b.id === id; }); el('profBgSelected').textContent = '선택: ' + (chosen ? chosen.name : '원래 배경');
+  }
+  function mountBackgrounds() {
+    var grid = el('profBackgrounds'); grid.classList.add('prof-background-gallery');
+    var tabs = row(); tabs.id = 'profBgTabs';
+    [['all', '전체'], ['simple', '심플'], ['art', '일러스트']].forEach(function (tab) { tabs.appendChild(button(tab[1], function () { filter = tab[0]; page = 0; renderBackgrounds(); }, {'data-prof-bg-filter': tab[0], 'aria-pressed': String(tab[0] === 'all')})); });
+    grid.before(tabs); grid.before(node('div', '', {id: 'profBgCount', class: 'prof-note'}));
+    var pager = row(); pager.appendChild(button('‹ 이전', function () { page--; renderBackgrounds(); }, {id: 'profBgPrevious'})); pager.appendChild(node('span', '', {id: 'profBgPage', 'aria-live': 'polite'})); pager.appendChild(button('다음 ›', function () { page++; renderBackgrounds(); }, {id: 'profBgNext'}));
+    grid.after(pager); pager.after(node('div', '', {id: 'profBgSelected', class: 'prof-note'}));
+    var colors = node('div', null, {class: 'prof-two-controls'}); colors.appendChild(mirror('profBackgroundColor1', 'giBgCol', '배경 색 1', 'color')); colors.appendChild(mirror('profBackgroundColor2', 'giBgCol2', '배경 색 2', 'color'));
+    el('profBgSelected').after(colors); colors.after(node('div', '심플 배경의 색을 바꿀 수 있어요. 원래 배경과 직접 넣은 사진도 그대로 사용할 수 있어요.', {class: 'prof-note'}));
+    renderBackgrounds();
+  }
+  function mountTransitions() {
+    var box = node('section', null, {id: 'profMotionCatalog', class: 'prof-catalog-section'});
+    box.appendChild(title('캐릭터에서 이름으로'));
+    box.appendChild(node('div', '캐릭터 → 이름 → 처음 캐릭터로 바로 돌아와요. 연출을 고른 뒤 처음부터 미리볼 수 있어요.', {class: 'prof-note'}));
+    var choreo = (window.PBKProfileChoreography || {}).names || [], grid = node('div', null, {id: 'profChoreographyGallery', class: 'prof-choreo-grid'});
+    choreo.forEach(function (p, i) { var b = button(null, function () { changeNative('giTrans', p[0], true); say(p[1] + ' 선택 · 저장 시간은 그대로 유지돼요.'); }, {'data-prof-transition': p[0], 'aria-pressed': 'false'}); b.appendChild(node('span', ['♡', '≋', '✧', '◒', '❀', '↝'][i % 6], {class: 'prof-motion-symbol', 'aria-hidden': 'true'})); b.appendChild(node('span', p[1])); grid.appendChild(b); });
+    box.appendChild(grid);
+    var selectRow = nativeSelect('profTransitionChoice', 'giTrans', '전체 전환 효과'), select = selectRow.querySelector('select');
+    var groups = [node('optgroup', null, {label: '장면 연출'}), node('optgroup', null, {label: '자연스러운 전환'}), node('optgroup', null, {label: '기존 전환'})], choreoIds = choreo.map(function (p) { return p[0]; });
+    Array.from(el('giTrans').options).forEach(function (o) { var group = choreoIds.indexOf(o.value) !== -1 ? groups[0] : /^prof/.test(o.value) ? groups[1] : groups[2]; group.appendChild(node('option', o.textContent, {value: o.value})); }); groups.forEach(function (g) { if (g.children.length) select.appendChild(g); }); box.appendChild(selectRow);
+    var typeRow = nativeSelect('profTypographyChoice', 'giTxtAnim', '이름 장면 글자 등장'); cloneOptions(typeRow.querySelector('select'), el('giTxtAnim')); box.appendChild(typeRow);
+    var timing = row(); timing.appendChild(button('연출에 맞추기', function () {
+      if (!allowed()) return;
+      put('giDur', '2'); put('giTransDur', '1.2'); put('giTransSpd', '1.2'); put('giTxtSpd', '0.8'); put('giTxtDelay', '0.1'); put('giPrev', true);
+      commit(true); say('전환 기준 1.2초 · 이름 장면 2초 · 글자 등장 0.8초. 짧은 원본 구간에서는 전환이 자동으로 짧아져요.');
+    }, {id: 'profMatchChoreography'})); timing.appendChild(button('처음부터 보기', function () { if (!allowed()) return; put('giPrev', true); bridge.restart(); }, {id: 'profCatalogPreview'})); box.appendChild(timing);
+    box.appendChild(node('div', '효과 선택은 기존 시간 설정을 유지해요. 위 버튼을 눌렀을 때만 연출 시간을 맞춰요.', {class: 'prof-note'}));
+    var displayTitle = Array.from(el('profQuick').querySelectorAll('.prof-label')).find(function (n) { return n.textContent === '이름 보여주기'; });
+    if (displayTitle) displayTitle.before(box); else el('profStatus').before(box);
+  }
+  function renderRingThumbs() {
+    var key = [el('gifRc1').value, el('gifRc2').value, el('gifRw').value].join('|'); if (key === thumbKey) return; thumbKey = key;
+    looks.rings.forEach(function (r) { var b = el('profRingGallery').querySelector('[data-prof-ring="profile_' + r.id + '"]'), c = b.querySelector('canvas'), g = c.getContext('2d'); g.clearRect(0, 0, 84, 84); r.draw(g, 84, .19, el('gifRc1').value, el('gifRc2').value, Math.max(3, +el('gifRw').value * 84 / 420), true, 1); });
+  }
+  function sync() {
+    if (!el('profRingCatalog')) return;
+    fields.forEach(function (f) { var input = el(f.id), native = el(f.native); if (!input || !native) return; if (input.type === 'checkbox') input.checked = native.checked; else input.value = native.value; });
+    var current = state().ring; el('profRingChoice').value = current;
+    el('profRingGallery').querySelectorAll('[data-prof-ring]').forEach(function (b) { var on = b.dataset.profRing === current; b.classList.toggle('selected', on); b.setAttribute('aria-pressed', String(on)); });
+    el('profRingWidthValue').textContent = el('gifRw').value;
+    el('profChoreographyGallery').querySelectorAll('[data-prof-transition]').forEach(function (b) { var on = b.dataset.profTransition === el('giTrans').value; b.classList.toggle('selected', on); b.setAttribute('aria-pressed', String(on)); });
+    markBackground(); renderRingThumbs();
+    var pages = Math.max(1, Math.ceil(filtered().length / perPage)); el('profBgPrevious').disabled = page === 0 || state().busy; el('profBgNext').disabled = page >= pages - 1 || state().busy;
+  }
+  var css = node('style', '#profQuick .prof-catalog-section{margin:14px 0;padding-top:4px;border-top:1px solid #e7dfe9}#profQuick .prof-ring-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}#profQuick .prof-ring-grid button{padding:4px;font-size:10px;line-height:1.4}#profQuick .prof-ring-grid canvas{width:100%;height:auto;display:block}#profQuick .prof-ring-grid span,#profQuick .prof-background-gallery span{display:block;overflow-wrap:anywhere}#profQuick .prof-two-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}#profQuick .prof-two-controls input[type=color]{width:48px;height:28px;flex:0 0 48px;padding:2px}#profQuick .prof-background-gallery{grid-template-columns:repeat(3,minmax(0,1fr))}#profQuick .prof-background-gallery canvas{width:100%;height:auto;aspect-ratio:1;display:block;border-radius:5px}#profQuick .prof-background-gallery button{font-size:11px;line-height:1.4}#profQuick #profBgPage{font-size:11px;min-width:38px;text-align:center}#profQuick .prof-choreo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}#profQuick .prof-choreo-grid button{font-size:11px;text-align:left;display:flex;gap:6px;align-items:center}#profQuick .prof-motion-symbol{font-size:23px;color:#aa77b8;width:28px;text-align:center}#profQuick output{font-size:11px;min-width:20px}#profQuick button:disabled{opacity:.45;cursor:default}#profQuick input[type=checkbox]{flex:0 0 auto}'); document.head.appendChild(css);
+  mountRings(); mountBackgrounds(); mountTransitions();
+  document.addEventListener('input', function (e) { if (['gifRc1', 'gifRc2', 'gifRw', 'giBgCol', 'giBgCol2'].indexOf(e.target.id) !== -1) sync(); });
+  document.addEventListener('change', function (e) { if (['gifRingAnim', 'giTrans', 'giTxtAnim', 'giProfArt', 'giBgCol', 'giBgCol2'].indexOf(e.target.id) !== -1) sync(); });
+  document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('#gifRingRow [data-r]')) sync(); });
+  window.PBKProfileCatalog = {sync: sync, backgrounds: backgrounds, applyRing: applyRing, renderBackgrounds: renderBackgrounds};
+  sync();
+})();

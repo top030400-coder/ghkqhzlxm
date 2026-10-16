@@ -1,0 +1,223 @@
+/* Original procedural profile looks. No user state, images or artwork bundled.
+ * Ring width is already scaled to W, phase is normalized 0..1. An animated
+ * ring makes one closed trip per supplied phase; speed shapes that trip rather
+ * than multiplying its frequency, so fractional settings never break the loop.
+ * Backgrounds fill a square; the host owns the final avatar/window mask.
+ * All functions preserve the caller's drawing state and never clear content.
+ */
+(function (global) {
+  'use strict';
+  var TAU = Math.PI * 2, WHITE = [255, 255, 255], colorCache = new Map();
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function phase(v) { return Number.isFinite(v) ? ((v % 1) + 1) % 1 : 0; }
+  function mix(a, b, t) { return a.map(function (v, i) { return Math.round(v + (b[i] - v) * t); }); }
+  function rgb(v, fallback) {
+    v = typeof v === 'string' ? v : fallback;
+    if (colorCache.has(v)) return colorCache.get(v);
+    var m = /^#([0-9a-f]{6})$/i.exec(v), out;
+    if (m) out = [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16)];
+    else {
+      var c = document.createElement('canvas'); c.width = c.height = 1;
+      var g = c.getContext('2d'); g.fillStyle = fallback; g.fillStyle = v; g.fillRect(0, 0, 1, 1);
+      var d = g.getImageData(0, 0, 1, 1).data; out = [d[0], d[1], d[2]];
+    }
+    if (colorCache.size > 48) colorCache.clear(); colorCache.set(v, out); return out;
+  }
+  function ink(c, a) { return 'rgba(' + c.join(',') + ',' + (a == null ? 1 : a) + ')'; }
+  function cleanState(g) {
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetX = g.shadowOffsetY = 0;
+    if ('filter' in g) g.filter = 'none'; g.setLineDash([]); g.lineCap = 'round'; g.lineJoin = 'round';
+  }
+  function circle(g, x, y, r) { g.beginPath(); g.arc(x, y, Math.max(0, r), 0, TAU); }
+  function ringPath(g, R, inner) {
+    g.beginPath(); g.arc(0, 0, R, 0, TAU); g.arc(0, 0, inner, 0, TAU, true); g.closePath();
+  }
+  function stroke(g, radius, width, color, start, end) {
+    g.strokeStyle = color; g.lineWidth = width; g.beginPath();
+    g.arc(0, 0, Math.max(.1, radius), start == null ? 0 : start, end == null ? TAU : end); g.stroke();
+  }
+  function conic(g, angle, stops) {
+    var gr = g.createConicGradient(angle, 0, 0);
+    stops.forEach(function (s) { gr.addColorStop(s[0], typeof s[1] === 'string' ? s[1] : ink(s[1])); }); return gr;
+  }
+  function baseRing(g, R, w, angle, a, b, pale) {
+    g.fillStyle = conic(g, angle, [[0, a], [.22, pale], [.46, b], [.70, pale], [1, a]]);
+    ringPath(g, R, R - w); g.fill();
+  }
+  function edgeFinish(g, R, w, a) {
+    var lw = Math.min(w * .12, 1.15);
+    stroke(g, R - lw / 2, lw, ink(mix(a, WHITE, .68), .75));
+    stroke(g, R - w + lw / 2, lw, ink(mix(a, [44, 29, 69], .36), .36));
+  }
+  function sheen(g, R, w, angle, alpha) {
+    var gr = conic(g, angle, [[0, 'rgba(255,255,255,0)'], [.06, 'rgba(255,255,255,0)'], [.16, 'rgba(255,255,255,' + alpha + ')'], [.26, 'rgba(255,255,255,0)'], [.60, 'rgba(255,255,255,0)'], [.71, 'rgba(255,255,255,' + (alpha * .55) + ')'], [.83, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0)']]);
+    stroke(g, R - w * .32, Math.max(.45, w * .19), gr);
+  }
+  function makeRing(id, label, painter) {
+    return {id: id, label: label, draw: function (g, W, p, c1, c2, width, animate, speed) {
+      if (!g || !Number.isFinite(W) || W < 4) return;
+      var w = clamp(Number.isFinite(width) ? width : W * 12 / 420, W * 2 / 420, Math.min(W * 40 / 420, W * .23));
+      var ph = animate === false ? 0 : phase(p), sp = Number.isFinite(speed) ? clamp(speed, .2, 2) : 1;
+      var travel = ph + Math.sin(ph * TAU) * (sp - 1) * .065;
+      var a = rgb(c1, '#e7a3c7'), b = rgb(c2, '#a5c9ed'), pale = mix(mix(a, b, .5), WHITE, .58);
+      // A small inset keeps antialiased edge coverage inside the circular export.
+      var R = W / 2 - .8, inner = Math.max(0, R - w);
+      g.save();
+      try {
+        cleanState(g); g.translate(W / 2, W / 2);
+        ringPath(g, R, inner); g.clip('evenodd');
+        painter(g, R, w, travel * TAU, a, b, pale, W);
+      } finally { g.restore(); }
+    }};
+  }
+  var rings = [
+    makeRing('premiumGradient', '벨벳 그라데이션', function (g, R, w, ph, a, b, pale) {
+      baseRing(g, R, w, ph - 1.2, a, b, pale);
+      var gr = g.createRadialGradient(0, 0, R - w, 0, 0, R);
+      gr.addColorStop(0, 'rgba(255,255,255,.05)'); gr.addColorStop(.35, 'rgba(255,255,255,.28)'); gr.addColorStop(.63, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(25,20,45,.08)');
+      g.fillStyle = gr; g.fillRect(-R, -R, R * 2, R * 2); sheen(g, R, w, ph, .65); edgeFinish(g, R, w, a);
+    }),
+    makeRing('satin', '사틴 이중 광택', function (g, R, w, ph, a, b, pale) {
+      baseRing(g, R, w, Math.sin(ph) * .35 - 1, mix(a, [70, 48, 82], .16), b, pale);
+      var gr = g.createRadialGradient(0, 0, R - w, 0, 0, R);
+      [[0, .02], [.16, .15], [.32, .66], [.47, .02], [.65, .12], [.82, .48], [1, .04]].forEach(function (s) { gr.addColorStop(s[0], 'rgba(255,255,255,' + s[1] + ')'); });
+      g.fillStyle = gr; g.fillRect(-R, -R, R * 2, R * 2);
+      sheen(g, R, w, ph, .84); stroke(g, R - w * .53, Math.min(.7, w * .08), ink(a, .42)); edgeFinish(g, R, w, a);
+    }),
+    makeRing('opal', '오팔 윤광', function (g, R, w, ph, a, b, pale) {
+      var mint = mix(mix(a, b, .5), [198, 246, 221], .55), lilac = mix(a, [220, 206, 255], .50);
+      g.fillStyle = conic(g, ph, [[0, mix(a, WHITE, .28)], [.15, pale], [.29, mint], [.44, b], [.61, lilac], [.77, pale], [1, mix(a, WHITE, .28)]]);
+      g.fillRect(-R, -R, R * 2, R * 2);
+      for (var i = 0; i < 3; i++) { var r = R - w * (.22 + i * .27); stroke(g, r, w * .13, conic(g, -ph + i * .8, [[0, 'rgba(255,255,255,0)'], [.22, 'rgba(255,255,255,.65)'], [.45, 'rgba(255,255,255,0)'], [.76, 'rgba(255,255,255,.38)'], [1, 'rgba(255,255,255,0)']])); }
+      edgeFinish(g, R, w, a);
+    }),
+    makeRing('prism', '프리즘 색 흐름', function (g, R, w, ph, a, b, pale) {
+      var tones = [a, mix(a, [255, 209, 157], .58), mix(a, [237, 240, 170], .65), mix(b, [166, 232, 205], .65), b, mix(b, [209, 175, 238], .6), a];
+      g.fillStyle = conic(g, ph - .8, tones.map(function (c, i) { return [i / 6, c]; })); g.fillRect(-R, -R, R * 2, R * 2);
+      sheen(g, R, w, -ph, .78); stroke(g, R - w * .70, w * .10, ink(pale, .6)); edgeFinish(g, R, w, a);
+    }),
+    makeRing('pearl', '진주 광택 라인', function (g, R, w, ph, a, b, pale) {
+      baseRing(g, R, w, ph, mix(a, WHITE, .25), mix(b, WHITE, .3), pale);
+      stroke(g, R - w * .5, w * .57, ink(mix(a, b, .5), .36));
+      var radius = R - w * .5, count = Math.max(26, Math.min(150, Math.round(TAU * radius / Math.max(4, w * .85))));
+      var size = Math.min(w * .34, TAU * radius / count * .36);
+      for (var i = 0; i < count; i++) {
+        var ang = i * TAU / count, x = Math.cos(ang) * radius, y = Math.sin(ang) * radius, pulse = .5 + .5 * Math.cos(ang - ph);
+        var gr = g.createRadialGradient(x - size * .30, y - size * .35, size * .05, x, y, size);
+        gr.addColorStop(0, ink(WHITE, .96)); gr.addColorStop(.40, ink(mix(pale, WHITE, .6), .94)); gr.addColorStop(1, ink(mix(a, b, pulse), .8));
+        g.fillStyle = gr; circle(g, x, y, size); g.fill();
+      }
+      edgeFinish(g, R, w, a);
+    }),
+    makeRing('comet', '유성빛 궤적', function (g, R, w, ph, a, b, pale) {
+      baseRing(g, R, w, -ph, mix(a, WHITE, .18), mix(b, WHITE, .18), pale);
+      for (var k = 0; k < 2; k++) {
+        var head = ph + k * Math.PI + .3, rr = R - w * (k ? .69 : .29), thick = w * (k ? .12 : .20);
+        for (var j = 0; j < 24; j++) {
+          var t = j / 24, ang = head - .90 + t * .90;
+          stroke(g, rr, Math.max(.55, thick * (.40 + t * .6)), ink(WHITE, t * t * .85), ang, ang + .05);
+        }
+        g.fillStyle = ink(WHITE, .98); circle(g, Math.cos(head) * rr, Math.sin(head) * rr, Math.min(w * .17, thick * .9)); g.fill();
+      }
+      edgeFinish(g, R, w, a);
+    }),
+    makeRing('wave', '이중 물결 라인', function (g, R, w, ph, a, b, pale) {
+      baseRing(g, R, w, ph, mix(a, WHITE, .44), mix(b, WHITE, .45), pale);
+      for (var k = 0; k < 2; k++) {
+        g.beginPath();
+        for (var i = 0; i <= 240; i++) {
+          var ang = i / 240 * TAU, r = R - w * (.35 + k * .30) + Math.sin(ang * 5 - ph + k * Math.PI) * w * .13;
+          var x = Math.cos(ang) * r, y = Math.sin(ang) * r; if (!i) g.moveTo(x, y); else g.lineTo(x, y);
+        }
+        g.strokeStyle = ink(k ? b : a, .92); g.lineWidth = w * .18; g.stroke();
+      }
+      sheen(g, R, w, ph, .52); edgeFinish(g, R, w, a);
+    }),
+    makeRing('faceted', '보석 컷 그라데이션', function (g, R, w, ph, a, b, pale) {
+      baseRing(g, R, w, ph, a, b, pale);
+      var n = 36;
+      for (var i = 0; i < n; i++) {
+        var st = i * TAU / n, en = (i + 1) * TAU / n, mid = (st + en) / 2;
+        for (var side = 0; side < 2; side++) {
+          var rr = R - (side ? w : 0), rm = R - w * .49;
+          g.beginPath(); g.moveTo(Math.cos(st) * rr, Math.sin(st) * rr); g.lineTo(Math.cos(en) * rr, Math.sin(en) * rr); g.lineTo(Math.cos(mid) * rm, Math.sin(mid) * rm); g.closePath();
+          var lit = .5 + .5 * Math.cos(mid - ph + side * .8);
+          g.fillStyle = side ? ink(mix(a, [54, 35, 72], .45), .10 + (1 - lit) * .14) : ink(WHITE, .10 + lit * .5); g.fill();
+        }
+      }
+      stroke(g, R - w * .49, Math.min(.65, w * .08), ink(WHITE, .64)); edgeFinish(g, R, w, a);
+    })
+  ];
+  function backdrop(g, W, a, b) {
+    var gr = g.createLinearGradient(0, 0, W, W); gr.addColorStop(0, ink(mix(a, WHITE, .80))); gr.addColorStop(.5, ink(mix(mix(a, b, .5), WHITE, .92))); gr.addColorStop(1, ink(mix(b, WHITE, .79))); g.fillStyle = gr; g.fillRect(0, 0, W, W);
+  }
+  function centerQuiet(g, W, strength) {
+    var gr = g.createRadialGradient(W * .50, W * .48, 0, W * .50, W * .48, W * .55);
+    gr.addColorStop(0, 'rgba(255,255,255,' + strength + ')'); gr.addColorStop(.42, 'rgba(255,255,255,' + (strength * .70) + ')'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, W);
+  }
+  function glow(g, x, y, r, c, alpha) {
+    var gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, ink(c, alpha)); gr.addColorStop(1, ink(c, 0)); g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  function curveBand(g, W, y, amp, thick, shift, color) {
+    g.beginPath();
+    for (var i = 0; i <= 48; i++) { var u = i / 48, v = y + Math.sin(u * Math.PI * 1.6 + shift) * amp; if (!i) g.moveTo(u * W, v * W); else g.lineTo(u * W, v * W); }
+    for (var j = 48; j >= 0; j--) { var u2 = j / 48, v2 = y + Math.sin(u2 * Math.PI * 1.6 + shift) * amp + thick; g.lineTo(u2 * W, v2 * W); }
+    g.closePath(); g.fillStyle = color; g.fill();
+  }
+  function makeBg(id, label, colors, paint) {
+    return {id: id, label: label, colors: colors, draw: function (g, W, p, c1, c2) {
+      if (!g || !Number.isFinite(W) || W <= 0) return;
+      var a = rgb(c1, colors[0]), b = rgb(c2, colors[1]); g.save();
+      try { cleanState(g); g.beginPath(); g.rect(0, 0, W, W); g.clip(); backdrop(g, W, a, b); paint(g, W, phase(p) * TAU, a, b); } finally { g.restore(); }
+    }};
+  }
+  var backgrounds = [
+    makeBg('softGradient', '부드러운 그라데이션', ['#e5a3c5', '#9fcbed'], function (g, W, ph, a, b) {
+      glow(g, W * (.25 + .05 * Math.sin(ph)), W * .18, W * .72, a, .24); glow(g, W * (.77 - .05 * Math.sin(ph)), W * .80, W * .68, b, .27); centerQuiet(g, W, .17);
+    }),
+    makeBg('aurora', '오로라 커튼', ['#bba7e6', '#8cd7ca'], function (g, W, ph, a, b) {
+      for (var i = 0; i < 6; i++) { var angle = -.5 + i * .12, x = W * (i * .24 - .15 + .025 * Math.sin(ph + i)); g.save(); g.translate(x, W / 2); g.rotate(angle); var gr = g.createLinearGradient(-W * .14, 0, W * .14, 0); gr.addColorStop(0, ink(a, 0)); gr.addColorStop(.48, ink(i % 2 ? a : b, .19)); gr.addColorStop(.63, ink(WHITE, .30)); gr.addColorStop(1, ink(b, 0)); g.fillStyle = gr; g.fillRect(-W * .14, -W, W * .28, W * 2); g.restore(); } centerQuiet(g, W, .15);
+    }),
+    makeBg('satinLight', '새틴 빛결', ['#e8b6b6', '#cbb3df'], function (g, W, ph, a, b) {
+      for (var i = 0; i < 7; i++) { curveBand(g, W, -.15 + i * .21, .12, .065, i * .4 + Math.sin(ph) * .12, ink(i % 2 ? a : b, .13)); curveBand(g, W, -.15 + i * .21, .12, .012, i * .4 + Math.sin(ph) * .12, ink(WHITE, .55)); } centerQuiet(g, W, .20);
+    }),
+    makeBg('waterWaves', '잔잔한 물결', ['#8fc4e4', '#b0ded8'], function (g, W, ph, a, b) {
+      for (var i = 0; i < 8; i++) { curveBand(g, W, .03 + i * .14, .035, .035, ph + i * .8, ink(i % 2 ? a : b, .19)); curveBand(g, W, .03 + i * .14, .035, .005, ph + i * .8, ink(WHITE, .70)); } centerQuiet(g, W, .22);
+    }),
+    makeBg('glassLight', '유리 조각 빛', ['#9dc9d9', '#d6b6df'], function (g, W, ph, a, b) {
+      var shapes = [[-.2,.05,.55,.25,.05,.62],[.55,-.1,1.12,.05,.80,.60],[.05,.72,.63,.85,.28,1.15],[.78,.62,1.12,.90,.75,1.12]];
+      shapes.forEach(function (v, i) { var ox = Math.sin(ph + i) * W * .006; g.beginPath(); g.moveTo(v[0] * W + ox, v[1] * W); g.lineTo(v[2] * W + ox, v[3] * W); g.lineTo(v[4] * W + ox, v[5] * W); g.closePath(); var gr = g.createLinearGradient(0, v[1] * W, W, v[5] * W); gr.addColorStop(0, ink(i % 2 ? a : b, .16)); gr.addColorStop(.5, ink(WHITE, .48)); gr.addColorStop(1, ink(i % 2 ? b : a, .08)); g.fillStyle = gr; g.fill(); g.strokeStyle = ink(WHITE, .80); g.lineWidth = Math.max(.65, W * .002); g.stroke(); }); centerQuiet(g, W, .18);
+    }),
+    makeBg('softBokeh', '포근한 보케', ['#e5b3c8', '#b4c0e7'], function (g, W, ph, a, b) {
+      for (var i = 0; i < 22; i++) { var ang = i * 2.39996323, rr = W * (.29 + .24 * ((i * .61803) % 1)), x = W / 2 + Math.cos(ang) * rr, y = W / 2 + Math.sin(ang) * rr, r = W * (.025 + .045 * ((i * .38197) % 1)); x += Math.sin(ph + i) * W * .006; y += Math.cos(ph + i) * W * .006; glow(g, x, y, r * 1.6, i % 2 ? a : b, .14); g.fillStyle = ink(WHITE, .20 + .15 * (.5 + .5 * Math.sin(ph + i))); circle(g, x, y, r); g.fill(); g.lineWidth = Math.max(.4, W * .0015); g.strokeStyle = ink(WHITE, .35); g.stroke(); } centerQuiet(g, W, .18);
+    }),
+    makeBg('tinyStars', '작은 별자리', ['#b6a7d9', '#a7c8e5'], function (g, W, ph, a, b) {
+      for (var i = 0; i < 26; i++) { var x = W * ((i * .6180339 + .12) % 1), y = W * ((i * .41421356 + .04) % 1); if (Math.hypot(x - W / 2, y - W / 2) < W * .23) continue; var r = W * (.0035 + .006 * ((i * .3819) % 1)), alpha = .27 + .20 * (.5 + .5 * Math.sin(ph + i)); g.fillStyle = ink(i % 2 ? a : b, alpha); g.beginPath(); g.moveTo(x, y - r); g.quadraticCurveTo(x + r * .15, y - r * .15, x + r, y); g.quadraticCurveTo(x + r * .15, y + r * .15, x, y + r); g.quadraticCurveTo(x - r * .15, y + r * .15, x - r, y); g.quadraticCurveTo(x - r * .15, y - r * .15, x, y - r); g.fill(); } centerQuiet(g, W, .18);
+    }),
+    makeBg('fineCheck', '가는 체크', ['#d5a7bc', '#a7c6d4'], function (g, W, ph, a, b) {
+      var gap = W / 10, d = Math.sin(ph) * gap * .045;
+      for (var i = -1; i < 12; i++) { var v = i * gap + d; g.fillStyle = ink(a, .065); g.fillRect(v, 0, gap * .32, W); g.fillStyle = ink(b, .065); g.fillRect(0, v, W, gap * .32); g.strokeStyle = ink(a, .15); g.lineWidth = Math.max(.45, W * .0018); g.beginPath(); g.moveTo(v, 0); g.lineTo(v, W); g.moveTo(0, v); g.lineTo(W, v); g.stroke(); } centerQuiet(g, W, .17);
+    }),
+    makeBg('petiteDots', '작은 도트', ['#dfa3bc', '#a9c8d8'], function (g, W, ph, a, b) {
+      var gap = W / 11, d = Math.sin(ph) * gap * .05;
+      for (var y = -1; y < 13; y++) for (var x = -1; x < 13; x++) { var xx = (x + (y % 2 ? .5 : 0)) * gap + d, yy = y * gap + d; g.fillStyle = ink((x + y) % 3 ? a : b, .19); circle(g, xx, yy, W * .0042); g.fill(); } centerQuiet(g, W, .23);
+    }),
+    makeBg('paperGrain', '은은한 종이결', ['#d3b5a7', '#b8c4be'], function (g, W, ph, a, b) {
+      // Fixed, sparse fibers: no per-frame random noise or compression shimmer.
+      var seed = 8147; function rand() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+      g.lineWidth = Math.max(.45, W * .0013);
+      for (var i = 0; i < 600; i++) { var x = rand() * W, y = rand() * W, length = W * (.002 + rand() * .006); g.strokeStyle = ink(i % 2 ? a : b, .085); g.beginPath(); g.moveTo(x, y); g.lineTo(x + length, y + length * .15); g.stroke(); } centerQuiet(g, W, .12);
+    }),
+    makeBg('diagonalRibbons', '사선 리본 줄무늬', ['#dca6bd', '#abc6d1'], function (g, W, ph, a, b) {
+      g.save(); g.translate(W / 2, W / 2); g.rotate(-Math.PI / 4); var gap = W * .18, d = Math.sin(ph) * W * .005;
+      for (var i = -6; i <= 6; i++) { var x = i * gap + d; g.fillStyle = ink(i % 2 ? a : b, .14); g.fillRect(x, -W, gap * .40, W * 2); g.fillStyle = ink(WHITE, .72); g.fillRect(x + gap * .42, -W, gap * .045, W * 2); g.fillStyle = ink(a, .08); g.fillRect(x + gap * .51, -W, gap * .035, W * 2); } g.restore(); centerQuiet(g, W, .30);
+    }),
+    makeBg('diamondLattice', '다이아 격자', ['#c8acda', '#b4c7d2'], function (g, W, ph, a, b) {
+      var gap = W * .17, d = Math.sin(ph) * gap * .025; g.lineWidth = Math.max(.55, W * .0018);
+      for (var i = -8; i < 9; i++) { var k = i * gap + d; g.strokeStyle = ink(i % 2 ? a : b, .22); g.beginPath(); g.moveTo(k - W, 0); g.lineTo(k + W, W); g.moveTo(k + W, 0); g.lineTo(k - W, W); g.stroke(); }
+      for (var j = 0; j < 9; j++) { var x = W * ((j * .61803 + .07) % 1), y = W * ((j * .41421 + .11) % 1); if (Math.hypot(x-W/2,y-W/2) < W*.25) continue; g.fillStyle = ink(WHITE, .65); circle(g, x, y, W * .005); g.fill(); } centerQuiet(g, W, .27);
+    })
+  ];
+  global.PBKProfileLooks = {version: '20261015-2', rings: rings, backgrounds: backgrounds};
+})(window);

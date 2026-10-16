@@ -1,0 +1,164 @@
+/* Original profile transitions. Source artwork is never distorted or blurred.
+ * Each renderer has the host signature (g, W, A, B, t, eased, colorA, colorB).
+ * It replaces A by B through a soft mask, clips to the output circle, and
+ * restores caller state. Transparent B pixels replace, rather than cover, A.
+ * Existing profile transitions are intentionally registered by their own file.
+ */
+(function (global) {
+  'use strict';
+  var TAU = Math.PI * 2, cache = new WeakMap();
+  function clamp(v) { return Math.max(0, Math.min(1, v)); }
+  function smooth(v) { return v * v * (3 - 2 * v); }
+  function surface(W) { var c = document.createElement('canvas'); c.width = c.height = W; return c; }
+  function scratch(g, W) {
+    var s = cache.get(g);
+    if (!s || s.size !== W) {
+      s = {size: W, mask: surface(W), a: surface(W), b: surface(W)};
+      s.m = s.mask.getContext('2d'); s.ga = s.a.getContext('2d'); s.gb = s.b.getContext('2d');
+      cache.set(g, s);
+    }
+    return s;
+  }
+  function reset(g, W) {
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.shadowColor = 'transparent'; g.shadowBlur = 0;
+    g.shadowOffsetX = 0; g.shadowOffsetY = 0;
+    if ('filter' in g) g.filter = 'none';
+    g.clearRect(0, 0, W, W);
+  }
+  function circle(g, W) { g.beginPath(); g.arc(W / 2, W / 2, W / 2, 0, TAU); g.clip(); }
+  function feather(g, W, p, path, width) {
+    // Layered vector masks avoid browser-dependent canvas-filter blur and keep
+    // the image sharp. Feathering tapers away at both temporal endpoints.
+    var edge = W * width * Math.sin(Math.PI * p);
+    [[1, 0.10], [0.68, 0.18], [0.36, 0.36], [0, 1]].forEach(function (v) {
+      g.globalAlpha = v[1]; path(v[0] * edge); g.fill();
+    });
+    g.globalAlpha = 1;
+  }
+  function radial(g, W, x, y, radius, soft) {
+    // Chromium can invert nearly coincident radial stops at subpixel radii.
+    // A half-pixel minimum keeps endpoints continuous on CPU and GPU canvases.
+    soft = Math.max(0.5, soft);
+    var inner = Math.max(0, radius - soft), outer = Math.max(0.0001, radius + soft);
+    var grad = g.createRadialGradient(x, y, inner, x, y, outer);
+    grad.addColorStop(0, '#fff'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, W, W);
+  }
+  function dissolve(g, W, p) {
+    g.globalAlpha = p; g.fillRect(0, 0, W, W); g.globalAlpha = 1;
+  }
+  function iris(g, W, p) {
+    radial(g, W, W * 0.5, W * 0.5, W * 0.56 * p,
+      W * 0.055 * Math.sin(Math.PI * p));
+  }
+  function diagonal(g, W, p) {
+    // Broad satin-soft diagonal wipe; no bright band is painted on the image.
+    var nx = Math.SQRT1_2, ny = Math.SQRT1_2;
+    var edge = W * (-0.56 + 1.12 * p), soft = W * (0.008 + 0.060 * Math.sin(Math.PI * p));
+    var x = W * 0.5 + nx * edge, y = W * 0.5 + ny * edge;
+    var grad = g.createLinearGradient(x - nx * soft, y - ny * soft, x + nx * soft, y + ny * soft);
+    grad.addColorStop(0, '#fff'); grad.addColorStop(0.42, 'rgba(255,255,255,0.76)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, W, W);
+  }
+  function petals(g, W, p) {
+    var radius = W * 0.66 * p, amp = 0.14 * Math.sin(Math.PI * p);
+    feather(g, W, p, function (f) {
+      g.beginPath();
+      for (var i = 0; i <= 108; i++) {
+        var a = TAU * i / 108 - Math.PI / 2;
+        var r = radius * (1 + amp * Math.cos(a * 6 + 0.16 * p)) + f;
+        var x = W * 0.5 + Math.cos(a) * r, y = W * 0.5 + Math.sin(a) * r;
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.closePath();
+    }, 0.020);
+  }
+  function ripple(g, W, p) {
+    var r = W * 0.60 * p, band = Math.max(0.6, W * 0.065 * Math.sin(Math.PI * p));
+    var inner = Math.max(0, r - band * 0.65), outer = Math.max(inner + 0.0001, r + band);
+    var grad = g.createRadialGradient(W * 0.5, W * 0.5, inner, W * 0.5, W * 0.5, outer);
+    grad.addColorStop(0, '#fff'); grad.addColorStop(0.24, 'rgba(255,255,255,0.54)');
+    grad.addColorStop(0.44, 'rgba(255,255,255,0.08)'); grad.addColorStop(0.58, 'rgba(255,255,255,0.25)');
+    grad.addColorStop(0.73, 'rgba(255,255,255,0.03)'); grad.addColorStop(0.86, 'rgba(255,255,255,0.10)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, W, W);
+  }
+  function veil(g, W, p) {
+    var envelope = Math.sin(Math.PI * p), edge = W * (-0.13 + 1.26 * p);
+    // A gently draped curtain passes downwards with a long, quiet leading edge.
+    feather(g, W, p, function (f) {
+      g.beginPath(); g.moveTo(-W * 0.1, -W);
+      for (var i = 0; i <= 56; i++) {
+        var x = -0.1 + i * 1.2 / 56;
+        var drape = W * envelope * (0.040 * Math.cos(x * TAU * 0.75 + 0.5) + 0.014 * Math.sin(x * TAU * 2.5));
+        g.lineTo(x * W, edge + drape + f);
+      }
+      g.lineTo(W * 1.1, -W); g.closePath();
+    }, 0.105);
+  }
+  function ellipse(g, W, p) {
+    var r = W * 0.78 * p, angle = -0.38 + 0.14 * p;
+    feather(g, W, p, function (f) {
+      g.beginPath(); g.ellipse(W * 0.5, W * 0.5, r + f, r * 0.72 + f, angle, 0, TAU); g.closePath();
+    }, 0.032);
+  }
+  function orbit(g, W, p) {
+    // The reveal centre follows a shallow arc. The artwork itself stays still.
+    var bend = Math.sin(Math.PI * p), angle = -Math.PI * 0.95 + p * Math.PI * 0.78;
+    var x = W * (0.5 + 0.29 * bend * Math.cos(angle));
+    var y = W * (0.5 + 0.29 * bend * Math.sin(angle));
+    radial(g, W, x, y, W * 0.76 * p, W * 0.028 * bend);
+  }
+  function cloud(g, W, p) {
+    var env = Math.sin(Math.PI * p), edge = W * (1.15 - 1.30 * p);
+    feather(g, W, p, function (f) {
+      g.beginPath(); g.moveTo(-W * 0.1, W * 2);
+      for (var i = 0; i <= 72; i++) {
+        var u = -0.1 + i * 1.2 / 72;
+        var scallop = W * env * (0.054 * Math.cos(u * TAU * 2.2) + 0.025 * Math.cos(u * TAU * 4.4 + 0.4));
+        g.lineTo(u * W, edge + scallop - f);
+      }
+      g.lineTo(W * 1.1, W * 2); g.closePath();
+    }, 0.026);
+  }
+  function transition(mask) {
+    return function (g, W, A, B, t, eased, colorA, colorB) {
+      if (!g || !Number.isFinite(W) || W <= 0 || !A || !B) return;
+      var raw = Number.isFinite(t) ? clamp(t) : 0;
+      g.save();
+      try {
+        reset(g, W); circle(g, W);
+        if (raw === 0 || raw === 1) { g.drawImage(raw === 0 ? A : B, 0, 0, W, W); return; }
+        var p = Number.isFinite(eased) ? clamp(eased) : smooth(raw);
+        if (p === 0 || p === 1) { g.drawImage(p === 0 ? A : B, 0, 0, W, W); return; }
+        var s = scratch(g, W);
+        reset(s.m, W); s.m.fillStyle = '#fff'; mask(s.m, W, p);
+        reset(s.ga, W); s.ga.drawImage(A, 0, 0, W, W);
+        s.ga.globalCompositeOperation = 'destination-out'; s.ga.drawImage(s.mask, 0, 0);
+        reset(s.gb, W); s.gb.drawImage(B, 0, 0, W, W);
+        s.gb.globalCompositeOperation = 'destination-in'; s.gb.drawImage(s.mask, 0, 0);
+        // Premultiplied interpolation is required for transparent/partial B.
+        // Plain source-over leaves A visible under B and darkens the seam.
+        s.ga.globalCompositeOperation = 'lighter'; s.ga.drawImage(s.b, 0, 0);
+        g.drawImage(s.a, 0, 0);
+      } finally { g.restore(); }
+    };
+  }
+  global.PBKProfileTransitions = {
+    profDissolve: transition(dissolve), profIris: transition(iris),
+    profDiagonal: transition(diagonal), profPetals: transition(petals),
+    profRipple: transition(ripple), profVeil: transition(veil),
+    profEllipse: transition(ellipse), profOrbit: transition(orbit),
+    profCloud: transition(cloud)
+  };
+  global.PBKProfileTransitionNames = [
+    ['profDissolve', '포근한 겹침'], ['profIris', '부드러운 원형 열림'],
+    ['profDiagonal', '새틴 사선'], ['profPetals', '꽃잎 윤곽 열림'],
+    ['profRipple', '동심 물결'], ['profVeil', '얇은 빛 커튼'],
+    ['profEllipse', '타원 펼침'], ['profOrbit', '곡선 따라 열림'],
+    ['profCloud', '구름 곡선']
+  ];
+})(window);

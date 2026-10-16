@@ -1,0 +1,180 @@
+/* Additive profile styling. Existing frame art and advanced controls stay intact. */
+(function(){
+'use strict';
+var bridge=window.PBKProfileBridge, fx=window.PBKProfileEffects;
+if(!bridge||!fx)return;
+var art=Object.assign({},window.PBKProfileArt||{},window.PBKProfileExtraArt||{}), images={}, pending={}, buffers={}, ticket=0, bgTicket=0, frameTicket=0, selectionPending=0, applying=false, keepBackground=false;
+var looks=window.PBKProfileLooks||{rings:[],backgrounds:[]};
+function simple(id){return looks.backgrounds.find(function(b){return 'simple:'+b.id===id;});}
+var ids=['giProfArt','giProfAtmosphere','giProfRimLight','giProfRimStrength'];
+var presets=[
+ {id:'berry',name:'딸기 리본',frame:'22-01',art:'berry-ribbon',color:'#e76191',base:'#fff2f6',out:'#a63c66',trans:'profHeart',mood:'hearts'},
+ {id:'moon',name:'달빛 레이스',frame:'22-03',art:'moon-lace',color:'#8671c4',base:'#f3efff',out:'#49407d',trans:'profWave',mood:'stars'},
+ {id:'lilac',name:'라일락 정원',frame:'22-06',art:'lilac-garden',color:'#ba7ad5',base:'#faf1ff',out:'#7e4999',trans:'profRibbon',mood:'petals'}
+];
+function el(id){return document.getElementById(id);}
+function state(){return PBKPilotGifBridge.state();}
+function enabled(){return state().mode==='avatar';}
+function canvas(W){var c=document.createElement('canvas');c.width=c.height=W;return c;}
+function buffer(key,W){if(!buffers[key]||buffers[key].width!==W)buffers[key]=canvas(W);return buffers[key];}
+function put(id,v){var e=el(id);if(!e)return;if(e.type==='checkbox')e.checked=!!v;else e.value=String(v);e.dispatchEvent(new Event('change',{bubbles:true}));}
+function say(s){el('profStatus').textContent=s;}
+function selecting(delta){selectionPending+=delta;el('gifGo').disabled=!!selectionPending||state().busy||state().loading||!state().url;}
+function loadArt(id){
+ if(!id||id==='original'||simple(id))return Promise.resolve(null);
+ if(images[id])return Promise.resolve(images[id]);
+ if(pending[id])return pending[id];
+ if(!art[id])return Promise.reject(Error('배경 파일을 찾지 못했어요.'));
+ pending[id]=new Promise(function(ok,no){
+  function decode(src){var im=new Image();im.onload=function(){images[id]=im;delete pending[id];ok(im);};im.onerror=function(){delete pending[id];no(Error('배경을 불러오지 못했어요. 다시 골라 주세요.'));};im.src=src;}
+  if(art[id].data){decode(art[id].data);return;}
+  if(window.PBKProfileArtBytes&&PBKProfileArtBytes[id]){decode(PBKProfileArtBytes[id]);return;}
+  var s=document.createElement('script');s.src=art[id].dataFile;s.onload=function(){s.remove();if(window.PBKProfileArtBytes&&PBKProfileArtBytes[id])decode(PBKProfileArtBytes[id]);else {delete pending[id];no(Error('배경 데이터가 없어요.'));}};s.onerror=function(){s.remove();delete pending[id];no(Error('배경 파일을 읽지 못했어요.'));};document.head.appendChild(s);
+ });
+ return pending[id];
+}
+function getFrame(){return window.PBKFullGif&&PBKFullGif.avatarSelected()?frameCache[PBKFullGif.state().avatar]:null;}
+var frameCache={};
+var thumbnailsStarted=false;
+function buildThumbnails(){
+ if(thumbnailsStarted)return;thumbnailsStarted=true;
+ presets.forEach(function(pr){Promise.all([loadArt(pr.art),rememberFrame(pr.frame)]).then(function(){
+  var p=frameCache[pr.frame],c=canvas(210),g=c.getContext('2d');g.drawImage(images[pr.art],0,0,210,210);g.globalCompositeOperation='destination-in';g.drawImage(p.window,0,0,210,210);g.globalCompositeOperation='destination-over';g.drawImage(p.card,0,0,210,210);g.globalCompositeOperation='source-over';g.drawImage(p.frame,0,0,210,210);
+  g.font='bold 36px sans-serif';g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';g.strokeStyle=pr.out;g.lineWidth=8;g.strokeText('이름',105,102);g.fillStyle='#fff';g.fillText('이름',105,102);
+  var im=document.querySelector('[data-preset="'+pr.id+'"] img');if(im)im.src=c.toDataURL();
+ }).catch(function(){/* The original frame remains a useful thumbnail offline. */});});
+}
+async function rememberFrame(id){if(id)frameCache[id]=await PBKFullGif.load(id);}
+function prepare(){return Promise.all([loadArt(el('giProfArt').value),rememberFrame(PBKFullGif.state().avatar)]);}
+function restorePrefs(){
+ var prefs=bridge.prefs();ids.forEach(function(id){if(!(id in prefs))return;var e=el(id);if(e.type==='checkbox')e.checked=!!prefs[id];else {e.value=String(prefs[id]);if(e.tagName==='SELECT'&&!e.value)e.selectedIndex=0;}});
+ if(prefs.giTrans&&(fx.transitions[prefs.giTrans]||(window.PBKProfileTransitions||{})[prefs.giTrans]||((window.PBKProfileChoreography||{}).transitions||{})[prefs.giTrans]))el('giTrans').value=prefs.giTrans;
+ if(prefs.giTxtAnim&&window.PBKProfileTypography&&PBKProfileTypography.modes.indexOf(prefs.giTxtAnim)>=0)el('giTxtAnim').value=prefs.giTxtAnim;
+ return prepare().then(function(){sync();if(!state().busy)PBKPilotGifBridge.refresh();}).catch(function(e){say(e.message);});
+}
+function hasBackground(){return enabled()&&el('giProfArt')&&el('giProfArt').value!=='original'&&!!(images[el('giProfArt').value]||simple(el('giProfArt').value));}
+function drawRingEffect(g,W,phase){
+ var id=state().ring;if(!id||id.indexOf('profile_')!==0)return false;
+ var ring=looks.rings.find(function(r){return 'profile_'+r.id===id;});if(!ring)return false;
+ ring.draw(g,W,Number.isFinite(phase)?phase:0,el('gifRc1').value,el('gifRc2').value,(+el('gifRw').value||12)*W/420,el('gifRingAnim').checked,1);return true;
+}
+function drawBackground(g,W,t,bgm){
+ if(!enabled()||!el('giProfArt'))return false;
+ var key=el('giProfArt').value,im=images[key],sp=simple(key),mood=el('giProfAtmosphere').value;
+ if(key==='original'||(!im&&!sp))return false;
+ var p=getFrame();if(PBKFullGif.avatarSelected()&&!p)return false;
+ var c=buffer('background',W),cg=c.getContext('2d');
+ cg.clearRect(0,0,W,W);cg.save();
+ // Slow breathing at sub-pixel scale; no large zoom or abrupt drift.
+ var phase=t*Math.PI*2,scale=1.018+Math.sin(phase)*.004;
+ if(sp)sp.draw(cg,W,t,el('giBgCol').value,el('giBgCol2').value);
+ else {cg.translate(W/2,W/2);cg.scale(scale,scale);cg.translate(-W/2,-W/2);cg.drawImage(im,0,0,W,W);}cg.restore();
+ fx.background(cg,W,t*8,mood,el('giBgCol').value,el('giBgCol2').value);
+ if(p){cg.globalCompositeOperation='destination-in';cg.drawImage(p.window,0,0,W,W);cg.globalCompositeOperation='destination-over';cg.drawImage(p.card,0,0,W,W);cg.globalCompositeOperation='source-over';cg.drawImage(p.frame,0,0,W,W);}
+ g.drawImage(c,0,0);return true;
+}
+function drawFinish(g,W,phase){
+ if(!enabled()||!el('giProfRimLight')||!el('giProfRimLight').checked)return;
+ var p=getFrame();if(!p)return;
+ var strength=(+el('giProfRimStrength').value||0)/100;
+ if(!strength)return;
+ var ph=Number.isFinite(phase)?phase:0,ang=ph*Math.PI*2;
+ var c=buffer('shine',W),cg=c.getContext('2d'),m=buffer('silhouette',W),mg=m.getContext('2d');
+ mg.clearRect(0,0,W,W);mg.drawImage(g.canvas,0,0);
+ cg.clearRect(0,0,W,W);cg.save();cg.translate(W/2,W/2);cg.rotate(ang);
+ var grad=cg.createLinearGradient(-W*.45,0,W*.45,0);
+ grad.addColorStop(0,'rgba(255,255,255,0)');grad.addColorStop(.35,'rgba(255,255,255,0)');grad.addColorStop(.48,'rgba(255,250,225,'+(strength*.28)+')');grad.addColorStop(.52,'rgba(255,255,255,'+(strength*.58)+')');grad.addColorStop(.65,'rgba(255,255,255,0)');grad.addColorStop(1,'rgba(255,255,255,0)');
+ cg.fillStyle=grad;cg.fillRect(-W,-W,W*2,W*2);cg.restore();
+ cg.globalCompositeOperation='destination-in';cg.drawImage(p.frame,0,0,W,W);cg.drawImage(m,0,0);cg.globalCompositeOperation='source-over';g.save();g.drawImage(c,0,0);g.restore();
+}
+async function applyPreset(id){
+ if(state().busy)return false;
+ var pr=presets.find(function(p){return p.id===id;});if(!pr)return false;
+ var n=++ticket;++bgTicket;++frameTicket;selecting(1);say('테두리와 배경을 불러오는 중…');
+ try{
+  await Promise.all([loadArt(pr.art),rememberFrame(pr.frame)]);
+  if(n!==ticket||state().busy||!enabled())return false;
+  applying=n;await PBKFullGif.apply(pr.frame);
+  if(n!==ticket||state().busy||!enabled())return false;
+  put('giProfArt',pr.art);put('giProfAtmosphere',pr.mood);put('giProfRimLight',true);
+  put('giBgCol',pr.color);put('giBgCol2',pr.base);put('giCol','#ffffff');put('giOut',pr.out);
+  put('giTrans',pr.trans);put('giParti','none');put('giTxtAnim','fadeup');
+  // Preserve photo, crop, name, font, positions and manually selected timing.
+  var ring=el('gifRingRow').querySelector('[data-r="none"]');if(ring)ring.click();
+  if(!el('giOn').checked&&!el('giOverlay').checked)put('giOn',true);
+  put('giPrev',true);bridge.commit();bridge.restart();sync();
+  say(pr.name+' 적용 완료 · 배경과 테두리는 아래에서 따로 바꿀 수 있어요.');return true;
+ }catch(e){say(e.message);return false;}finally{if(applying===n)applying=false;selecting(-1);}
+}
+function rhythm(){
+ if(state().busy||!enabled())return;
+ put('gifFps',el('gifAvSize').value==='210'?'30':'15');
+ put('giDur','2');put('giTransDur','0.8');put('giTransSpd','0.8');
+ put('giTxtDelay','0.15');put('giTxtSpd','0.6');put('giTxtAnim','fadeup');put('giPrev',true);
+ bridge.commit();bridge.restart();say('전환 '+el('giTransSpd').value+'초 · 이름 장면 '+el('giDur').value+'초 · 글자가 부드럽게 나타나요.');
+}
+function sync(){
+ var box=el('profQuick');if(!box)return;
+ box.hidden=!enabled();if(!enabled())return;
+ buildThumbnails();
+ el('profName').value=el('giName').value;
+ el('profFrame').value=PBKFullGif.state().avatar||'';
+ el('profStrengthV').textContent=el('giProfRimStrength').value+'%';
+ var current=el('giProfArt').value;
+ box.querySelectorAll('[data-bg]').forEach(function(b){var on=b.dataset.bg===current;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on?'true':'false');});
+ box.querySelectorAll('[data-display]').forEach(function(b){var on=b.dataset.display===(el('giOverlay').checked?'overlay':el('giOn').checked?'card':'none');b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on?'true':'false');});
+ var fid=PBKFullGif.state().avatar;if(fid&&!frameCache[fid])rememberFrame(fid).then(function(){if(!state().busy)PBKPilotGifBridge.refresh();}).catch(function(e){say(e.message);});
+ if(window.PBKProfileCatalog)PBKProfileCatalog.sync();
+}
+async function chooseBackground(id){
+ if(state().busy)return false;var n=++bgTicket,parent=ticket;selecting(1);say('배경을 불러오는 중…');
+ try{await loadArt(id);if(n!==bgTicket||parent!==ticket||state().busy||!enabled())return false;
+  put('giProfArt',id);var sp=simple(id);if(sp){put('giBgCol',sp.colors[0]);put('giBgCol2',sp.colors[1]);}
+  bridge.commit();sync();say(id==='original'?'원래 이름 배경을 사용해요.':'배경을 적용했어요. 테두리 효과는 유지돼요.');return true;
+ }catch(e){say(e.message);return false;}finally{selecting(-1);}
+}
+function mount(){
+ Object.keys(fx.transitions).forEach(function(k){bridge.registerTransition(k,fx.transitions[k]);});
+ [['profHeart','하트가 부드럽게 열림'],['profWave','겹물결로 이어짐'],['profRibbon','리본 커튼이 열림']].forEach(function(a){var o=document.createElement('option');o.value=a[0];o.textContent=a[1];el('giTrans').appendChild(o);});
+ Object.keys(window.PBKProfileTransitions||{}).forEach(function(id){bridge.registerTransition(id,PBKProfileTransitions[id]);});
+ (window.PBKProfileTransitionNames||[]).forEach(function(a){var o=document.createElement('option');o.value=a[0];o.textContent=a[1];el('giTrans').appendChild(o);});
+ Object.keys((window.PBKProfileChoreography||{}).transitions||{}).forEach(function(id){bridge.registerTransition(id,PBKProfileChoreography.transitions[id]);});
+ ((window.PBKProfileChoreography||{}).names||[]).forEach(function(a){var o=document.createElement('option');o.value=a[0];o.textContent=a[1];el('giTrans').appendChild(o);});
+ [['profCascade','빛을 따라 차례로'],['profRibbonType','리본 곡선으로']].forEach(function(a){var o=document.createElement('option');o.value=a[0];o.textContent=a[1];el('giTxtAnim').appendChild(o);});
+ var style=document.createElement('style');style.textContent='#profQuick[hidden]{display:none!important}#profQuick{margin:12px 0;padding:12px;border:1px solid #d7c9dd;background:#fffcff;border-radius:12px;color:#4b4055}#profQuick h3{font-size:14px;margin:0 0 5px}#profQuick .prof-note{font-size:11px;line-height:1.55;color:#7a7180;margin:4px 0 10px}#profQuick .prof-row{display:flex;gap:5px;margin:8px 0;align-items:center}#profQuick .prof-row>input,#profQuick .prof-row>select{min-width:0;flex:1}#profQuick button{font:inherit;border:1px solid #d8cedb;border-radius:7px;background:white;color:#554660;padding:7px;cursor:pointer}#profQuick .selected{border-color:#9b6fa7;background:#f4eaf7}#profQuick .prof-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}#profQuick .prof-grid button{padding:5px;font-size:11px}#profQuick .prof-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px}#profQuick label,#profQuick select,#profQuick input{font-size:12px}#profQuick .prof-row button{flex:1;font-size:11px}#profStatus{font-size:11px;color:#776780;line-height:1.55;min-height:18px;margin-top:7px}#profQuick .prof-bg img{aspect-ratio:1.7}#profQuick .prof-label{font-size:12px;font-weight:bold;margin:12px 0 6px}#profQuick input[type=range]{width:80px}';document.head.appendChild(style);
+ var box=document.createElement('section');box.id='profQuick';box.hidden=true;box.innerHTML='<h3>프사 꾸미기</h3><div class="prof-note">사진·이름을 넣고 조합을 골라요. 아래 세부 설정에서 더 자유롭게 조절할 수 있어요.</div><div class="prof-row"><button type="button" id="profPhoto">사진·영상 선택</button><button type="button" id="profNameFit">이름 위치 맞추기</button></div><label class="prof-row">이름 <input id="profName" aria-label="프사 이름" placeholder="표시할 이름"></label><div class="prof-label">테두리 + 새 배경 조합</div><div class="prof-grid" id="profPresets"></div><label class="prof-row">테두리 <select id="profFrame" aria-label="프사 테두리"><option value="">기존 기본 테두리</option></select></label><div class="prof-label">이름 장면 배경</div><div class="prof-grid prof-bg" id="profBackgrounds"></div><div class="prof-row"><button type="button" data-bg="original">원래 배경</button></div><select id="giProfArt" hidden aria-label="이름 장면 원화 배경"><option value="original">원래 배경</option></select><label class="prof-row">배경 움직임 <select id="giProfAtmosphere"><option value="none">없음</option><option value="hearts">살랑이는 하트</option><option value="stars">은은한 별빛</option><option value="petals">흩날리는 꽃잎</option><option value="bubbles">맑은 물방울</option></select></label><div class="prof-row"><label><input id="giProfRimLight" type="checkbox"> 테두리 윤광</label><input id="giProfRimStrength" aria-label="테두리 윤광 강도" type="range" min="0" max="100" value="55"><span id="profStrengthV">55%</span></div><div class="prof-label">이름 보여주기</div><div class="prof-row"><button type="button" data-display="card">캐릭터 → 이름</button><button type="button" data-display="overlay">캐릭터 위에 이름</button></div><div class="prof-row"><button type="button" id="profRhythm">자연스러운 속도로 맞추기</button><button type="button" id="profPreview">처음부터 보기</button></div><div id="profStatus" role="status" aria-live="polite"></div>';
+ el('gifModeRow').after(box);
+ presets.forEach(function(p){var b=document.createElement('button');b.type='button';b.dataset.preset=p.id;b.innerHTML='<img alt="" src="full_assets/releases/2026-10-02_v2/avatar/'+p.frame+'.png"><span>'+p.name+'</span>';b.onclick=function(){applyPreset(p.id);};el('profPresets').appendChild(b);});
+ PBKFullGif.assets().filter(function(a){return a.categoryId===22;}).forEach(function(a){var o=document.createElement('option');o.value=a.id;o.textContent=a.theme;el('profFrame').appendChild(o);});
+ Object.keys(art).forEach(function(k){var o=document.createElement('option');o.value=k;o.textContent=art[k].name;el('giProfArt').appendChild(o);});
+ looks.backgrounds.forEach(function(a){var o=document.createElement('option');o.value='simple:'+a.id;o.textContent=a.label;el('giProfArt').appendChild(o);});
+ bridge.addPrefs(ids);
+ el('profPhoto').onclick=function(){el('gifFile').click();};
+ el('profNameFit').onclick=function(){var b=document.querySelector('#gifFitRow [data-f="text"],#gifFitRow [data-fit="text"]');if(b)b.click();else {state().fitMode='text';bridge.commit();}say('미리보기의 이름을 마우스로 끌어 위치를 맞춰요.');};
+ el('profName').oninput=function(){el('giName').value=this.value;if(this.value&&!el('giOn').checked&&!el('giOverlay').checked)put('giOn',true);el('giName').dispatchEvent(new Event('input',{bubbles:true}));bridge.commit();};
+ el('profName').onchange=function(){put('giName',this.value);};
+ el('profFrame').onchange=async function(){if(state().busy)return;var id=this.value,n=++frameTicket,parent=ticket;selecting(1);try{if(id){await rememberFrame(id);if(n!==frameTicket||parent!==ticket||state().busy||!enabled())return;keepBackground=true;await PBKFullGif.apply(id);}else{keepBackground=true;PBKFullGif.clear('avatar');}bridge.commit();sync();}catch(e){say(e.message);}finally{keepBackground=false;selecting(-1);}};
+ box.addEventListener('click',function(e){var b=e.target.closest('[data-bg]');if(b)chooseBackground(b.dataset.bg);var d=e.target.closest('[data-display]');if(d){if(state().busy)return;put(d.dataset.display==='overlay'?'giOverlay':'giOn',true);bridge.restart();sync();}});
+ ids.forEach(function(id){el(id).addEventListener('change',function(){bridge.commit();sync();});});
+ el('giProfRimStrength').addEventListener('input',function(){bridge.commit();sync();});
+ el('profRhythm').onclick=rhythm;el('profPreview').onclick=function(){put('giPrev',true);bridge.restart();};
+ document.addEventListener('change',function(e){if(e.target.id==='giBgMode'&&!applying&&!keepBackground){++ticket;el('giProfArt').value='original';}if(['giName','giOn','giOverlay','giBgMode'].indexOf(e.target.id)>=0)sync();});
+ document.addEventListener('click',function(e){if(e.target.closest('#gifModeRow,#tabGif,#tabGifBn')){if(e.isTrusted)++ticket;sync();}});
+ // Restore through the native completion hook; no timeout can drop late prefs.
+ if(PBKPilotGifBridge.prefsReady())restorePrefs();sync();
+ var nativeRefresh=PBKPilotGifBridge.refresh;
+ PBKPilotGifBridge.refresh=function(){nativeRefresh();sync();};
+ var nativeGo=el('gifGo').onclick,waiting=false;
+ el('gifGo').onclick=function(){
+  if(!enabled())return nativeGo.apply(this,arguments);
+  if(selectionPending){say('선택한 배경과 테두리를 준비하고 있어요. 완료 후 만들어 주세요.');return;}
+  if(state().busy||state().loading||!state().url||waiting)return;
+  var bg=el('giProfArt').value,fid=PBKFullGif.state().avatar;
+  if((bg==='original'||images[bg]||simple(bg))&&(!fid||frameCache[fid]))return nativeGo.apply(this,arguments);
+  var url=state().url,n=ticket;waiting=true;el('gifGo').disabled=true;say('배경을 준비한 뒤 저장용 GIF를 만들어요…');
+  prepare().then(function(){if(enabled()&&state().url===url&&ticket===n&&el('giProfArt').value===bg&&PBKFullGif.state().avatar===fid&&!state().busy)nativeGo.call(el('gifGo'));}).catch(function(e){say(e.message);}).finally(function(){waiting=false;if(!state().busy)el('gifGo').disabled=!state().url||!!state().loading;});
+ };
+}
+window.PBKProfileStudio={applyPreset:applyPreset,chooseBackground:chooseBackground,drawBackground:drawBackground,drawRingEffect:drawRingEffect,drawFinish:drawFinish,hasBackground:hasBackground,sync:sync,loadArt:loadArt,restorePrefs:restorePrefs,presets:presets,art:art};
+mount();
+})();

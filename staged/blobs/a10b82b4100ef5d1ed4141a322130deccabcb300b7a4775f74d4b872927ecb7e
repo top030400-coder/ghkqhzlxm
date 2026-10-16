@@ -1,0 +1,128 @@
+/* Approved catalog wired to native GIF frames, text, timing and export. */
+(function(){
+'use strict';
+var api=window.PBKApprovedProfile,bridge=window.PBKProfileBridge,studio=window.PBKProfileStudio;
+if(!api||!bridge||!studio)return;
+var catalog=api.catalog,tickets={backgrounds:0,decorations:0,motions:0,rings:0},pending=0,applying=0,packs={},pages={},tab='motions';
+var fields=['giApprovedBackground','giApprovedDecoration','giApprovedTextFit'];
+var ringBuffer=null;
+function el(id){return document.getElementById(id);}
+function state(){return PBKPilotGifBridge.state();}
+function enabled(){return state().mode==='avatar';}
+function allowed(){return enabled()&&!state().busy&&!state().loading;}
+function say(s){el('profStatus').textContent=s;}
+function name(row){return row.name||row.label||row.id;}
+function transId(id){return 'profApproved_'+id.replace(/-/g,'_');}
+function ringId(id){return 'profile_approved_'+id.replace(/-/g,'_');}
+function find(kind,id){return(catalog[kind]||[]).find(function(r){return r.id===id;});}
+function baseId(row){return row&&(row.assetKey||row.baseId||row.frameId);}
+function current(kind){if(kind==='backgrounds')return el(fields[0]).value;if(kind==='decorations')return el(fields[1]).value;return((catalog[kind]||[]).find(function(r){return kind==='motions'?transId(r.id)===el('giTrans').value:ringId(r.id)===state().ring;})||{}).id||'';}
+function put(id,value){var e=el(id);e.value=value;e.dispatchEvent(new Event('change',{bubbles:true}));}
+function lock(delta){pending+=delta;el('gifGo').disabled=!!pending||state().busy||state().loading||!state().url;sync();}
+function commit(){bridge.commit();bridge.restart();sync();}
+function selectedIds(){return ['backgrounds','decorations','motions','rings'].map(current).filter(Boolean);}
+function prepare(){return api.loadAssets(selectedIds());}
+function nativeFrame(id){
+ if(!enabled())return null;var row=find('decorations',current('decorations'));if(!row||baseId(row)!==id)return null;
+ var p=api.getFrame(row.id);if(!p)return null;
+ if(!packs[row.id]||packs[row.id].card!==p.card)packs[row.id]=Object.assign({stages:[],draws:{}},p,{approved:true});
+ return packs[row.id];
+}
+async function choose(kind,id){
+ if(!allowed())return false;var row=id?find(kind,id):null;if(id&&!row)return false;
+ var ticket=++tickets[kind];lock(1);
+ try{
+  if(id)await api.loadAssets([id]);if(ticket!==tickets[kind]||!allowed())return false;
+  if(kind==='backgrounds'){applying++;try{put('giProfArt','original');}finally{applying--;}el(fields[0]).value=id;}
+  else if(kind==='decorations'){
+   await PBKFullGif.selectAvatar(id?baseId(row):null);
+   if(ticket!==tickets[kind])return false;
+   el(fields[1]).value=id;
+  }else if(kind==='motions'){put('giTrans',transId(id));}
+  else{
+   state().ring=id?ringId(id):'none';
+   ['gifRingOpt','gifRingOpt2','gifRingAnimRow','gifRc2Wrap'].forEach(function(k){el(k).style.display=id?'':'none';});
+   el('gifRingRow').querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b.dataset.r===state().ring);});
+  }
+  commit();say((row?name(row):'효과 없음')+' 적용 · 사진 위치와 이름, 재생 시간은 유지돼요.');return true;
+ }catch(e){say(e.message||'불러오지 못했어요. 다시 골라 주세요.');return false;}
+ finally{lock(-1);}
+}
+function hasBackground(){return enabled()&&!!find('backgrounds',current('backgrounds'));}
+function drawBackground(g,W,t){
+ var id=current('backgrounds');if(!enabled()||!id)return false;
+ return api.drawBackground(g,W,id,{phase:t,seconds:t});
+}
+function drawRing(g,W,phase){
+ if(!enabled())return false;var id=current('rings');if(!id)return false;
+ // The edge owns its outline. The final compositor clips decorations inside
+ // its aperture; masking the edge to a decoration here would erase the effect.
+ return api.drawRing(g,W,phase,id,{colorA:el('gifRc1').value,colorB:el('gifRc2').value,c1:el('gifRc1').value,c2:el('gifRc2').value,width:(+el('gifRw').value||12)*W/420,animate:el('gifRingAnim').checked});
+}
+// Derive a safe size from the actual aperture, preserving the user's position/rotation.
+function fitText(g,W,it,fs,outPct){
+ var p=nativeFrame(PBKFullGif.state().avatar);if(!p||!el('giApprovedTextFit').checked)return fs;
+ if(!p.safeAlpha){var mask=document.createElement('canvas');mask.width=p.window.width;mask.height=p.window.height;var mg=mask.getContext('2d',{willReadFrequently:true});mg.drawImage(p.window,0,0);p.safeAlpha=mg.getImageData(0,0,mask.width,mask.height).data;}
+ var mw=p.window.width,mh=p.window.height,a=p.safeAlpha,cx=.5+it.px,cy=.5+it.py,rot=(it.rot||0)*Math.PI/180,co=Math.cos(rot),si=Math.sin(rot),ratio=g.measureText(it.s).width/fs;
+ function fits(size){var rx=(ratio*size+outPct*size+W*.025)/W/2,ry=(size*1.25+outPct*size+W*.025)/W/2;for(var iy=0;iy<=8;iy++)for(var ix=0;ix<=16;ix++){var x=-rx+2*rx*ix/16,y=-ry+2*ry*iy/8,px=Math.round((cx+x*co-y*si)*mw),py=Math.round((cy+x*si+y*co)*mh);if(px<0||px>=mw||py<0||py>=mh||a[(py*mw+px)*4+3]<240)return false;}return true;}
+ if(fits(fs))return fs;var lo=Math.min(fs,12*W/420),hi=fs;if(!fits(lo))return fs;for(var i=0;i<12;i++){var m=(lo+hi)/2;if(fits(m))lo=m;else hi=m;}return Math.max(1,Math.floor(lo));
+}
+function drawFinish(g,W,phase){
+ var id=current('decorations');if(!enabled()||!id)return;
+ api.drawFrameFinish(g,W,phase,id,{strength:el('giProfRimLight').checked?(+el('giProfRimStrength').value||0)/100:0});
+}
+async function restorePrefs(){
+ var prefs=bridge.prefs();fields.slice(0,2).forEach(function(k){var kind=k===fields[0]?'backgrounds':'decorations',v=prefs[k];el(k).value=find(kind,v)?v:'';});if(fields[2] in prefs)el(fields[2]).checked=!!prefs[fields[2]];
+ if((catalog.motions||[]).some(function(r){return transId(r.id)===prefs.giTrans;}))el('giTrans').value=prefs.giTrans;
+ lock(1);try{await prepare();if(!state().busy)PBKPilotGifBridge.refresh();}catch(e){say(e.message);}finally{lock(-1);}
+}
+function node(tag,text,attrs){var n=document.createElement(tag);if(text!=null)n.textContent=text;Object.keys(attrs||{}).forEach(function(k){n.setAttribute(k,attrs[k]);});return n;}
+function sync(){
+ var box=el('profApproved');if(!box)return;box.hidden=!enabled();
+ ['motions','rings','decorations','backgrounds'].forEach(function(k){el('approved_'+k).value=current(k);});
+ box.querySelectorAll('[data-approved-id]').forEach(function(b){b.classList.toggle('selected',b.dataset.approvedId===current(tab));b.setAttribute('aria-pressed',String(b.dataset.approvedId===current(tab)));});
+ box.querySelectorAll('select,button').forEach(function(n){n.disabled=state().busy||!!state().loading;});
+ var list=catalog[tab],pg=pages[tab]||0;el('approvedPrev').disabled=state().busy||pg===0;el('approvedNext').disabled=state().busy||(pg+1)*6>=list.length;
+}
+function thumb(c,kind,row){
+ var token=kind+row.id;c.dataset.token=token;
+ api.loadAssets([row.id]).then(function(){
+  if(!c.isConnected||c.dataset.token!==token)return;var g=c.getContext('2d'),W=c.width;g.clearRect(0,0,W,W);
+  if(kind==='backgrounds'){api.drawBackground(g,W,row.id,{phase:0});return;}
+  if(kind==='decorations'){var p=api.getFrame(row.id);g.drawImage(p.card,0,0,W,W);return;}
+  var a=document.createElement('canvas'),b=document.createElement('canvas');a.width=a.height=b.width=b.height=W;
+  [a,b].forEach(function(v,i){var h=v.getContext('2d');h.fillStyle=i?'#fbe5f3':'#c6e1ee';h.fillRect(0,0,W,W);h.fillStyle=i?'#a96389':'#456889';h.font='bold 30px sans-serif';h.textAlign='center';h.fillText(i?'이름':'사진',W/2,W*.55);});
+  if(kind==='motions')api.drawTransition(g,W,a,b,.5,{id:row.id,colorA:'#ef9dbd',colorB:'#b9c7ef',clipRadius:W/2});
+  else{g.fillStyle='#f5eef3';g.beginPath();g.arc(W/2,W/2,W*.45,0,Math.PI*2);g.fill();api.drawRing(g,W,.2,row.id,{colorA:'#f19ab9',colorB:'#c3b5ef',width:W*.035,animate:true});}
+ }).catch(function(){var g=c.getContext('2d');g.fillStyle='#776780';g.font='12px sans-serif';g.fillText('다시 선택',8,60);});
+}
+function render(){
+ var grid=el('approvedGallery');grid.textContent='';var list=catalog[tab],pg=pages[tab]||0;
+ list.slice(pg*6,pg*6+6).forEach(function(row){var b=node('button',null,{type:'button','data-approved-id':row.id,'aria-label':name(row)}),c=node('canvas',null,{width:'144',height:'144','aria-hidden':'true'});b.appendChild(c);b.appendChild(node('span',name(row)));b.onclick=function(){choose(tab,row.id);};grid.appendChild(b);thumb(c,tab,row);});
+ el('approvedPage').textContent=(pg+1)+' / '+Math.ceil(list.length/6);sync();
+}
+function mount(){
+ fields.slice(0,2).forEach(function(id){el('profQuick').appendChild(node('input',null,{type:'hidden',id:id,value:''}));});bridge.addPrefs(fields);
+ var group=node('optgroup',null,{label:'추가한 전환'});
+ catalog.motions.forEach(function(row){var id=transId(row.id);group.appendChild(node('option',name(row),{value:id}));bridge.registerTransition(id,function(g,W,A,B,t,e,c1,c2){return api.drawTransition(g,W,A,B,t,{id:row.id,colorA:c1,colorB:c2,seconds:t*(+el('giTransSpd').value||.8),clip:PBKFullGif.avatarSelected()?false:undefined,clipRadius:PBKFullGif.avatarSelected()?null:W/2});});});el('giTrans').appendChild(group);
+ if(el('profTransitionChoice')){el('profTransitionChoice').appendChild(group.cloneNode(true));}
+ var box=node('section',null,{id:'profApproved'});box.appendChild(node('div','추가 꾸미기',{class:'prof-label'}));
+ box.appendChild(node('div','전환·테두리 효과·장식·배경을 각각 골라 조합해요. 캐릭터 GIF는 계속 움직이고, 이름 뒤에는 첫 장면으로 돌아가요.',{class:'prof-note'}));
+ [['motions','캐릭터 → 이름'],['rings','테두리 효과'],['decorations','장식'],['backgrounds','이름 배경']].forEach(function(pair){var kind=pair[0],label=node('label',pair[1],{class:'prof-row'}),sel=node('select',null,{id:'approved_'+kind,'aria-label':pair[1]});sel.appendChild(node('option',kind==='motions'?'기존 전환 선택 유지':'기존 설정 / 선택 해제',{value:''}));catalog[kind].forEach(function(row){sel.appendChild(node('option',name(row),{value:row.id}));});label.appendChild(sel);box.appendChild(label);sel.onchange=function(){if(!sel.value&&kind==='motions'){sync();return;}choose(kind,sel.value);};});
+ var fitLabel=node('label',null,{class:'prof-row'}),fit=node('input',null,{id:'giApprovedTextFit',type:'checkbox'});fit.checked=true;fit.onchange=commit;fitLabel.appendChild(fit);fitLabel.appendChild(document.createTextNode('이름을 장식 안에 맞춤'));box.appendChild(fitLabel);
+ var view=node('label','미리 보기',{class:'prof-row'}),types=node('select',null,{'aria-label':'추가 꾸미기 목록'});[['motions','전환 20종'],['rings','테두리 효과 23종'],['decorations','장식 28종'],['backgrounds','배경 21종']].forEach(function(a){types.appendChild(node('option',a[1],{value:a[0]}));});types.onchange=function(){tab=types.value;render();};view.appendChild(types);box.appendChild(view);
+ box.appendChild(node('div',null,{id:'approvedGallery',class:'prof-grid'}));var nav=node('div',null,{class:'prof-row'}),prev=node('button','이전',{type:'button',id:'approvedPrev'}),next=node('button','다음',{type:'button',id:'approvedNext'});prev.onclick=function(){pages[tab]=Math.max(0,(pages[tab]||0)-1);render();};next.onclick=function(){pages[tab]=(pages[tab]||0)+1;render();};nav.appendChild(prev);nav.appendChild(node('span','',{id:'approvedPage'}));nav.appendChild(next);box.appendChild(nav);
+ el('profName').closest('label').after(box);var style=node('style','#profApproved[hidden]{display:none!important}#profApproved{border-bottom:1px solid #ded5e3;padding-bottom:12px;margin-bottom:12px}#approvedGallery canvas{width:100%;height:auto;display:block}#approvedGallery button{min-width:0;overflow-wrap:anywhere}#approvedGallery span{display:block;font-size:11px;line-height:1.4}');document.head.appendChild(style);
+ // Keep older selectors working; choosing an older item exits only its new counterpart.
+ document.addEventListener('change',function(e){if(applying)return;var id=e.target.id;if(id==='giProfArt'||id==='giBgMode'){++tickets.backgrounds;el(fields[0]).value='';}if(id==='profFrame'||id==='giBgMode'){++tickets.decorations;el(fields[1]).value='';}if(id==='giTrans')++tickets.motions;sync();},true);
+ var oldRefresh=PBKPilotGifBridge.refresh;PBKPilotGifBridge.refresh=function(){oldRefresh();sync();};
+ var oldGo=el('gifGo').onclick,waiting=false;el('gifGo').onclick=function(){
+  if(!enabled())return oldGo.apply(this,arguments);if(pending||waiting||!allowed())return;
+  var fingerprint=JSON.stringify(selectedIds()),url=state().url;waiting=true;lock(1);
+  prepare().then(function(){if(allowed()&&url===state().url&&fingerprint===JSON.stringify(selectedIds()))oldGo.call(el('gifGo'));}).catch(function(e){say(e.message);}).finally(function(){waiting=false;lock(-1);});
+ };
+ render();if(PBKPilotGifBridge.prefsReady())restorePrefs();
+}
+window.PBKApprovedStudio={choose:choose,current:current,prepare:prepare,nativeFrame:nativeFrame,drawBackground:drawBackground,hasBackground:hasBackground,drawRing:drawRing,drawFinish:drawFinish,fitText:fitText,restorePrefs:restorePrefs,sync:sync};
+mount();
+})();

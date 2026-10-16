@@ -1,0 +1,106 @@
+/* Original name entrances. The host supplies its unchanged text painter so
+ * fonts, outlines, glow and shadows remain owned by the existing editor.
+ * draw(g,text,cx,cy,{mode,u,alpha,fontSize,rotation,scale,offsetY,color,outline,paint})
+ * paint(str,x,y) must paint centered/middle-aligned text without its own rotation.
+ * u is the entire entrance in [0,1], independent of card duration. Returns void.
+ */
+(function (global) {
+  'use strict';
+  var MODES = ['profCascade', 'profRibbonType'], segmenter = null;
+  try { if (typeof Intl !== 'undefined' && Intl.Segmenter) segmenter = new Intl.Segmenter(undefined, {granularity: 'grapheme'}); } catch (_) {}
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function smooth(v) { return v * v * (3 - 2 * v); }
+  function segment(text) {
+    if (segmenter) return Array.from(segmenter.segment(text), function (v) { return v.segment; });
+    // Array.from protects surrogate pairs. Preserve common combining marks,
+    // emoji skin modifiers, variation selectors, and joined emoji as one unit.
+    var out = [], joined = false;
+    Array.from(text).forEach(function (c) {
+      var cp = c.codePointAt(0), mark = /[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe00-\ufe0f\ufe20-\ufe2f]/.test(c) || cp >= 0x1f3fb && cp <= 0x1f3ff;
+      if (out.length && (joined || c === '\u200d' || mark)) out[out.length - 1] += c; else out.push(c);
+      joined = c === '\u200d';
+    });
+    return out;
+  }
+  function layout(g, text) {
+    var chars = segment(text), prefix = '', before = 0, total = g.measureText(text).width;
+    return chars.map(function (s, i) {
+      prefix += s; var end = g.measureText(prefix).width;
+      var item = {text: s, index: i, advance: end - before, x: end - g.measureText(s).width / 2 - total / 2}; before = end; return item;
+    });
+  }
+  function back(q, strength) { var z = q - 1; return 1 + (strength + 1) * z * z * z + strength * z * z; }
+  function position(mode, q, i, fs) {
+    if (mode === 'profRibbonType') {
+      var e = 1 - Math.pow(1 - q, 3), bend = Math.sin(q * Math.PI) * Math.pow(1 - q, .55);
+      return {x: -(1 - e) * fs * .52, y: (1 - e) * fs * .36 - bend * fs * .27,
+        angle: (1 - e) * -.24 + bend * .14, sx: .91 + .09 * e, sy: .96 + .04 * e};
+    }
+    var eb = back(q, .58), sign = i % 2 ? 1 : -1;
+    return {x: (1 - eb) * fs * .045 * sign, y: (1 - eb) * fs * .57,
+      angle: (1 - eb) * .14 * sign, sx: 1 - (1 - eb) * .085,
+      sy: 1 - (1 - eb) * .10 + Math.sin(q * Math.PI) * (1 - q) * .025};
+  }
+  function lightTrail(g, item, count, q, mode, fs, color, opacity) {
+    var vis = Math.sin(q * Math.PI) * Math.pow(1 - q, .62);
+    if (vis < .008 || opacity <= 0) return;
+    g.save();
+    try {
+      g.globalAlpha *= opacity * vis * .24;
+      g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetX = g.shadowOffsetY = 0;
+      if ('filter' in g) g.filter = 'none'; g.lineCap = 'round'; g.lineJoin = 'round'; g.setLineDash([]);
+      g.strokeStyle = color; g.lineWidth = Math.max(.55, fs * .014);
+      g.beginPath();
+      for (var i = 0; i <= 12; i++) {
+        var p = Math.max(0, q - .30 + i / 12 * .30), pos = position(mode, p, item.index, fs);
+        var x = item.x + pos.x - fs * .09, y = pos.y + fs * .08;
+        if (!i) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.stroke();
+      if (mode === 'profRibbonType') {
+        g.globalAlpha *= .42; g.lineWidth *= .65; g.translate(fs * .035, fs * .04); g.stroke();
+      }
+    } finally { g.restore(); }
+  }
+  function draw(g, text, cx, cy, options) {
+    options = options || {}; text = text == null ? '' : String(text);
+    if (!g || !text || typeof options.paint !== 'function') return;
+    var mode = options.mode, u = Number.isFinite(options.u) ? clamp(options.u, 0, 1) : 0;
+    var alpha = Number.isFinite(options.alpha) ? clamp(options.alpha, 0, 1) : 1;
+    if (u <= 0 || alpha <= 0) return;
+    var fontMatch = /([\d.]+)px/.exec(g.font);
+    var fs = Number.isFinite(options.fontSize) ? Math.max(1, options.fontSize) : fontMatch ? Number(fontMatch[1]) : 42;
+    var scale = Number.isFinite(options.scale) ? Math.max(.01, options.scale) : 1;
+    var dy = Number.isFinite(options.offsetY) ? options.offsetY : 0;
+    var rotation = Number.isFinite(options.rotation) ? options.rotation : 0;
+    var paint = options.paint, parts = layout(g, text), known = MODES.indexOf(mode) !== -1;
+    g.save();
+    try {
+      g.translate(Number.isFinite(cx) ? cx : 0, (Number.isFinite(cy) ? cy : 0) + dy); g.rotate(rotation); g.scale(scale, scale);
+      g.globalAlpha *= alpha;
+      // One final whole-string draw preserves native kerning, ligatures and
+      // grapheme shaping exactly, rather than freezing individually drawn glyphs.
+      // The per-glyph entrance has fully settled by .94, before this handoff.
+      if (u >= .985 || !known) { paint(text, 0, 0); return; }
+      // Connected scripts must remain a shaped run throughout the entrance.
+      // They receive the same gentle motion without splitting the word apart.
+      if (g.direction === 'rtl' || /[\u0590-\u08ff\u0900-\u0dff]/.test(text)) {
+        var qp = clamp(u / .94, 0, 1), wholePos = position(mode, qp, 0, fs);
+        g.translate(wholePos.x, wholePos.y); g.rotate(wholePos.angle); g.scale(wholePos.sx, wholePos.sy); g.globalAlpha *= smooth(clamp(qp / .24, 0, 1)); paint(text, 0, 0); return;
+      }
+      var stagger = parts.length > 1 ? Math.min(.31, .045 * (parts.length - 1)) : 0;
+      var run = .94 - stagger;
+      parts.forEach(function (item, i) {
+        var delay = parts.length > 1 ? stagger * i / (parts.length - 1) : 0, q = clamp((u - delay) / run, 0, 1);
+        if (q <= 0) return;
+        var opacity = smooth(clamp(q / .24, 0, 1)), pos = position(mode, q, i, fs);
+        lightTrail(g, item, parts.length, q, mode, fs, options.color || '#ffffff', opacity);
+        g.save();
+        try {
+          g.translate(item.x + pos.x, pos.y); g.rotate(pos.angle); g.scale(pos.sx, pos.sy); g.globalAlpha *= opacity; paint(item.text, 0, 0);
+        } finally { g.restore(); }
+      });
+    } finally { g.restore(); }
+  }
+  global.PBKProfileTypography = {version: '20261015-2', modes: MODES.slice(), draw: draw, segment: segment, layout: layout};
+})(window);

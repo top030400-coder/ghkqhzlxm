@@ -1,0 +1,180 @@
+/* Independent, original profile effects. No artwork or product state is embedded.
+ * transitions[name](g,W,A,B,t,e2,cA,cB): W-square CanvasImageSources, t in [0,1].
+ * e2 may supply eased progress; cA/cB are reserved for host compatibility.
+ * Clears its output, clips to the circle, preserves context state. Endpoints
+ * draw exactly the source through that circle; a transparent B replaces A.
+ * background(g,W,t,kind,color,base): transparent overlay; t is seconds,
+ * seamless 8-second period. kind: none/hearts/stars/petals/bubbles.
+ * The caller draws the background image first and the name afterwards.
+ */
+(function (global) {
+  'use strict';
+  var TAU = Math.PI * 2, buffers = new WeakMap(), colors = new Map();
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function smooth(v) { return v * v * (3 - 2 * v); }
+  function canvas(W) {
+    var c = document.createElement('canvas'); c.width = W; c.height = W; return c;
+  }
+  function scratch(g, W) {
+    var item = buffers.get(g);
+    if (!item || item.size !== W) {
+      item = {size: W, mask: canvas(W), a: canvas(W), b: canvas(W)};
+      item.m = item.mask.getContext('2d', {willReadFrequently: true});
+      item.ga = item.a.getContext('2d', {willReadFrequently: true}); item.gb = item.b.getContext('2d', {willReadFrequently: true});
+      buffers.set(g, item);
+    }
+    return item;
+  }
+  function clean(g, W) {
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.shadowColor = 'transparent'; g.shadowBlur = 0;
+    g.shadowOffsetX = 0; g.shadowOffsetY = 0;
+    if ('filter' in g) g.filter = 'none';
+    g.clearRect(0, 0, W, W);
+  }
+  function circle(g, W) { g.beginPath(); g.arc(W / 2, W / 2, W / 2, 0, TAU); g.clip(); }
+  function heartPath(g, x, y, r) {
+    g.beginPath(); g.moveTo(x, y + r * 0.94);
+    g.bezierCurveTo(x - r * 1.30, y + r * 0.12, x - r, y - r * 0.93, x - r * 0.43, y - r * 0.90);
+    g.bezierCurveTo(x - r * 0.15, y - r * 0.88, x, y - r * 0.65, x, y - r * 0.46);
+    g.bezierCurveTo(x, y - r * 0.65, x + r * 0.15, y - r * 0.88, x + r * 0.43, y - r * 0.90);
+    g.bezierCurveTo(x + r, y - r * 0.93, x + r * 1.30, y + r * 0.12, x, y + r * 0.94);
+    g.closePath();
+  }
+  function feather(g, W, path) {
+    // Feather only the mask; never blur the character, frame, or typography.
+    var edge = Math.max(0.6, W * 0.004);
+    [[1.5, 0.12], [1, 0.22], [0.5, 0.45], [0, 1]].forEach(function (step) {
+      g.globalAlpha = step[1]; path(step[0] * edge); g.fill();
+    });
+    g.globalAlpha = 1;
+  }
+  function heartMask(g, W, p) {
+    var fade = Math.min(1, p * 12, (1 - p) * 12);
+    feather(g, W, function (f) { heartPath(g, W * 0.5, W * 0.5, W * 1.30 * p + f * fade); });
+  }
+  function waveMask(g, W, p) {
+    var envelope = Math.sin(Math.PI * p), edge = W * (-0.12 + 1.24 * p);
+    // Two overlapping curves provide depth without adding an opaque flash.
+    [[0.022, 0.18, 0.4], [0.010, 0.35, 0.15], [0, 1, 0]].forEach(function (layer) {
+      g.globalAlpha = layer[1];
+      g.beginPath(); g.moveTo(-W, -W * 0.1);
+      for (var i = 0; i <= 44; i++) {
+        var u = -0.1 + i * 1.2 / 44;
+        var x = edge + W * envelope * (0.048 * Math.sin(u * TAU + p * 0.8 + layer[2]) + 0.014 * Math.sin(u * TAU * 2 - p) + layer[0]);
+        g.lineTo(x, u * W);
+      }
+      g.lineTo(-W, W * 1.1); g.closePath(); g.fill();
+    });
+    g.globalAlpha = 1;
+  }
+  function ribbonMask(g, W, p) {
+    var half = W * 0.62 * p, env = Math.sin(Math.PI * p), fade = Math.min(1, p * 12, (1 - p) * 12);
+    feather(g, W, function (f) {
+      f *= fade;
+      g.beginPath();
+      for (var i = 0; i <= 40; i++) {
+        var u = -0.1 + i * 1.2 / 40;
+        var bow = W * env * (0.022 * Math.cos(u * Math.PI) + 0.011 * Math.sin(u * TAU));
+        var left = W * 0.5 - half - f - bow;
+        if (i === 0) g.moveTo(left, u * W); else g.lineTo(left, u * W);
+      }
+      for (var j = 40; j >= 0; j--) {
+        var v = -0.1 + j * 1.2 / 40;
+        var fold = W * env * (0.022 * Math.cos(v * Math.PI) - 0.011 * Math.sin(v * TAU));
+        g.lineTo(W * 0.5 + half + f + fold, v * W);
+      }
+      g.closePath();
+    });
+  }
+  function transition(maskFn) {
+    return function (g, W, A, B, t, e2, cA, cB) {
+      if (!g || !Number.isFinite(W) || W <= 0 || !A || !B) return;
+      var raw = Number.isFinite(t) ? clamp(t, 0, 1) : 0;
+      g.save();
+      try {
+        clean(g, W); circle(g, W);
+        if (raw === 0 || raw === 1) { g.drawImage(raw === 0 ? A : B, 0, 0, W, W); return; }
+        var p = Number.isFinite(e2) ? clamp(e2, 0, 1) : smooth(raw);
+        if (p === 0 || p === 1) { g.drawImage(p === 0 ? A : B, 0, 0, W, W); return; }
+        var s = scratch(g, W);
+        clean(s.m, W); s.m.fillStyle = '#ffffff'; maskFn(s.m, W, p);
+        clean(s.ga, W); s.ga.drawImage(A, 0, 0, W, W);
+        s.ga.globalCompositeOperation = 'destination-out'; s.ga.drawImage(s.mask, 0, 0);
+        clean(s.gb, W); s.gb.drawImage(B, 0, 0, W, W);
+        s.gb.globalCompositeOperation = 'destination-in'; s.gb.drawImage(s.mask, 0, 0);
+        // Add premultiplied A*(1-mask) and B*mask. source-over would darken
+        // the seam and leave the old image behind semi-transparent new pixels.
+        s.ga.globalCompositeOperation = 'lighter'; s.ga.drawImage(s.b, 0, 0);
+        g.drawImage(s.a, 0, 0);
+      } finally { g.restore(); }
+    };
+  }
+  function rgb(value, fallback) {
+    var key = typeof value === 'string' ? value : fallback;
+    if (colors.has(key)) return colors.get(key);
+    var c = canvas(1), g = c.getContext('2d');
+    g.fillStyle = fallback; g.fillStyle = key; g.fillRect(0, 0, 1, 1);
+    var d = g.getImageData(0, 0, 1, 1).data, result = [d[0], d[1], d[2]];
+    if (colors.size > 48) colors.clear(); colors.set(key, result); return result;
+  }
+  function mix(a, b, f) { return a.map(function (v, i) { return Math.round(v * (1 - f) + b[i] * f); }); }
+  function rgba(c, a) { return 'rgba(' + c.join(',') + ',' + a + ')'; }
+  function starPath(g, r) {
+    g.beginPath();
+    for (var i = 0; i < 10; i++) {
+      var a = i * Math.PI / 5 - Math.PI / 2, rr = r * (i % 2 ? 0.46 : 1);
+      if (i === 0) g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      else g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    g.closePath();
+  }
+  function petalPath(g, r) {
+    g.beginPath(); g.moveTo(0, -r);
+    g.bezierCurveTo(r * 0.85, -r * 0.65, r * 0.65, r * 0.65, 0, r);
+    g.bezierCurveTo(-r * 0.65, r * 0.65, -r * 0.85, -r * 0.65, 0, -r);
+    g.closePath();
+  }
+  function background(g, W, t, kind, color, base) {
+    if (!g || !Number.isFinite(W) || W <= 0 || !/^(hearts|stars|petals|bubbles)$/.test(kind)) return;
+    var time = Number.isFinite(t) ? t : 0;
+    var phase = (((time % 8) + 8) % 8) / 8 * TAU;
+    var ink = rgb(color, '#c98caf'), paper = rgb(base, '#fff6f8');
+    var pastel = mix(mix(ink, paper, 0.55), [255, 255, 255], 0.5);
+    var count = kind === 'stars' ? 14 : kind === 'petals' ? 15 : 12;
+    g.save();
+    try {
+      g.globalCompositeOperation = 'source-over';
+      g.shadowColor = 'transparent'; g.shadowBlur = 0; if ('filter' in g) g.filter = 'none';
+      circle(g, W);
+      for (var i = 0; i < count; i++) {
+        var seed = (i * 0.61803398875) % 1, angle = TAU * i / count + 0.11 * Math.sin(phase + i * 1.9);
+        var radius = W * (0.340 + 0.103 * seed + 0.009 * Math.sin(phase + i));
+        var r = W * ((kind === 'bubbles' ? 0.018 : 0.014) + 0.015 * ((i * 0.38196601125) % 1));
+        var pulse = 0.83 + 0.17 * Math.sin(phase + i * 1.7);
+        g.save();
+        g.translate(W * 0.5 + Math.cos(angle) * radius, W * 0.5 + Math.sin(angle) * radius);
+        g.rotate((kind === 'petals' ? angle : 0) + 0.16 * Math.sin(phase + i));
+        g.globalAlpha *= pulse;
+        g.lineWidth = Math.max(0.55, W * 0.0024); g.lineJoin = 'round';
+        g.fillStyle = rgba(pastel, kind === 'bubbles' ? 0.13 : 0.27);
+        g.strokeStyle = rgba(ink, kind === 'bubbles' ? 0.25 : 0.33);
+        if (kind === 'hearts') heartPath(g, 0, 0, r);
+        else if (kind === 'stars') starPath(g, r);
+        else if (kind === 'petals') petalPath(g, r);
+        else { g.beginPath(); g.arc(0, 0, r, 0, TAU); }
+        g.fill(); g.stroke();
+        g.strokeStyle = 'rgba(255,255,255,0.64)'; g.lineWidth = Math.max(0.6, W * 0.0028);
+        g.beginPath();
+        if (kind === 'bubbles') g.arc(0, 0, r * 0.72, Math.PI * 1.06, Math.PI * 1.55);
+        else { g.moveTo(-r * 0.33, -r * 0.31); g.lineTo(-r * 0.09, -r * 0.51); }
+        g.stroke(); g.restore();
+      }
+    } finally { g.restore(); }
+  }
+  global.PBKProfileEffects = {
+    transitions: {profHeart: transition(heartMask), profWave: transition(waveMask), profRibbon: transition(ribbonMask)},
+    background: background
+  };
+})(window);

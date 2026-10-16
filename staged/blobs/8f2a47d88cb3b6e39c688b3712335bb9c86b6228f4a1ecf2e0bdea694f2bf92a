@@ -1,0 +1,66 @@
+/* The completed portrait is clipped once, before its edge is painted.
+ * The inner aperture follows the selected effect, not the enclosing disk.
+ * Disconnected pearls/dashes use their shared inner orbit; irregular painted
+ * effects use the rendered ink contour, with interpolation across empty arcs.
+ */
+(function(root){
+'use strict';
+var TAU=Math.PI*2,cache=new Map();
+function el(id){return document.getElementById(id);}
+function state(){return root.PBKPilotGifBridge&&PBKPilotGifBridge.state();}
+function active(){var s=state();return !!(s&&s.mode==='avatar'&&s.ring&&s.ring!=='none');}
+function canvas(W){var c=document.createElement('canvas');c.width=c.height=W;return c;}
+function clean(g){g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;g.globalCompositeOperation='source-over';g.shadowBlur=0;g.shadowOffsetX=g.shadowOffsetY=0;g.shadowColor='transparent';if('filter'in g)g.filter='none';}
+function phase(p){return Number.isFinite(p)?((p%1)+1)%1:0;}
+function settings(W,p){var anim=!!(el('gifRingAnim')&&el('gifRingAnim').checked),s=state();return {id:s?s.ring:'none',W:W,p:anim?phase(p):0,anim:anim,w:Math.max(2,Math.min(40,+el('gifRw').value||12))*W/420,c1:el('gifRc1').value,c2:el('gifRc2').value};}
+function circleRadius(s){
+ var W=s.W,w=s.w,R=W/2,id=s.id;
+ if(id==='solid'||id==='grad'||id==='glow'||id==='candy')return R-w-.5;
+ if(id==='dash')return R-Math.max(W*.004,w*.42);
+ if(id==='beads')return R-2*Math.max(W*.007,w*.6);
+ if(id==='pearl')return R-2*Math.max(W*.008,w*.44);
+ if(id==='spark')return R-Math.max(W*.038,w*1.4)-(w*.9+W*.0095);
+ if(id==='duo')return R-(w*.83+Math.max(W*.014,w*.30))-Math.max(W*.0035,w*.2)/2;
+ if(/^profile_(premiumGradient|satin|opal|prism|pearl|comet|wave|faceted)$/.test(id))return R-.8-w;
+ // These materials change colour/highlight, but their aperture is stationary.
+ var m=/^profile_approved_(R0[1-9]|E4_06)$/.exec(id);
+ if(m){var inn=m[1]==='R07'?.456:m[1]==='R08'?.4484:m[1]==='R09'?.4495*Math.cos(Math.PI/40):m[1]==='E4_06'?.447:.4495;return W*(.498-(.498-inn)*Math.max(.06,Math.min(4,w/(W*.037))));}
+ return null;
+}
+function path(g,s,radii,radius){
+ var c=s.W/2;
+ if(radius!=null){g.arc(c,c,Math.max(1,radius),0,TAU);return;}
+ for(var i=0;i<radii.length;i++){var a=i/radii.length*TAU,x=c+Math.cos(a)*radii[i],y=c+Math.sin(a)*radii[i];if(i)g.lineTo(x,y);else g.moveTo(x,y);}g.closePath();
+}
+function contour(s,ring){
+ var W=s.W,c=W/2,N=Math.max(360,Math.ceil(W*2)),radii=new Float32Array(N),known=[],d=ring.getContext('2d',{willReadFrequently:true}).getImageData(0,0,W,W).data;
+ function alpha(x,y){var ix=Math.floor(x),iy=Math.floor(y);if(ix<0||iy<0||ix>=W-1||iy>=W-1)return 0;var fx=x-ix,fy=y-iy,k=(iy*W+ix)*4+3;return d[k]*(1-fx)*(1-fy)+d[k+4]*fx*(1-fy)+d[k+W*4]*(1-fx)*fy+d[k+W*4+4]*fx*fy;}
+ for(var i=0;i<N;i++){
+  var a=i/N*TAU,co=Math.cos(a),si=Math.sin(a),r;
+  if(s.id==='sketch'){
+   var jit=s.anim?Math.floor(s.p*6)%3:0;
+   var r0=c-s.w*.715+Math.sin(a*3+jit*2.1)*s.w*.22+Math.sin(a*7+jit*1.3)*s.w*.12-Math.max(W*.0048,s.w*.75)/2;
+   var r1=c-s.w*1.015+Math.sin(a*3+1.7+jit*2.1)*s.w*.22+Math.sin(a*7+jit*1.3+1)*s.w*.12-Math.max(W*.0048,s.w*.5)/2;
+   radii[i]=Math.max(1,Math.min(r0,r1));known.push(i);continue;
+  }
+  for(r=W*.16;r<=c;r+=.5){if(alpha(c+co*r-.5,c+si*r-.5)>=16){radii[i]=Math.max(1,r-.35);known.push(i);break;}}
+ }
+ if(!known.length){radii.fill(Math.max(1,c-s.w-1));return radii;}
+ // An open arc is still an edge, not an opening for the source to escape.
+ for(var k=0;k<known.length;k++){var start=known[k],end=known[(k+1)%known.length],span=(end-start+N)%N;if(!span)continue;for(var j=1;j<span;j++)radii[(start+j)%N]=radii[start]+(radii[end]-radii[start])*j/span;}
+ return radii;
+}
+function build(W,p,drawRing){
+ var s=settings(W,p),key=[s.id,W,s.w,s.anim,s.p.toFixed(7),s.c1,s.c2].join('|');
+ if(cache.has(key)){var hit=cache.get(key);cache.delete(key);cache.set(key,hit);return hit;}
+ var ring=canvas(W),rg=ring.getContext('2d',{willReadFrequently:true});clean(rg);(drawRing||PBKPilotGifBridge.nativeRing)(rg,W,s.p);
+ var radius=circleRadius(s),radii=radius==null?contour(s,ring):null,mask=canvas(W),mg=mask.getContext('2d');mg.fillStyle='#fff';mg.beginPath();path(mg,s,radii,radius);mg.fill();
+ var item={settings:s,ring:ring,mask:mask,radius:radius,radii:radii};cache.set(key,item);while(cache.size>4)cache.delete(cache.keys().next().value);return item;
+}
+function innerPath(g,W,p){if(!active()){g.arc(W/2,W/2,W/2,0,TAU);return;}var b=build(W,p);path(g,b.settings,b.radii,b.radius);}
+function innerMask(W,p){if(!active())return null;return build(W,p).mask;}
+function finish(g,W,p,drawRing){
+ if(!active())return false;var b=build(W,p,drawRing);g.save();clean(g);g.globalCompositeOperation='destination-in';g.drawImage(b.mask,0,0);g.globalCompositeOperation='source-over';g.drawImage(b.ring,0,0);g.restore();return true;
+}
+root.PBKProfileClip={active:active,innerPath:innerPath,innerMask:innerMask,finish:finish,describe:function(W,p){var b=build(W,p);return {id:b.settings.id,radius:b.radius,radii:b.radii?Array.from(b.radii):null,mask:b.mask,ring:b.ring};},clearCache:function(){cache.clear();}};
+})(window);

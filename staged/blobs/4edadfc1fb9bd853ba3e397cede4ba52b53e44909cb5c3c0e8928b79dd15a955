@@ -1,0 +1,280 @@
+/* Original multi-layer profile scene choreography. No reference artwork is
+ * embedded. A stays legible during a small push-in; original motifs lead the
+ * reveal of B and clear before its reading hold. The outer frame is host-owned.
+ * All sources use premultiplied alpha replacement, including transparent B.
+ */
+(function (global) {
+  'use strict';
+  var TAU = Math.PI * 2, pool = new WeakMap(), colorCache = new Map();
+  function clamp(v) { return Math.max(0, Math.min(1, v)); }
+  function ease(v) { v = clamp(v); return v * v * (3 - 2 * v); }
+  function span(p, a, b) { return ease((p - a) / (b - a)); }
+  function envelope(p, a, b, c, d) { return span(p, a, b) * (1 - span(p, c, d)); }
+  function canvas(W) { var c = document.createElement('canvas'); c.width = c.height = W; return c; }
+  function scratch(g, W) {
+    var s = pool.get(g);
+    if (!s || s.size !== W) {
+      s = {size: W, mask: canvas(W), a: canvas(W), b: canvas(W)};
+      s.m = s.mask.getContext('2d'); s.ga = s.a.getContext('2d'); s.gb = s.b.getContext('2d'); pool.set(g, s);
+    }
+    return s;
+  }
+  function clear(g, W) {
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetX = g.shadowOffsetY = 0;
+    if ('filter' in g) g.filter = 'none'; g.clearRect(0, 0, W, W);
+  }
+  function circle(g, W) { g.beginPath(); g.arc(W / 2, W / 2, W / 2, 0, TAU); g.clip(); }
+  function color(value, fallback) {
+    var key = typeof value === 'string' ? value : fallback;
+    if (colorCache.has(key)) return colorCache.get(key);
+    var c = canvas(1), g = c.getContext('2d'); g.fillStyle = fallback; g.fillStyle = key; g.fillRect(0, 0, 1, 1);
+    var d = g.getImageData(0, 0, 1, 1).data, rgb = [d[0], d[1], d[2]];
+    if (colorCache.size > 64) colorCache.clear(); colorCache.set(key, rgb); return rgb;
+  }
+  function mix(a, b, t) { return a.map(function (v, i) { return Math.round(v * (1 - t) + b[i] * t); }); }
+  function rgba(c, a) { return 'rgba(' + c.join(',') + ',' + a + ')'; }
+  function palette(cA, cB) {
+    var ink = color(cA, '#c786ae'), paper = color(cB, '#fff0f5');
+    if (ink.every(function (v) { return v > 232; })) ink = mix(ink, [183, 143, 181], 0.52);
+    return {ink: ink, paper: paper, light: mix(ink, [255, 255, 255], 0.79),
+      shade: mix(ink, [56, 35, 71], 0.28), white: [255, 255, 255]};
+  }
+  function silk(g, x1, y1, x2, y2, pal, alpha) {
+    var q = g.createLinearGradient(x1, y1, x2, y2);
+    q.addColorStop(0, rgba(pal.shade, alpha * 0.88)); q.addColorStop(0.22, rgba(pal.ink, alpha));
+    q.addColorStop(0.48, rgba(pal.light, alpha)); q.addColorStop(0.61, rgba(pal.white, alpha * 0.96));
+    q.addColorStop(0.77, rgba(pal.light, alpha)); q.addColorStop(1, rgba(pal.ink, alpha * 0.91)); return q;
+  }
+  function radialMask(g, W, x, y, radius, soft) {
+    soft = Math.max(0.55, soft); var inner = Math.max(0, radius - soft), outer = Math.max(inner + 0.55, radius + soft);
+    var q = g.createRadialGradient(x, y, inner, x, y, outer); q.addColorStop(0, '#fff'); q.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = q; g.fillRect(0, 0, W, W);
+  }
+  function feather(g, W, path, amount) {
+    [[1, 0.11], [0.58, 0.23], [0.25, 0.43], [0, 1]].forEach(function (s) {
+      g.globalAlpha = s[1]; path(s[0] * W * amount); g.fill();
+    }); g.globalAlpha = 1;
+  }
+  function star(g, x, y, r, inner, rotation) {
+    g.beginPath(); for (var i = 0; i < 8; i++) {
+      var a = rotation + i * Math.PI / 4, rr = r * (i % 2 ? inner : 1);
+      var xx = x + Math.cos(a) * rr, yy = y + Math.sin(a) * rr;
+      if (!i) g.moveTo(xx, yy); else g.lineTo(xx, yy);
+    } g.closePath();
+  }
+  function glint(g, W, x, y, r, alpha, pal, rotation) {
+    if (alpha <= 0 || r <= 0) return; g.save(); g.globalAlpha *= alpha;
+    star(g, x, y, r * 1.25, 0.20, rotation); g.fillStyle = rgba(pal.ink, 0.30); g.fill();
+    star(g, x, y, r, 0.20, rotation); g.fillStyle = '#fff'; g.fill();
+    g.strokeStyle = rgba(pal.ink, 0.63); g.lineWidth = Math.max(0.45, W * 0.0017); g.stroke(); g.restore();
+  }
+  function softCurve(g, W, path, pal, width, opacity) {
+    g.save(); g.globalAlpha *= opacity; g.lineCap = g.lineJoin = 'round';
+    path(); g.strokeStyle = rgba(pal.shade, 0.12); g.lineWidth = width * 1.55; g.stroke();
+    path(); g.strokeStyle = rgba(pal.ink, 0.46); g.lineWidth = width; g.stroke();
+    path(); g.strokeStyle = rgba(pal.white, 0.92); g.lineWidth = Math.max(0.5, width * 0.20); g.stroke(); g.restore();
+  }
+
+  /* Satin: broad folds arrive at different depths, their fine hems lead B. */
+  function satinMask(g, W, p) {
+    var r = span(p, 0.16, 0.87), e = W * (-0.71 + 1.42 * r), k = Math.SQRT1_2;
+    var soft = Math.max(0.8, W * 0.018 * Math.sin(Math.PI * r));
+    var q = g.createLinearGradient(W / 2 + k * (e - soft), W / 2 + k * (e - soft), W / 2 + k * (e + soft), W / 2 + k * (e + soft));
+    q.addColorStop(0, '#fff'); q.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = q; g.fillRect(0, 0, W, W);
+  }
+  function satinMotifs(g, W, p, pal) {
+    var op = envelope(p, 0.04, 0.18, 0.76, 0.96); if (!op) return;
+    g.save(); g.translate(W / 2, W / 2); g.rotate(-Math.PI / 4);
+    for (var j = 0; j < 3; j++) {
+      var r = span(p, 0.09 + j * 0.035, 0.85 + j * 0.025), y = W * (-0.79 + 1.58 * r);
+      var width = W * [0.075, 0.043, 0.025][j], bend = W * (0.025 + j * 0.012) * Math.sin(Math.PI * r);
+      var path = function (offset) { g.beginPath(); g.moveTo(-W, y + offset); g.bezierCurveTo(-W * 0.3, y - bend + offset, W * 0.27, y + bend + offset, W, y + offset); };
+      g.globalAlpha = op * [0.76, 0.66, 0.51][j];
+      g.beginPath(); g.moveTo(-W, y - width / 2); g.bezierCurveTo(-W * 0.3, y - bend - width / 2, W * 0.27, y + bend - width / 2, W, y - width / 2);
+      g.lineTo(W, y + width / 2); g.bezierCurveTo(W * 0.27, y + bend + width / 2, -W * 0.3, y - bend + width / 2, -W, y + width / 2); g.closePath();
+      g.fillStyle = silk(g, 0, y - width / 2, 0, y + width / 2, pal, 1); g.fill();
+      path(-width / 2); g.strokeStyle = rgba(pal.white, 0.93); g.lineWidth = Math.max(0.6, W * 0.0022); g.stroke();
+      path(width * 0.28); g.strokeStyle = rgba(pal.shade, 0.28); g.lineWidth = Math.max(0.5, W * 0.0018); g.stroke();
+      if (j === 0) { g.setLineDash([W * 0.005, W * 0.013]); path(width * 0.36); g.strokeStyle = rgba(pal.white, 0.62); g.stroke(); g.setLineDash([]); }
+    }
+    g.restore();
+    for (var i = 0; i < 4; i++) { var q = span(p, 0.13 + i * 0.055, 0.82 + i * 0.025); glint(g, W, W * (0.13 + q * 0.82), W * (0.87 - q * 0.74 + i * 0.026), W * (0.007 + i * 0.001), op * 0.65, pal, p * 0.12); }
+  }
+
+  /* Petal wind: twelve shaded petals form a coherent, layered diagonal gust. */
+  function petalMask(g, W, p) {
+    var r = span(p, 0.20, 0.88), edge = W * (-0.17 + 1.34 * r), env = Math.sin(Math.PI * r);
+    feather(g, W, function (f) {
+      g.beginPath(); g.moveTo(-W, -W * 0.1);
+      for (var i = 0; i <= 50; i++) { var u = -0.1 + i * 1.2 / 50; g.lineTo(edge + W * env * (0.075 * Math.sin(u * Math.PI * 1.4 - 0.8) + 0.023 * Math.cos(u * TAU * 2)) + f, u * W); }
+      g.lineTo(-W, W * 1.1); g.closePath();
+    }, 0.047 * env);
+  }
+  function petalShape(g, r) {
+    g.beginPath(); g.moveTo(0, -r); g.bezierCurveTo(r * 0.72, -r * 0.91, r * 0.92, -r * 0.10, r * 0.23, r * 0.70);
+    g.quadraticCurveTo(r * 0.08, r * 0.88, 0, r); g.quadraticCurveTo(-r * 0.09, r * 0.82, -r * 0.25, r * 0.65);
+    g.bezierCurveTo(-r * 0.91, -r * 0.07, -r * 0.71, -r * 0.90, 0, -r); g.closePath();
+  }
+  function petalMotifs(g, W, p, pal) {
+    var op = envelope(p, 0.035, 0.17, 0.78, 0.97); if (!op) return;
+    for (var veil = 0; veil < 2; veil++) {
+      var off = span(p, 0.08 + veil * 0.06, 0.86), x = W * (-0.3 + 1.6 * off);
+      softCurve(g, W, function () { g.beginPath(); g.moveTo(x - W * 0.25, W * 1.05); g.bezierCurveTo(x + W * 0.12, W * 0.75, x - W * 0.18, W * 0.3, x + W * 0.26, -W * 0.07); }, pal, W * 0.032, op * 0.27);
+    }
+    for (var i = 0; i < 12; i++) {
+      var seed = (i * 0.61803398875) % 1, depth = 0.58 + ((i * 0.38196601125) % 1) * 0.66;
+      var u = span(p, 0.015 + seed * 0.23, 0.72 + seed * 0.22);
+      var x = W * (-0.22 + u * 1.44 + 0.065 * Math.sin(u * TAU + i));
+      var y = W * (1.12 - u * 1.24 + (seed - 0.5) * 0.63 + 0.035 * Math.sin(u * Math.PI + i));
+      var r = W * (0.024 + depth * 0.019), alpha = op * (0.44 + depth * 0.28);
+      g.save(); g.translate(x, y); g.rotate(-0.9 + u * 1.1 + i * 0.59); g.scale(0.80 + 0.16 * Math.sin(i + u * Math.PI), 1); g.globalAlpha = alpha;
+      petalShape(g, r); g.fillStyle = silk(g, -r, -r * 0.6, r, r * 0.5, pal, 0.95); g.fill();
+      g.strokeStyle = rgba(pal.shade, 0.52); g.lineWidth = Math.max(0.6, W * 0.0018); g.stroke();
+      g.beginPath(); g.moveTo(0, r * 0.70); g.bezierCurveTo(-r * 0.25, r * 0.15, r * 0.13, -r * 0.45, 0, -r * 0.77); g.strokeStyle = rgba(pal.white, 0.85); g.lineWidth = Math.max(0.6, W * 0.0025); g.stroke();
+      g.beginPath(); g.moveTo(-r * 0.03, r * 0.36); g.quadraticCurveTo(-r * 0.35, r * 0.03, -r * 0.39, -r * 0.20); g.strokeStyle = rgba(pal.ink, 0.30); g.lineWidth = Math.max(0.45, W * 0.0015); g.stroke(); g.restore();
+    }
+  }
+
+  /* Orbit: two distinct drawn orbits gather into a small, expanding star. */
+  function orbitMask(g, W, p) {
+    var r = span(p, 0.27, 0.88), radius = W * 1.34 * r;
+    feather(g, W, function (f) { star(g, W / 2, W / 2, radius + f, 0.53, -Math.PI / 2 + r * 0.06); }, 0.017 * Math.sin(Math.PI * r));
+  }
+  function orbitMotifs(g, W, p, pal) {
+    var op = envelope(p, 0.03, 0.17, 0.75, 0.96); if (!op) return;
+    var spread = span(p, 0.25, 0.88), trace = span(p, 0.04, 0.52);
+    for (var i = 0; i < 2; i++) {
+      var tilt = i ? -0.49 : 0.46, rx = W * (0.36 + spread * 0.12), ry = W * (0.25 + spread * 0.20), start = -Math.PI / 2 + i * Math.PI;
+      g.save(); g.translate(W / 2, W / 2); g.rotate(tilt);
+      var end = start + (TAU - 0.32) * trace, path = function () { g.beginPath(); g.ellipse(0, 0, rx, ry, 0, start, end); };
+      softCurve(g, W, path, pal, W * (i ? 0.010 : 0.014), op * (i ? 0.70 : 0.90));
+      g.globalAlpha = op * 0.74; g.beginPath(); g.ellipse(0, 0, rx + W * 0.008, ry + W * 0.008, 0, start + 0.35, end); g.strokeStyle = rgba(pal.light, 0.72); g.lineWidth = Math.max(0.6, W * 0.0021); g.stroke();
+      glint(g, W, Math.cos(end) * rx, Math.sin(end) * ry, W * 0.023, op, pal, -tilt + p * 0.2); g.restore();
+    }
+    var burst = envelope(p, 0.25, 0.43, 0.69, 0.91), r = W * (0.016 + 0.66 * spread);
+    g.save(); g.globalAlpha = burst * 0.77; star(g, W / 2, W / 2, r, 0.53, -Math.PI / 2 + spread * 0.06);
+    g.strokeStyle = rgba(pal.ink, 0.62); g.lineWidth = W * 0.014; g.stroke(); g.strokeStyle = rgba(pal.white, 0.94); g.lineWidth = Math.max(0.7, W * 0.0038); g.stroke(); g.restore();
+    for (var j = 0; j < 7; j++) { var a = TAU * j / 7 + 0.24, d = W * (0.08 + spread * 0.47); glint(g, W, W / 2 + Math.cos(a) * d, W / 2 + Math.sin(a) * d, W * (0.008 + (j % 3) * 0.002), burst * 0.81, pal, a * 0.1); }
+  }
+
+  /* Glass: five staggered panes unfold, with paired refraction lines/edges. */
+  function glassPane(g, W, x, width, y, skew, pad) {
+    g.beginPath(); g.moveTo(x - pad, -W * 0.1); g.lineTo(x + width + pad, -W * 0.1);
+    g.lineTo(x + width + skew + pad, y + pad); g.quadraticCurveTo(x + width / 2 + skew, y + W * 0.013 + pad, x + skew - pad, y + pad); g.closePath();
+  }
+  function glassMask(g, W, p) {
+    for (var i = 0; i < 5; i++) {
+      var r = span(p, 0.11 + Math.abs(i - 2) * 0.045, 0.80 + Math.abs(i - 2) * 0.04);
+      var width = W * 0.215, x = W * (i * 0.20 - 0.0075), y = W * (-0.12 + r * 1.25), skew = W * 0.025 * Math.sin(Math.PI * r) * (i - 2);
+      feather(g, W, function (f) { glassPane(g, W, x, width, y, skew, f); }, 0.012 * Math.sin(Math.PI * r));
+    }
+  }
+  function glassMotifs(g, W, p, pal) {
+    var op = envelope(p, 0.055, 0.20, 0.78, 0.96); if (!op) return;
+    for (var i = 0; i < 5; i++) {
+      var r = span(p, 0.11 + Math.abs(i - 2) * 0.045, 0.80 + Math.abs(i - 2) * 0.04);
+      var width = W * 0.215, x = W * (i * 0.20 - 0.0075), y = W * (-0.12 + r * 1.25), skew = W * 0.025 * Math.sin(Math.PI * r) * (i - 2);
+      g.save(); g.globalAlpha = op * 0.70; glassPane(g, W, x, width, y, skew, 0);
+      var q = g.createLinearGradient(x, 0, x + width, 0); q.addColorStop(0, rgba(pal.light, 0.06)); q.addColorStop(0.16, rgba(pal.white, 0.22)); q.addColorStop(0.39, rgba(pal.paper, 0.03)); q.addColorStop(0.91, rgba(pal.ink, 0.13)); q.addColorStop(1, rgba(pal.white, 0.28)); g.fillStyle = q; g.fill();
+      g.strokeStyle = rgba(pal.white, 0.78); g.lineWidth = Math.max(0.6, W * 0.0027); g.stroke();
+      g.beginPath(); g.moveTo(x + skew + W * 0.006, y + W * 0.005); g.quadraticCurveTo(x + width / 2 + skew, y + W * 0.018, x + width + skew - W * 0.006, y + W * 0.005); g.strokeStyle = rgba(pal.shade, 0.36); g.lineWidth = Math.max(0.55, W * 0.0018); g.stroke();
+      g.beginPath(); g.moveTo(x + width * 0.16, y - W * 0.09); g.lineTo(x + width * 0.40, y - W * 0.19); g.moveTo(x + width * 0.26, y - W * 0.09); g.lineTo(x + width * 0.40, y - W * 0.15); g.strokeStyle = rgba(pal.white, 0.50); g.lineWidth = Math.max(0.8, W * 0.003); g.stroke(); g.restore();
+      glint(g, W, x + width * 0.81 + skew, y, W * 0.008, op * 0.73, pal, 0.12);
+    }
+  }
+
+  /* Bubbles: depth-varying droplets lead an airy rising foam reveal. */
+  function bubbles(p, fn) {
+    for (var i = 0; i < 15; i++) {
+      var seed = (i * 0.61803398875) % 1, depth = 0.54 + ((i * 0.41421356237) % 1) * 0.63;
+      var u = span(p, 0.025 + seed * 0.20, 0.73 + seed * 0.23);
+      fn(i, 0.075 + seed * 0.85 + 0.036 * Math.sin(u * Math.PI * 1.4 + i), 1.17 - 1.45 * u + (i % 3) * 0.025, (0.023 + 0.041 * depth), depth, u);
+    }
+  }
+  function bubbleMask(g, W, p) {
+    var r = span(p, 0.23, 0.90), edge = W * (1.16 - 1.32 * r), env = Math.sin(Math.PI * r);
+    feather(g, W, function (f) {
+      g.beginPath(); g.moveTo(-W * 0.1, W * 1.2);
+      for (var i = 0; i <= 72; i++) { var x = -0.1 + i * 1.2 / 72; var wave = W * env * (0.030 * Math.sin(x * TAU * 2.5) + 0.016 * Math.sin(x * TAU * 5 + 0.7)); g.lineTo(x * W, edge + wave - f); }
+      g.lineTo(W * 1.1, W * 1.2); g.closePath();
+    }, 0.019 * env);
+    var op = envelope(p, 0.10, 0.24, 0.72, 0.93);
+    bubbles(p, function (i, x, y, size, depth) { if (i % 2) return; g.globalAlpha = op * (0.18 + depth * 0.11); g.fillStyle = '#fff'; g.beginPath(); g.arc(x * W, y * W, size * W * 0.90, 0, TAU); g.fill(); }); g.globalAlpha = 1;
+  }
+  function bubbleMotifs(g, W, p, pal) {
+    var op = envelope(p, 0.025, 0.18, 0.78, 0.97); if (!op) return;
+    bubbles(p, function (i, x, y, size, depth) {
+      var X = x * W, Y = y * W, r = size * W; g.save(); g.globalAlpha = op * (0.48 + depth * 0.29);
+      var q = g.createRadialGradient(X - r * 0.29, Y - r * 0.35, r * 0.07, X, Y, r);
+      q.addColorStop(0, rgba(pal.white, 0.12)); q.addColorStop(0.56, rgba(pal.paper, 0.02)); q.addColorStop(0.86, rgba(pal.light, 0.16)); q.addColorStop(1, rgba(pal.ink, 0.40));
+      g.beginPath(); g.arc(X, Y, r, 0, TAU); g.fillStyle = q; g.fill(); g.strokeStyle = rgba(pal.shade, 0.35); g.lineWidth = Math.max(0.5, W * 0.0018); g.stroke();
+      g.beginPath(); g.arc(X, Y, r * 0.92, 0, TAU); g.strokeStyle = rgba(pal.white, 0.70); g.lineWidth = Math.max(0.7, W * 0.0024); g.stroke();
+      g.beginPath(); g.arc(X, Y, r * 0.72, Math.PI * 1.06, Math.PI * 1.56); g.strokeStyle = rgba(pal.white, 0.98); g.lineWidth = Math.max(0.9, W * 0.0044 * depth); g.lineCap = 'round'; g.stroke();
+      g.beginPath(); g.arc(X + r * 0.27, Y + r * 0.30, r * 0.29, Math.PI * 0.10, Math.PI * 0.68); g.strokeStyle = rgba(pal.light, 0.69); g.lineWidth = Math.max(0.5, W * 0.0019); g.stroke(); g.restore();
+    });
+  }
+
+  /* Ribbons: two shaded bands cross, untwist, and open into the name scene. */
+  function ribbonMask(g, W, p) {
+    var r = span(p, 0.24, 0.88), half = W * 0.76 * r, slope = 0.54 * (1 - r * 0.38);
+    for (var sign = -1; sign <= 1; sign += 2) feather(g, W, function (f) {
+      g.beginPath(); g.moveTo(-W * 0.1, W * 0.5 - sign * W * 0.6 * slope - half - f);
+      g.lineTo(W * 1.1, W * 0.5 + sign * W * 0.6 * slope - half - f);
+      g.lineTo(W * 1.1, W * 0.5 + sign * W * 0.6 * slope + half + f);
+      g.lineTo(-W * 0.1, W * 0.5 - sign * W * 0.6 * slope + half + f); g.closePath();
+    }, 0.015 * Math.sin(Math.PI * r));
+  }
+  function ribbonMotifs(g, W, p, pal) {
+    var op = envelope(p, 0.025, 0.17, 0.76, 0.96); if (!op) return;
+    var arrive = span(p, 0.04, 0.35), open = span(p, 0.28, 0.90), twist = Math.sin(Math.PI * open);
+    for (var j = 0; j < 2; j++) {
+      var sign = j ? 1 : -1, x0 = W * (-0.60 + arrive * 0.49), x1 = W * (1.60 - arrive * 0.49);
+      var cy = W * (0.5 + sign * open * 0.66), width = W * (0.054 - open * 0.018), bend = sign * W * (0.17 * (1 - open) + twist * 0.055);
+      function line(off) { g.beginPath(); g.moveTo(x0, cy - bend + off); g.bezierCurveTo(W * 0.32, cy + bend + off, W * 0.68, cy - bend + off, x1, cy + bend + off); }
+      g.save(); g.globalAlpha = op * (j ? 0.90 : 0.72);
+      g.beginPath(); g.moveTo(x0, cy - bend - width / 2); g.bezierCurveTo(W * 0.32, cy + bend - width * 0.16, W * 0.68, cy - bend - width * 0.16, x1, cy + bend - width / 2);
+      g.lineTo(x1, cy + bend + width / 2); g.bezierCurveTo(W * 0.68, cy - bend + width * 0.16, W * 0.32, cy + bend + width * 0.16, x0, cy - bend + width / 2); g.closePath();
+      g.fillStyle = silk(g, 0, cy - width, W * 0.08, cy + width, pal, 1); g.fill(); g.strokeStyle = rgba(pal.shade, 0.43); g.lineWidth = Math.max(0.6, W * 0.002); g.stroke();
+      line(-width * 0.28); g.strokeStyle = rgba(pal.white, 0.91); g.lineWidth = Math.max(0.65, W * 0.003); g.stroke();
+      line(width * 0.20); g.strokeStyle = rgba(pal.ink, 0.53); g.lineWidth = Math.max(0.5, W * 0.0017); g.stroke();
+      g.setLineDash([W * 0.003, W * 0.011]); line(width * 0.34); g.strokeStyle = rgba(pal.white, 0.69); g.lineWidth = Math.max(0.5, W * 0.0018); g.stroke(); g.restore();
+    }
+    for (var i = 0; i < 6; i++) { var a = i * TAU / 6 + 0.2, d = W * (0.035 + open * 0.52); glint(g, W, W / 2 + Math.cos(a) * d, W / 2 + Math.sin(a) * d, W * 0.008, op * envelope(p, 0.22, 0.42, 0.69, 0.88), pal, a); }
+  }
+
+  function scene(mask, motifs) {
+    return function (g, W, A, B, t, eased, cA, cB) {
+      if (!g || !Number.isFinite(W) || W <= 0 || !A || !B) return;
+      var p = Number.isFinite(t) ? clamp(t) : 0;
+      g.save();
+      try {
+        clear(g, W); circle(g, W);
+        if (p === 0 || p === 1) { g.drawImage(p ? B : A, 0, 0, W, W); return; }
+        var s = scratch(g, W), pal = palette(cA, cB);
+        clear(s.m, W); s.m.fillStyle = '#fff'; mask(s.m, W, p);
+        clear(s.ga, W);
+        // No displacement, bounce, or flip: only a four-percent face push-in.
+        var zoom = 1 + 0.04 * span(p, 0.015, 0.56);
+        s.ga.drawImage(A, W * (1 - zoom) / 2, W * (1 - zoom) / 2, W * zoom, W * zoom);
+        s.ga.globalCompositeOperation = 'destination-out'; s.ga.drawImage(s.mask, 0, 0);
+        clear(s.gb, W); s.gb.drawImage(B, 0, 0, W, W);
+        s.gb.globalCompositeOperation = 'destination-in'; s.gb.drawImage(s.mask, 0, 0);
+        s.ga.globalCompositeOperation = 'lighter'; s.ga.drawImage(s.b, 0, 0); g.drawImage(s.a, 0, 0);
+        motifs(g, W, p, pal);
+      } finally { g.restore(); }
+    };
+  }
+  global.PBKProfileChoreography = {
+    transitions: {
+      profSatinScene: scene(satinMask, satinMotifs), profPetalScene: scene(petalMask, petalMotifs),
+      profOrbitScene: scene(orbitMask, orbitMotifs), profGlassScene: scene(glassMask, glassMotifs),
+      profBubbleScene: scene(bubbleMask, bubbleMotifs), profRibbonScene: scene(ribbonMask, ribbonMotifs)
+    },
+    names: [
+      ['profSatinScene', '사틴 베일 스윕'], ['profPetalScene', '꽃잎 바람'],
+      ['profOrbitScene', '별빛 오비트'], ['profGlassScene', '글라스 폴드'],
+      ['profBubbleScene', '버블 블룸'], ['profRibbonScene', '리본 크로스']
+    ]
+  };
+})(window);
