@@ -1,0 +1,199 @@
+/* One profile catalog. Native controls remain the source of truth for rendering
+ * and saved projects; only their presentation and category selection move. */
+(function () {
+  'use strict';
+  var bridge = window.PBKProfileBridge, studio = window.PBKProfileStudio, approved = window.PBKApprovedStudio;
+  if (!bridge || !studio || !approved) return;
+  var catalog = {}, tab = 'backgrounds', pages = {}, queued = Promise.resolve(), pending = 0, mounted = false, scheduled = false, saving = false;
+  var titles = {backgrounds:'배경', rings:'가장자리', decorations:'장식', motions:'전환', typography:'글자 효과'};
+  var order = Object.keys(titles), perPage = 6;
+  function el(id) { return document.getElementById(id); }
+  function state() { return PBKPilotGifBridge.state(); }
+  function node(tag, text, attrs) { var n = document.createElement(tag); if (text != null) n.textContent = text; Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); }); return n; }
+  function btn(text, fn, attrs) { var b = node('button', text, Object.assign({type:'button'}, attrs)); b.onclick = fn; return b; }
+  function put(id, value) { var n = el(id); if (n.type === 'checkbox') n.checked = !!value; else n.value = String(value); n.dispatchEvent(new Event('change', {bubbles:true})); }
+  function row(id) { return el(id).closest('.ckRow, .prof-row'); }
+  function markHidden(n) { if (n) n.classList.add('profile-native-hidden'); }
+  function selection(kind) {
+    var a = approved.current(kind);
+    if (kind === 'backgrounds') return a ? 'approved:'+a : el('giProfArt').value !== 'original' ? 'art:'+el('giProfArt').value : el('giBgMode').value.startsWith('pilot:') ? 'frame-default' : 'native:'+el('giBgMode').value;
+    if (kind === 'decorations') return a ? 'approved:'+a : PBKFullGif.state().avatar ? 'native:'+PBKFullGif.state().avatar : 'none';
+    if (kind === 'rings') return a ? 'approved:'+a : 'native:'+state().ring;
+    return el(kind === 'motions' ? 'giTrans' : 'giTxtAnim').value;
+  }
+  function collect() {
+    catalog.backgrounds = Array.from(el('giBgMode').options).filter(function(o){return !o.value.startsWith('pilot:');}).map(function(o){return {id:'native:'+o.value, value:o.value, name:o.textContent.trim(), type:'native'};});
+    PBKProfileCatalog.backgrounds.forEach(function(b){catalog.backgrounds.push({id:'art:'+b.id,value:b.id,name:b.name,type:b.type,source:b.source});});
+    catalog.rings = Array.from(el('gifRingRow').querySelectorAll('[data-r]')).map(function(b){return {id:'native:'+b.dataset.r,value:b.dataset.r,name:b.textContent.trim(),type:'native'};});
+    catalog.decorations = [{id:'none',name:'장식 없음',type:'none'}].concat(PBKFullGif.assets().filter(function(a){return a.categoryId===22;}).map(function(a){return {id:'native:'+a.id,value:a.id,name:a.theme,type:'native'};}));
+    var distinctNames={'F3-01':'레몬 소다 · 투톤','F4-02':'레몬 소다 · 골드'};
+    ['backgrounds','rings','decorations'].forEach(function(k){PBKApprovedProfile.catalog[k].forEach(function(a){catalog[k].push({id:'approved:'+a.id,value:a.id,name:distinctNames[a.id]||a.name||a.label||a.id,type:'approved'});});});
+    catalog.backgrounds.push({id:'frame-default',name:'선택한 장식의 기본 배경',type:'frame-default'});
+    [['motions','giTrans'],['typography','giTxtAnim']].forEach(function(pair){catalog[pair[0]]=Array.from(el(pair[1]).options).map(function(o){return {id:o.value,value:o.value,name:o.textContent.trim(),type:'native'};});});
+  }
+  async function apply(kind, item) {
+    if (state().mode !== 'avatar' || state().busy || state().loading) return false;
+    if (kind === 'backgrounds') {
+      if(item.type==='frame-default'){
+        var frameId=PBKFullGif.state().avatar,approvedFrame=approved.current('decorations');
+        if(!frameId){el('profStatus').textContent='장식에서 프레임을 먼저 골라 주세요.';return false;}
+        put('giBgMode','pilot:'+frameId);
+        if(approvedFrame)await approved.choose('decorations',approvedFrame);
+        else await PBKFullGif.selectAvatar(frameId);
+        return true;
+      }
+      if (item.type === 'approved') return approved.choose(kind,item.value);
+      if (item.type !== 'native') return studio.chooseBackground(item.value);
+      // The old background change also clears frames. Restore only that category,
+      // using its original approved ID so its aperture and finish stay intact.
+      var decoration = approved.current('decorations'), frame = PBKFullGif.state().avatar;
+      put('giBgMode',item.value);
+      if (decoration) await approved.choose('decorations',decoration);
+      else if (frame) await PBKFullGif.selectAvatar(frame);
+      if(item.value.startsWith('art:'))await bridge.prepareBackground();
+      return true;
+    }
+    if (kind === 'decorations') {
+      if (item.type === 'approved') return approved.choose(kind,item.value);
+      // Selecting a frame must not replace the independently selected background.
+      var useFrameBackground=selection('backgrounds')==='frame-default';
+      await approved.choose('decorations','');
+      if (item.value) {await PBKFullGif.selectAvatar(item.value);if(useFrameBackground)put('giBgMode','pilot:'+item.value);}
+      return true;
+    }
+    if (kind === 'rings') {
+      if (item.type === 'approved') return approved.choose(kind,item.value);
+      var b = Array.from(el('gifRingRow').querySelectorAll('[data-r]')).find(function(b){return b.dataset.r===item.value;});
+      b.click(); return true;
+    }
+    put(kind === 'motions' ? 'giTrans' : 'giTxtAnim',item.value); return true;
+  }
+  function choose(kind,id) {
+    var item = (catalog[kind]||[]).find(function(r){return r.id===id;});
+    if (!item || state().mode !== 'avatar' || state().busy || state().loading || saving || !PBKPilotGifBridge.prefsReady()) return Promise.resolve(false);
+    pending++; sync();
+    var job = queued.then(async function(){
+      try { var ok = await apply(kind,item); if(ok) {bridge.commit(); bridge.restart(); el('profStatus').textContent=item.name+' 적용';} return ok; }
+      catch(e) {el('profStatus').textContent=e.message||'불러오지 못했어요. 다시 선택해 주세요.';return false;}
+      finally {pending--; if(!pending&&!saving)el('gifGo').disabled=state().busy||state().loading||!state().url;sync();}
+    });
+    queued = job.then(function(){},function(){}); return job;
+  }
+  function caption(c,text) {var g=c.getContext('2d'),W=c.width;g.fillStyle='#f3edf5';g.fillRect(0,0,W,W);g.fillStyle='#655074';g.font='bold 18px sans-serif';g.textAlign='center';g.fillText(text,W/2,W*.55);}
+  async function thumbnail(c,kind,item) {
+    var W=c.width,g=c.getContext('2d');
+    try {
+      if(item.type==='frame-default'){
+        var frameId=PBKFullGif.state().avatar;if(!frameId){caption(c,'장식 선택 후');return;}
+        var frame=approved.nativeFrame(frameId)||await PBKFullGif.load(frameId);g.drawImage(frame.card,0,0,W,W);
+      } else if (item.type==='approved') {
+        await PBKApprovedProfile.loadAssets([item.value]);
+        if(kind==='backgrounds')PBKApprovedProfile.drawBackground(g,W,item.value,{phase:.2,seconds:.2});
+        else if(kind==='decorations'){var p=PBKApprovedProfile.getFrame(item.value);g.drawImage(p.card,0,0,W,W);}
+        else PBKApprovedProfile.drawRing(g,W,.2,item.value,{colorA:el('gifRc1').value,colorB:el('gifRc2').value,width:W*.035,animate:true});
+      } else if(kind==='backgrounds') {
+        if(item.type==='simple')item.source.draw(g,W,.2,el('giBgCol').value,el('giBgCol2').value);
+        else if(item.type==='art'){var im=await studio.loadArt(item.value);g.drawImage(im,0,0,W,W);}
+        else if(item.value.startsWith('art:')){var image=new Image();await new Promise(function(ok,no){image.onload=ok;image.onerror=no;image.src=item.value.slice(4);});g.drawImage(image,0,0,W,W);}
+        else if(!bridge.previewBackground(g,W,item.value,.2))caption(c,item.value==='image'?'내 이미지':'영상 흐림');
+      } else if(kind==='rings') {
+        if(item.value==='none')caption(c,'효과 없음');else bridge.previewRing(g,W,item.value,.2);
+      } else if(kind==='decorations') {
+        if(item.type==='none')caption(c,'장식 없음');else {var frame=await PBKFullGif.load(item.value);g.drawImage(frame.card,0,0,W,W);}
+      } else if(kind==='motions') {
+        var a=document.createElement('canvas'),b=document.createElement('canvas');a.width=a.height=b.width=b.height=W;
+        caption(a,'캐릭터');caption(b,'이름');b.getContext('2d').fillStyle='#dbeaf3';b.getContext('2d').fillRect(0,0,W,W);b.getContext('2d').fillStyle='#51677d';b.getContext('2d').font='bold 24px sans-serif';b.getContext('2d').textAlign='center';b.getContext('2d').fillText('이름',W/2,W*.55);
+        bridge.previewTransition(g,W,item.value,a,b,.5);
+      } else caption(c,item.value==='none'?'바로 표시':'이름');
+    } catch(e) {caption(c,'선택해 보기');}
+  }
+  function render() {
+    if(!mounted)return;
+    var items=catalog[tab],count=Math.ceil(items.length/perPage),page=Math.max(0,Math.min(pages[tab]||0,count-1));pages[tab]=page;
+    var select=el('profileChoice');select.textContent='';items.forEach(function(r){select.appendChild(node('option',r.name,{value:r.id}));});select.setAttribute('aria-label',titles[tab]+' 전체 선택');
+    var grid=el('profileGallery');grid.textContent='';items.slice(page*perPage,page*perPage+perPage).forEach(function(item){var kind=tab,b=btn('',function(){choose(kind,item.id);},{'data-profile-item':item.id,'aria-label':item.name}),c=node('canvas',null,{width:'144',height:'144','aria-hidden':'true'});b.append(c,node('span',item.name));grid.appendChild(b);thumbnail(c,kind,item);});
+    el('profilePage').textContent=(page+1)+' / '+count;
+    el('profileCategoryTitle').textContent=titles[tab]+' · '+items.length+'개';
+    el('profileBgExtras').hidden=tab!=='backgrounds';el('profileSuggestions').hidden=tab!=='decorations';
+    sync();
+  }
+  function show(kind) {if(!catalog[kind])return;tab=kind;var index=catalog[kind].findIndex(function(r){return r.id===selection(kind);});if(index>=0)pages[kind]=Math.floor(index/perPage);render();}
+  function schedule() {if(scheduled)return;scheduled=true;requestAnimationFrame(function(){scheduled=false;sync();});}
+  function sync() {
+    if(!mounted)return;
+    var avatar=state().mode==='avatar',background=bridge.backgroundStatus(),busy=!!(state().busy||state().loading||pending||saving);
+    el('profUnified').hidden=!avatar;el('profileDetails').hidden=!avatar;
+    if(!avatar)return;
+    el('profileDisplay').value=el('giOverlay').checked?'overlay':el('giOn').checked?'card':'none';
+    var active=selection(tab),chosen=catalog[tab].find(function(r){return r.id===active;});
+    el('profileChoice').value=active;
+    el('profileSelected').textContent='선택: '+(chosen?chosen.name:tab==='backgrounds'?'장식에 포함된 배경':'없음');
+    el('profileModeNote').textContent=tab==='backgrounds'?'이름 화면의 배경이에요. 캐릭터 영상은 그대로 유지돼요.':tab==='motions'?'캐릭터에서 이름으로 넘어갈 때 적용돼요.':tab==='typography'?'이름이 나타날 때 적용돼요.':'효과를 고른 뒤 색·굵기는 상세 편집에서 조절해요.';
+    el('profileNameHint').hidden=el('giOn').checked||!['backgrounds','motions'].includes(tab);
+    el('profileNameFit').disabled=!el('giOn').checked&&!el('giOverlay').checked||busy;
+    el('profileBgImage').hidden=active!=='native:image';
+    // The native color row was hidden for image/frame backgrounds. Expanded
+    // procedural backgrounds still need their two color controls available.
+    if(el('giProfArt').value!=='original')el('giBgColRow').style.display='';
+    el('profUnified').querySelectorAll('[data-profile-tab]').forEach(function(b){b.classList.toggle('selected',b.dataset.profileTab===tab);b.setAttribute('aria-selected',String(b.dataset.profileTab===tab));});
+    el('profileGallery').querySelectorAll('button').forEach(function(b){b.classList.toggle('selected',b.dataset.profileItem===active);b.setAttribute('aria-pressed',String(b.dataset.profileItem===active));});
+    el('profUnified').querySelectorAll('button,select,input').forEach(function(n){if(n.id!=='profileNameFit')n.disabled=busy;});
+    var noFrame=!PBKFullGif.state().avatar;
+    el('profileChoice').querySelectorAll('option[value="frame-default"]').forEach(function(n){n.disabled=noFrame;});
+    el('profileGallery').querySelectorAll('[data-profile-item="frame-default"]').forEach(function(n){n.disabled=busy||noFrame;n.title=noFrame?'장식에서 프레임을 먼저 골라 주세요.':'';});
+    el('profilePrevious').disabled=busy||(pages[tab]||0)===0;el('profileNext').disabled=busy||((pages[tab]||0)+1)*perPage>=catalog[tab].length;
+    el('profileDetailFields').disabled=busy;
+    if(pending||saving||background.loading)el('gifGo').disabled=true;
+    el('profileSummary').textContent=order.map(function(k){var r=catalog[k].find(function(x){return x.id===selection(k);});return titles[k]+': '+(r?r.name:k==='backgrounds'?'장식 배경':'없음');}).join(' · ');
+  }
+  function mount() {
+    if(mounted)return;collect();
+    var box=node('section',null,{id:'profUnified'});
+    box.innerHTML='<h3>프사 꾸미기</h3><div class="profile-note">배경·효과를 여기서 고르고, 상세 편집에서 세밀하게 조절해요.</div><div id="profileSourceRow" class="profile-row"></div><div id="profileNameRow"></div><label class="profile-row">이름 표시 <select id="profileDisplay"><option value="none">캐릭터만</option><option value="card">캐릭터 → 이름</option><option value="overlay">캐릭터 위에 이름</option></select></label><div id="profileTabs" role="tablist" aria-label="프사 꾸미기 종류"></div><div id="profileCatalog" role="tabpanel"><div id="profileCategoryTitle" class="profile-label"></div><select id="profileChoice"></select><div id="profileSelected" class="profile-note"></div><div id="profileGallery"></div><div class="profile-row profile-pager"><button type="button" id="profilePrevious">‹ 이전</button><span id="profilePage"></span><button type="button" id="profileNext">다음 ›</button></div><div id="profileBgExtras"><div id="profileBgImage"></div></div><details id="profileSuggestions"><summary>추천 조합</summary><div id="profilePresetShelf"></div></details><div id="profileModeNote" class="profile-note"></div><div id="profileNameHint" class="profile-note">위의 이름 표시에서 ‘캐릭터 → 이름’을 켜면 볼 수 있어요.</div></div><button type="button" id="profileRestart">처음부터 보기</button><div id="profileSummary" class="profile-note"></div>';
+    el('profQuick').before(box);
+    el('profileSourceRow').appendChild(el('profPhoto'));
+    var fit=btn('이름 위치 맞추기',function(){el('profNameFit').click();},{id:'profileNameFit'});el('profileSourceRow').appendChild(fit);
+    el('profileNameRow').appendChild(el('profName').closest('label'));
+    order.forEach(function(k){el('profileTabs').appendChild(btn(titles[k],function(){show(k);},{'data-profile-tab':k,role:'tab','aria-controls':'profileCatalog'}));});
+    el('profileChoice').onchange=function(){choose(tab,this.value).then(function(){show(tab);});};
+    el('profilePrevious').onclick=function(){pages[tab]=(pages[tab]||0)-1;render();};el('profileNext').onclick=function(){pages[tab]=(pages[tab]||0)+1;render();};
+    el('profileDisplay').onchange=function(){var mode=this.value;put('giOn',mode==='card');put('giOverlay',mode==='overlay');bridge.commit();bridge.restart();sync();};
+    el('profileRestart').onclick=function(){put('giPrev',true);bridge.restart();};
+    el('profileBgExtras').appendChild(row('giProfAtmosphere'));el('profileBgExtras').appendChild(row('giParti'));
+    var pick=el('giBgPickBtn');el('profileBgImage').appendChild(pick);pick.childNodes[0].textContent='배경 이미지 고르기';
+    el('profilePresetShelf').appendChild(el('profPresets'));
+    box.appendChild(el('profStatus'));
+    var detail=node('details',null,{id:'profileDetails'});detail.innerHTML='<summary>상세 편집 <small>시간 · 글자 · 색 · 굵기</small></summary><fieldset id="profileDetailFields"><div class="profile-detail-title">가장자리 · 장식 세부 조절</div><div id="profileEdgeDetails"></div><div class="profile-detail-title">이름 · 재생 시간 세부 조절</div></fieldset>';
+    el('gifFpsRow').after(detail);
+    ['gifRingOpt','gifRingOpt2','gifRingAnimRow'].forEach(function(id){el('profileEdgeDetails').appendChild(el(id));});
+    if(el('fullGifRingLayer'))el('profileEdgeDetails').appendChild(el('fullGifRingLayer').parentElement.parentElement);
+    el('profileEdgeDetails').appendChild(row('giProfRimLight'));
+    el('profileDetailFields').appendChild(el('gifIntroSec'));
+    el('giOpts').appendChild(row('giApprovedTextFit'));
+    ['giOn','giOverlay','giName','giBgMode','giTrans','giTxtAnim'].forEach(function(id){markHidden(row(id));});
+    markHidden(el('gifIntroSec').querySelector(':scope > .insSec'));
+    markHidden(el('profQuick'));markHidden(el('gifRingSec'));
+    // Keep native speed controls next to the corresponding names after the
+    // duplicated type selectors have moved to the catalog.
+    var timing=node('div','전환·글자 등장 시간은 아래에서 조절해요.',{class:'profile-note'});el('giProfileTimingBox').after(timing);
+    mounted=true;
+    document.addEventListener('change',schedule);document.addEventListener('input',schedule);document.addEventListener('click',schedule);
+    document.addEventListener('pbk-profile-background',function(){var s=bridge.backgroundStatus();if(s.error)el('profStatus').textContent=s.error;else if(s.loading)el('profStatus').textContent='배경을 불러오는 중…';if(!s.loading&&!pending&&!saving)el('gifGo').disabled=state().busy||state().loading||!state().url;schedule();});
+    var refresh=PBKPilotGifBridge.refresh;PBKPilotGifBridge.refresh=function(){var result=refresh.apply(this,arguments);schedule();return result;};
+    new MutationObserver(schedule).observe(el('gifRingSec'),{attributes:true,attributeFilter:['style']});
+    // Native file decoding and encoding update the save button without going
+    // through the profile bridge. Unlock the catalog when those jobs finish.
+    // Compare state, not the button alone: our own pending lock also changes it.
+    var sourceKey='';
+    new MutationObserver(function(){var s=state(),key=[s.mode,!!s.loading,!!s.busy,s.url||''].join('|');if(key!==sourceKey){sourceKey=key;schedule();}}).observe(el('gifGo'),{attributes:true,attributeFilter:['disabled']});
+    var originalGo=el('gifGo').onclick;el('gifGo').onclick=function(){
+      if(state().mode!=='avatar')return originalGo.apply(this,arguments);
+      if(pending||saving||state().busy||state().loading)return;
+      var source=state().url,background=selection('backgrounds');saving=true;sync();
+      return bridge.prepareBackground().then(function(ready){if(ready===false||selection('backgrounds')!==background){el('profStatus').textContent='배경이 변경됐어요. 확인한 뒤 다시 만들어 주세요.';return;}if(state().mode==='avatar'&&state().url===source&&!state().busy&&!state().loading)return originalGo.call(el('gifGo'));}).catch(function(e){el('profStatus').textContent=e.message;}).finally(function(){saving=false;if(!pending)el('gifGo').disabled=state().busy||state().loading||!state().url;sync();});
+    };
+    render();
+  }
+  window.PBKProfileUnified={list:function(k){return(catalog[k]||[]).map(function(r){return {id:r.id,name:r.name,type:r.type};});},current:selection,choose:choose,show:show,sync:sync};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount);else mount();
+})();

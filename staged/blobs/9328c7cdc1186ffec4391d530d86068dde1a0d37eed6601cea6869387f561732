@@ -1,0 +1,39 @@
+.profile-native-hidden {display:none!important}
+#profUnified[hidden],#profileDetails[hidden],#profUnified [hidden] {display:none!important}
+#profUnified {margin:12px 0;padding:12px;border:1px solid #d7c9dd;border-radius:12px;background:#fffcff;color:#4b4055}
+#profUnified h3 {margin:0 0 5px;font-size:14px}
+#profUnified .profile-note {font-size:11px;line-height:1.6;color:#7a7180;margin:7px 0;overflow-wrap:anywhere}
+#profUnified .profile-row,#profUnified .prof-row,#profileDetails .prof-row {display:flex;align-items:center;gap:6px;margin:9px 0;min-width:0}
+#profUnified button,#profUnified select,#profUnified input,#profileDetails select,#profileDetails input {font:inherit;min-width:0;max-width:100%}
+#profUnified button {padding:7px;border:1px solid #d8cedb;border-radius:7px;background:white;color:#554660;cursor:pointer;font-size:11px;line-height:1.45}
+#profUnified select,#profUnified input[type=text],#profUnified #profName {border:1px solid #d8cedb;border-radius:7px;background:white;padding:6px;color:#4b4055;font-size:12px}
+#profUnified .profile-row>select,#profUnified .prof-row>input,#profUnified .prof-row>select,#profUnified .ckRow>select {flex:1;width:0}
+#profUnified .profile-row>button {flex:1}
+#profUnified #profileTabs {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:13px 0 9px}
+#profUnified #profileTabs [aria-selected=true] {background:#444f82;border-color:#444f82;color:white}
+#profUnified .selected {background:#f4eaf7;border-color:#9b6fa7}
+#profUnified .profile-label {font-size:12px;font-weight:600;margin:8px 0}
+#profileChoice {display:block;width:100%}
+#profileGallery {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+#profileGallery button {padding:5px;min-width:0;overflow-wrap:anywhere}
+#profileGallery canvas {display:block;width:100%;height:auto;aspect-ratio:1;border-radius:5px;background:repeating-conic-gradient(#e9e6eb 0% 25%,#fff 0% 50%) 50%/12px 12px}
+#profileGallery span {display:block;margin-top:5px;font-size:11px;line-height:1.45}
+#profilePage {min-width:52px;text-align:center;font-size:11px}
+#profUnified #profileRestart {width:100%;background:#444f82;border-color:#444f82;color:white;margin-top:4px}
+#profUnified button:disabled,#profUnified input:disabled,#profUnified select:disabled {opacity:.5;cursor:default}
+#profileSummary {padding-top:7px;border-top:1px solid #e7dfe9}
+#profileSuggestions {margin:8px 0;font-size:12px}
+#profileSuggestions summary {cursor:pointer;padding:5px 0}
+#profilePresetShelf #profPresets {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:6px}
+#profilePresetShelf img {width:100%;height:auto;display:block}
+#profStatus {margin-top:8px;min-height:18px;font-size:11px;line-height:1.5;color:#776780}
+#profileDetails {margin:14px 0;border:1px solid #d4ced8;border-radius:10px;padding:10px;background:#faf8fb}
+#profileDetails>summary {cursor:pointer;font-size:13px;font-weight:600;line-height:1.65}
+#profileDetails>summary small {font-weight:400;color:#7a7180;font-size:11px}
+#profileDetails .profile-detail-title {font-size:12px;font-weight:600;padding:13px 0 5px;border-bottom:1px solid #e7dfe9;margin-bottom:7px}
+#profileDetailFields {border:0;padding:0;margin:0;min-width:0}
+#profileDetails .ckRow,#profileDetails .prof-row {flex-wrap:wrap;gap:6px}
+#profileDetails .ckRow>input[type=range] {min-width:40px!important}
+#profileDetails #giProfRimStrength {flex:1;width:75px}
+#profileDetails .profile-note {font-size:11px;color:#7a7180;line-height:1.6}
+#profileDetails #giApprovedTextFit {flex:0 0 auto}
