@@ -1,0 +1,69 @@
+/* User-created local profile styles. No media or sample names are embedded. */
+(function(){
+  'use strict';
+  var bridge=window.PBKProfilePersonalBridge,unified=window.PBKProfileUnified;
+  if(!bridge||!unified)return;
+  var busy=false,mounted=false,selected='',rows=[];
+  function el(id){return document.getElementById(id);}
+  function node(tag,text,attrs){var n=document.createElement(tag);if(text!=null)n.textContent=text;Object.keys(attrs||{}).forEach(function(k){n.setAttribute(k,attrs[k]);});return n;}
+  function message(s){if(el('profilePersonalStatus'))el('profilePersonalStatus').textContent=s;}
+  function safeRows(){return bridge.list().filter(function(r){return r&&typeof r.id==='string'&&typeof r.name==='string'&&r.data&&r.data.controls&&r.data.selections;}).slice(0,100);}
+  function nameValue(v){var n=String(v||'').trim().slice(0,60);if(!n)throw Error('프리셋 이름을 입력해 주세요.');return n;}
+  function find(id){var r=rows.find(function(r){return r.id===id;});if(!r)throw Error('프리셋을 먼저 골라 주세요.');return r;}
+  function canEdit(){var s=PBKPilotGifBridge.state();if(busy||s.busy||s.loading)throw Error('현재 작업이 끝난 후 다시 시도해 주세요.');if(!bridge.ready())throw Error('설정을 불러오는 중이에요.');}
+  function capture(includeText){
+    var data=bridge.capture(includeText);data.selections={};
+    ['decorations','rings','backgrounds','motions','typography'].forEach(function(k){data.selections[k]=unified.current(k);});
+    data.usesCustomBackground=data.selections.backgrounds==='native:image';
+    return data;
+  }
+  async function save(name,includeText,id){
+    canEdit();name=nameValue(name);rows=safeRows();
+    if(!id&&rows.length>=100)throw Error('프리셋은 100개까지 저장할 수 있어요. 사용하지 않는 항목을 삭제해 주세요.');
+    var row={id:id||('profile-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8)),name:name,data:capture(includeText),updatedAt:Date.now()};
+    var next=rows.slice();if(id)next[next.findIndex(function(r){return r.id===find(id).id;})]=row;else next.push(row);
+    busy=true;sync();try{await bridge.write(next);rows=next;selected=row.id;message('저장했어요. 다음에 다시 적용할 수 있어요.');return row.id;}finally{busy=false;render();}
+  }
+  async function rename(id,name){canEdit();rows=safeRows();find(id);name=nameValue(name);var next=rows.map(function(r){return r.id===id?Object.assign({},r,{name:name,updatedAt:Date.now()}):r;});busy=true;sync();try{await bridge.write(next);rows=next;selected=id;message('프리셋 이름을 바꿨어요.');}finally{busy=false;render();}}
+  async function remove(id){canEdit();rows=safeRows();find(id);var next=rows.filter(function(r){return r.id!==id;});busy=true;sync();try{await bridge.write(next);rows=next;selected='';message('프리셋을 삭제했어요. 현재 편집 내용은 유지돼요.');}finally{busy=false;render();}}
+  async function apply(id){
+    canEdit();rows=safeRows();var row=find(id),data=row.data,s=PBKPilotGifBridge.state();if(s.mode!=='avatar')throw Error('움짤 프사에서 적용해 주세요.');
+    var choices=data.selections||{},order=['decorations','rings','backgrounds','motions','typography'];
+    order.forEach(function(k){if(!choices[k]||data.usesCustomBackground&&k==='backgrounds')return;if(!unified.list(k).some(function(r){return r.id===choices[k];}))throw Error('현재 버전에서 사용할 수 없는 효과가 있어요: '+k);});
+    var view=el('gifView'),oldInert=view.inert,source=s.url,old= capture(true);busy=true;view.inert=true;sync();
+    async function applyData(d){
+      for(var k of order){if(d.usesCustomBackground&&k==='backgrounds')continue;var v=d.selections[k];if(v&&!await unified.choose(k,v))throw Error('프리셋 효과를 불러오지 못했어요. 다시 적용해 주세요.');}
+      if(PBKPilotGifBridge.state().url!==source)throw Error('원본이 바뀌었어요. 원본을 확인한 뒤 다시 적용해 주세요.');
+      await bridge.apply(d);await PBKProfileBridge.prepareBackground();await PBKApprovedStudio.prepare();
+    }
+    try{await applyData(data);selected=id;message(data.usesCustomBackground?'적용했어요. 직접 불러온 배경 이미지는 현재 선택을 유지해요.':data.includeText?'문구와 스타일을 적용했어요.':'스타일을 적용했어요. 현재 이름·문구·원본은 유지돼요.');return true;}
+    catch(e){try{if(PBKPilotGifBridge.state().url===source)await applyData(old);}catch(restoreError){message('적용 중 문제가 생겼어요. 현재 미리보기를 확인해 주세요.');}throw e;}
+    finally{busy=false;view.inert=oldInert;unified.sync();render();}
+  }
+  function sync(){if(!mounted)return;var s=PBKPilotGifBridge.state(),lock=busy||s.busy||s.loading||!bridge.ready();el('profilePersonalFields').disabled=lock;['profilePersonalApply','profilePersonalReplace','profilePersonalRename','profilePersonalDelete'].forEach(function(id){el(id).disabled=lock||!selected;});}
+  function render(){
+    if(!mounted)return;rows=safeRows();if(!rows.some(function(r){return r.id===selected;}))selected='';
+    var sel=el('profilePersonalSelect');sel.textContent='';sel.appendChild(node('option',rows.length?'저장한 프리셋 선택':'아직 저장한 프리셋이 없어요',{value:''}));rows.forEach(function(r){sel.appendChild(node('option',r.name,{value:r.id}));});sel.value=selected;sync();
+  }
+  function run(fn){return async function(){try{await fn();}catch(e){message(e.message||String(e));}};}
+  function button(id,text,fn){var b=node('button',text,{id:id,type:'button'});b.onclick=run(fn);return b;}
+  function mount(){
+    if(mounted||!el('profUnified'))return;
+    var box=node('details',null,{id:'profilePersonal'});box.style.cssText='margin-top:10px;border-top:1px solid #d7d1c7;padding-top:9px';
+    box.appendChild(node('summary','내 프리셋'));
+    var fields=node('fieldset',null,{id:'profilePersonalFields'});fields.style.cssText='border:0;padding:8px 0 0;min-width:0';
+    var select=node('select',null,{id:'profilePersonalSelect','aria-label':'내 프리셋 선택'});select.style.width='100%';select.onchange=function(){selected=this.value;var r=rows.find(function(r){return r.id===selected;});if(r){el('profilePersonalName').value=r.name;el('profilePersonalText').checked=!!r.data.includeText;}sync();};fields.appendChild(select);
+    var r1=node('div',null,{class:'profile-row'});r1.appendChild(button('profilePersonalApply','적용',function(){return apply(selected);}));r1.appendChild(button('profilePersonalDelete','삭제',async function(){var id=selected;if(await askYesNo('선택한 프리셋을 삭제할까요? 현재 편집 내용은 유지돼요.'))await remove(id);}));fields.appendChild(r1);
+    var label=node('label','프리셋 이름 ',{class:'profile-row'}),name=node('input',null,{id:'profilePersonalName',type:'text',maxlength:'60',placeholder:'예: 분홍 하트 · 천천히'});name.style.cssText='flex:1;min-width:0';label.appendChild(name);fields.appendChild(label);
+    var opt=node('label',null,{class:'profile-row'}),check=node('input',null,{id:'profilePersonalText',type:'checkbox'});opt.append(check,document.createTextNode('이름·추가 문구도 함께 저장'));fields.appendChild(opt);
+    var r2=node('div',null,{class:'profile-row'});r2.style.flexWrap='wrap';r2.appendChild(button('profilePersonalSave','새로 저장',function(){return save(name.value,check.checked);}));r2.appendChild(button('profilePersonalReplace','현재 설정으로 덮어쓰기',async function(){var id=selected,newName=name.value,withText=check.checked;if(await askYesNo('선택한 프리셋을 현재 설정으로 바꿀까요?'))return save(newName,withText,id);}));r2.appendChild(button('profilePersonalRename','이름 변경',function(){return rename(selected,name.value);}));fields.appendChild(r2);
+    fields.appendChild(node('div','배경·가장자리·장식·전환·글자 스타일·배치·시간을 저장해요. 영상·사진·직접 불러온 배경 파일은 포함하지 않아요.',{class:'profile-note'}));
+    fields.appendChild(node('div','',{id:'profilePersonalStatus',role:'status','aria-live':'polite',class:'profile-note'}));box.appendChild(fields);el('profileSummary').after(box);mounted=true;
+    document.addEventListener('click',function(){setTimeout(sync,0);});document.addEventListener('change',function(){setTimeout(sync,0);});
+    var wait=setInterval(function(){if(bridge.ready()){clearInterval(wait);render();}},100);render();
+  }
+  /* Keep deletion confirmation inside the app rather than a browser dialog. */
+  function askYesNo(text){return new Promise(function(resolve){var box=node('div',null,{role:'group','aria-label':'프리셋 변경 확인'});box.style.cssText='padding:8px;border:1px solid #d7d1c7;border-radius:6px;margin:6px 0';box.appendChild(node('div',text));var row=node('div',null,{class:'profile-row'});['확인','취소'].forEach(function(label,i){var b=node('button',label,{type:'button'});b.onclick=function(){box.remove();resolve(i===0);};row.appendChild(b);});box.appendChild(row);el('profilePersonalFields').appendChild(box);});}
+  window.PBKProfilePersonalPresets={list:function(){return safeRows();},capture:capture,save:save,apply:apply,rename:rename,remove:remove,busy:function(){return busy;}};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount);else mount();
+})();

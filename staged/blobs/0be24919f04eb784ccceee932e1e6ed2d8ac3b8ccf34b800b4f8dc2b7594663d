@@ -1,0 +1,101 @@
+/* A lookbook is an ordinary editable PhotobookKit book, using existing layouts.
+   No reference artwork, sample person, or unapproved visual design is included. */
+(function () {
+  'use strict';
+  if (window.PBKLookbook || !window.PBK) return;
+  var B = window.PBK;
+  var SECTIONS = [
+    {id:'cover', name:'메인 포스터', detail:'룩 사진 · 룰렛 이름 · 진행 기간', layout:'cover-mast'},
+    {id:'costume', name:'의상 목록', detail:'사진 6장 · 의상별 설명', layout:'gr-contact6', title:'COSTUME', caption:'의상'},
+    {id:'hair', name:'헤어 목록', detail:'사진 6장 · 헤어별 설명', layout:'gr-contact6', title:'HAIR', caption:'헤어'},
+    {id:'menu', name:'확정 안내', detail:'사진 6장 · 항목별 수량과 구성', layout:'gr-contact6', title:'MENU', caption:'확정 항목'},
+    {id:'lens', name:'렌즈 선택', detail:'사진 4장 · 색상별 설명 · 선택 사항', layout:'gr-contact4', title:'LENS', caption:'렌즈'},
+    {id:'face', name:'표정 선택', detail:'사진 9장 · 선택 사항', layout:'gr-index9', title:'FACE', caption:'표정'}
+  ];
+  // Reuse the established page geometry and styling, while giving every field
+  // meaningful lookbook labels. Each saved section remains independently editable.
+  SECTIONS.forEach(function(s){
+    var base=B.byId(s.layout), id='lookbook-v1-'+s.id;
+    if(!base)return;
+    var def=Object.assign({},base,{id:id,n:'룩북 · '+s.name});
+    def.ph=(base.ph||[]).map(function(p,i){return {n:s.id==='cover'?'메인 룩 사진':s.name+' 사진 '+(i+1)};});
+    def.tx=(base.tx||[]).map(function(t){var copy=Object.assign({},t);if(/^c\d+$/.test(t.k)){copy.n=s.caption+' '+t.k.slice(1)+' 설명';copy.m=true;}return copy;});
+    if(s.id==='cover')def.tx.forEach(function(t){if(t.k==='mast')t.n='룰렛 / 룩북 이름';if(t.k==='season')t.n='진행 기간';});
+    if(s.id==='face')for(var i=1;i<=9;i++)def.tx.push({k:'label'+i,n:'표정 '+i+' 이름',d:'표정 '+i});
+    def.h=function(c){
+      if(s.id!=='face'&&s.id!=='costume')return base.h(c);
+      var context=Object.assign({},c);
+      context.img=function(i,extra){
+        var html=c.img(i,(extra?extra+';':'')+(s.id==='costume'?'object-fit:contain':''));
+        if(s.id==='face')html+='<span style="position:absolute;left:0;right:0;bottom:0;padding:.6cqw 1cqw;text-align:center;font:600 2.5cqw/1.4 var(--sans);color:var(--ink);background:#ffffffdd">'+c.t('label'+(i+1))+'</span>';
+        return html;
+      };
+      return base.h(context);
+    };
+    B.LAYOUTS.push(def);s.layout=id;
+  });
+  function buildPages(options) {
+    options = options || {};
+    if (options.theme && options.theme !== 'classic' && window.PBKLookbookThemes) return PBKLookbookThemes.buildPages(options);
+    var name = String(options.name || '').trim().slice(0, 150);
+    var period = String(options.period || '').trim().slice(0, 150);
+    var selected = Array.isArray(options.sections) ? options.sections : SECTIONS.map(function(s){return s.id;});
+    return SECTIONS.filter(function(s){return selected.indexOf(s.id)>=0;}).map(function(s){
+      if (!B.byId(s.layout)) throw Error('필요한 기존 레이아웃을 찾지 못했어요: ' + s.layout);
+      var pg = B.newPage(s.layout), def = B.byId(s.layout);
+      pg.texts = {};
+      (def.tx || []).forEach(function(t){pg.texts[t.k]='';});
+      if (s.id === 'cover') {
+        Object.assign(pg.texts, {tag:'LOOKBOOK', mast:name || '룩북', vol:'', season:period});
+      } else if (s.id === 'face') {
+        Object.assign(pg.texts, {chip:'표정 선택', title:'FACE', cap1:'', cap2:''});
+        for(var f=1;f<=9;f++)pg.texts['label'+f]='표정 '+f;
+      } else {
+        Object.assign(pg.texts, {chip:s.title, em:s.name});
+        for (var n=1; n<=def.ph.length; n++) pg.texts['c'+n]=s.caption+' '+n;
+      }
+      pg.lookbookSection=s.id;
+      pg.lookbookSchema=1;
+      return pg;
+    });
+  }
+  function open() {
+    if (document.getElementById('lbBuilder')) { document.getElementById('lbBuilder').focus(); return; }
+    var before = document.activeElement;
+    var d = document.createElement('dialog'); d.id='lbBuilder'; d.setAttribute('aria-labelledby','lbTitle');
+    d.innerHTML='<form method="dialog"><div class="lb-head"><h3 id="lbTitle">룩북 구성</h3><button value="cancel" aria-label="닫기">×</button></div>'+
+      '<p class="lb-note">마음에 드는 테마로 필요한 페이지를 한 번에 준비해요. 사진과 글은 각 칸에서 바꾸고, 순서 변경·복제·책 넘김·PNG/HTML 저장을 그대로 사용할 수 있어요.</p>'+
+      '<label class="lb-theme-label">룩북 테마<select id="lbTheme">'+PBKLookbookThemes.themes.map(function(t){return '<option value="'+t.id+'">'+t.name+'</option>';}).join('')+'<option value="classic">기존 화보집 레이아웃</option></select></label>'+
+      '<div class="lb-inputs"><label>룰렛 / 룩북 이름<input id="lbName" maxlength="150" placeholder="이름 직접 입력"></label><label>진행 기간<input id="lbPeriod" maxlength="150" placeholder="예: 10. 20 – 10. 31"></label></div>'+
+      '<div class="lb-sections">'+SECTIONS.map(function(s){return '<label><input type="checkbox" name="lbSection" value="'+s.id+'" checked><span><b>'+s.name+'</b><small>'+s.detail+'</small></span></label>';}).join('')+'</div>'+
+      '<div class="lb-review" aria-label="선택한 페이지 미리보기"></div><p id="lbStatus" role="status"></p>'+
+      '<div class="lb-actions"><button value="cancel">닫기</button><button type="button" class="primary" id="lbAdd">현재 책 뒤에 추가</button></div></form>';
+    document.body.appendChild(d);
+    function opts(){return {theme:d.querySelector('#lbTheme').value,name:d.querySelector('#lbName').value,period:d.querySelector('#lbPeriod').value,sections:Array.from(d.querySelectorAll('[name="lbSection"]:checked')).map(function(x){return x.value;})};}
+    function review(){
+      var pages=buildPages(opts()), root=d.querySelector('.lb-review');
+      root.innerHTML=pages.map(function(pg){var section=SECTIONS.find(function(s){return s.id===pg.lookbookSection;});return '<div class="lb-card"><div class="lb-sheet">'+B.render(pg,{mode:'edit'})+'</div><strong>'+section.name+'</strong></div>';}).join('');
+      d.querySelectorAll('.lb-sections label').forEach(function(label){var id=label.querySelector('input').value,pg=pages.find(function(p){return p.lookbookSection===id;});if(pg){var s=SECTIONS.find(function(x){return x.id===id;});label.querySelector('small').textContent=id==='cover'?'사진 '+pg.photos.length+'장 · 룩북 이름 · 진행 기간':'사진 '+pg.photos.length+'장 · '+(s.caption||s.name)+'별 설명'+((id==='lens'||id==='face')?' · 선택 사항':'');}});
+      d.querySelector('#lbAdd').disabled=!pages.length;
+      d.querySelector('#lbStatus').textContent=pages.length ? pages.length+'쪽 · 기존 작업 뒤에 추가돼요.' : '페이지를 하나 이상 골라주세요.';
+    }
+    d.querySelector('#lbTheme').addEventListener('change',review);
+    d.querySelectorAll('input').forEach(function(x){x.addEventListener('input',review);});
+    d.querySelector('#lbAdd').onclick=function(){
+      var pages=buildPages(opts()); if(!pages.length)return;
+      try {
+        if(!window.PBKPilotBridge || !PBKPilotBridge.addAlbumPages) throw Error('룩북 편집기를 준비 중이에요. 잠시 뒤 다시 시도해 주세요.');
+        PBKPilotBridge.addAlbumPages(pages);
+        d.close();
+      } catch(e){d.querySelector('#lbStatus').textContent=e.message;}
+    };
+    d.addEventListener('close',function(){d.remove();if(before&&before.isConnected)before.focus();},{once:true});
+    review(); d.showModal(); d.querySelector('#lbName').focus();
+  }
+  var style=document.createElement('style');
+  style.textContent='#lbBuilder{width:min(970px,94vw);max-height:90vh;box-sizing:border-box;overflow:auto;border:1px solid #c8c3b7;border-radius:13px;padding:22px;color:#393936;background:#f8f6ef;font:13px/1.6 var(--sans,system-ui)}#lbBuilder::backdrop{background:#20202780}#lbBuilder .lb-head>h3{margin:0;font-size:20px}#lbBuilder .lb-head,#lbBuilder .lb-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}#lbBuilder .lb-note{color:#777365;line-height:1.8}#lbBuilder .lb-theme-label{display:grid;gap:5px;margin:12px 0}#lbBuilder #lbTheme{width:100%;padding:9px;border:1px solid #c8c3b7;border-radius:6px;background:white;color:#393936}#lbBuilder .lb-inputs{display:grid;grid-template-columns:1fr 1fr;gap:12px}#lbBuilder .lb-inputs label{display:grid;gap:5px}#lbBuilder input:not([type=checkbox]){width:100%;box-sizing:border-box;padding:8px;border:1px solid #c8c3b7;border-radius:6px;background:white}#lbBuilder .lb-sections{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}#lbBuilder .lb-sections label{display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid #d9d5cc;border-radius:8px;background:white;cursor:pointer}#lbBuilder .lb-sections small{display:block;color:#777365;font-size:11px}#lbBuilder .lb-sections input{margin-top:5px}#lbBuilder .lb-review{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}#lbBuilder .lb-card{min-width:0;text-align:center}#lbBuilder .lb-sheet{position:relative;aspect-ratio:3/4;overflow:hidden;background:#fff;pointer-events:none;box-shadow:0 2px 8px #332f261a}#lbBuilder .lb-sheet>.sheet{width:100%;height:100%;line-height:normal;text-align:start}#lbBuilder .lb-card>strong{display:block;margin-top:4px;font-size:12px}#lbBuilder .lb-actions{justify-content:flex-end;margin-top:15px}#lbBuilder #lbStatus{min-height:21px;color:#746c5a}@media(max-width:650px){#lbBuilder .lb-inputs{grid-template-columns:1fr}#lbBuilder .lb-sections,#lbBuilder .lb-review{grid-template-columns:repeat(2,minmax(0,1fr))}}';
+  document.head.appendChild(style);
+  var add=document.getElementById('btnAddPage');
+  if(add){var btn=document.createElement('button');btn.id='btnLookbook';btn.textContent='룩북 구성';btn.title='포스터·의상·헤어·확정 안내·렌즈·표정 페이지 준비';btn.style.cssText='width:100%;margin-top:8px';btn.onclick=open;add.insertAdjacentElement('afterend',btn);}
+  window.PBKLookbook={schemaVersion:1,sections:SECTIONS,buildPages:buildPages,open:open};
+})();
