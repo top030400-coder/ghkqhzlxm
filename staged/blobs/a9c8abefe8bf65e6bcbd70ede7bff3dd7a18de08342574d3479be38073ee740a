@@ -1,0 +1,73 @@
+/* Opt-in continuous profile text. The host owns typography, entrance, outlines,
+ * shadow, clipping and export timing. All animation is a pure function of the
+ * same supplied seconds used by preview and export; never wall-clock time. */
+(function(global){
+  'use strict';
+  var defaults={giTextMotion:'none',giTextFill:'solid',giTextShine:'none',giTextStrength:'25',giTextPeriod:'3',giTextColorB:'#f4b8d6',giTextAngle:'90',giTextShineStrength:'45'};
+  var ids=Object.keys(defaults);
+  function el(id){return document.getElementById(id);}
+  function num(v,d,a,b){v=Number(v);return Number.isFinite(v)?Math.max(a,Math.min(b,v)):d;}
+  function pick(v,allowed,d){return allowed.indexOf(v)>=0?v:d;}
+  function read(){
+    function v(id){var e=el(id);return e?e.value:defaults[id];}
+    return {motion:pick(v('giTextMotion'),['none','float','breathe','sway'],'none'),fill:pick(v('giTextFill'),['solid','gradient','flow'],'solid'),shine:pick(v('giTextShine'),['none','sweep'],'none'),strength:num(v('giTextStrength'),25,0,100)/100,period:num(v('giTextPeriod'),3,1,12),colorB:/^#[0-9a-f]{6}$/i.test(v('giTextColorB'))?v('giTextColorB'):'#f4b8d6',angle:num(v('giTextAngle'),90,0,360),shineStrength:num(v('giTextShineStrength'),45,0,100)/100};
+  }
+  function cycle(seconds,o){var p=Number.isFinite(o.loopPeriod)&&o.loopPeriod>0?o.loopPeriod:num(o.period,3,1,12),s=num(seconds,0,-1e8,1e8);return (Math.round((((s%p)+p)%p)/p*1e9)/1e9)%1;}
+  // Always-visible overlay text has no entrance/exit to hide a phase reset.
+  // Fit complete cycles to the actual loop without changing the user's target,
+  // output duration, frame count, or any card/entrance animation timing.
+  function forLoop(o,duration){
+    if(!o||!Number.isFinite(duration)||duration<=0)return o;
+    var count=Math.max(1,Math.round(duration/num(o.period,3,1,12)));
+    return Object.assign({},o,{loopPeriod:duration/count});
+  }
+  function phase(seconds,o){return cycle(seconds,o)*Math.PI*2;}
+  function motion(g,seconds,fs,o){
+    if(!o||o.motion==='none'||!o.strength)return;
+    var p=phase(seconds,o),a=o.strength,s;
+    if(o.motion==='float')g.translate(Math.sin(p)*fs*.018*a,-Math.sin(p)*fs*.13*a);
+    else if(o.motion==='breathe'){s=1+Math.sin(p)*.075*a;g.scale(s,s);}
+    else if(o.motion==='sway'){g.rotate(Math.sin(p)*.12*a);g.translate(Math.sin(p)*fs*.035*a,0);}
+  }
+  function rgb(hex){if(!/^#[0-9a-f]{6}$/i.test(hex))hex='#ffffff';return [parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)];}
+  function mix(a,b,t){return 'rgb('+a.map(function(v,i){return Math.round(v+(b[i]-v)*t);}).join(',')+')';}
+  function bounds(g,text,x,y){
+    var m=g.measureText(text),match=/([\d.]+)px/.exec(g.font),fs=match?+match[1]:42;
+    var l=Number.isFinite(m.actualBoundingBoxLeft)?m.actualBoundingBoxLeft:m.width/2,r=Number.isFinite(m.actualBoundingBoxRight)?m.actualBoundingBoxRight:m.width/2;
+    var a=Number.isFinite(m.actualBoundingBoxAscent)?m.actualBoundingBoxAscent:fs*.5,d=Number.isFinite(m.actualBoundingBoxDescent)?m.actualBoundingBoxDescent:fs*.5;
+    return {cx:x+(r-l)/2,cy:y+(d-a)/2,w:Math.max(1,l+r),h:Math.max(1,a+d),fs:fs};
+  }
+  function fill(g,text,x,y,color,seconds,o){
+    var b=bounds(g,text,x,y),angle=o.angle*Math.PI/180,dx=Math.cos(angle),dy=Math.sin(angle),half=(Math.abs(dx)*b.w+Math.abs(dy)*b.h)/2;
+    if(o.fill==='solid')g.fillStyle=color;
+    else{
+      var grad=g.createLinearGradient(b.cx-dx*half,b.cy-dy*half,b.cx+dx*half,b.cy+dy*half);
+      if(o.fill==='gradient'){grad.addColorStop(0,color);grad.addColorStop(1,o.colorB);}
+      else{var a=rgb(color),c=rgb(o.colorB),p=phase(seconds,o);for(var i=0;i<=12;i++){var t=i/12;grad.addColorStop(t,mix(a,c,.5-.5*Math.cos(t*Math.PI*2-p)));}}
+      g.fillStyle=grad;
+    }
+    g.fillText(text,x,y);
+    if(o.shine!=='sweep'||o.shineStrength<=0)return;
+    // Transparent color stops painted through fillText stay inside glyphs. No
+    // compositing operation can erase underlying characters, art or video.
+    var unit=cycle(seconds,o),center=b.cx+(unit*1.6-.8)*b.w,spread=Math.max(b.fs*.18,b.w*.13);
+    g.save();
+    try{
+      g.shadowColor='transparent';g.shadowBlur=0;g.shadowOffsetX=g.shadowOffsetY=0;
+      var shine=g.createLinearGradient(center-spread,b.cy+b.h*.18,center+spread,b.cy-b.h*.18);
+      shine.addColorStop(0,'rgba(255,255,255,0)');shine.addColorStop(.5,'rgba(255,255,255,'+o.shineStrength+')');shine.addColorStop(1,'rgba(255,255,255,0)');
+      g.fillStyle=shine;g.fillText(text,x,y);
+    }finally{g.restore();}
+  }
+  function restorePresetDefaults(controls){ids.forEach(function(id){if(!(id in controls)&&el(id))el(id).value=defaults[id];});}
+  function sync(){
+    [['giTextStrength','%'],['giTextPeriod','초'],['giTextAngle','°'],['giTextShineStrength','%']].forEach(function(p){if(el(p[0]+'V'))el(p[0]+'V').textContent=el(p[0]).value+p[1];});
+    var o=read();if(el('profileTextFinishSummary'))el('profileTextFinishSummary').textContent='재생 내내: '+({none:'움직임 없음',float:'둥실',breathe:'숨쉬기',sway:'살랑'}[o.motion])+' · '+({solid:'단색',gradient:'그라데이션',flow:'흐르는 색'}[o.fill])+' · '+(o.shine==='sweep'?'빛 스침':'하이라이트 없음');
+  }
+  function mount(){
+    ids.forEach(function(id){var e=el(id);if(!e)return;e.addEventListener('input',function(){sync();if(global.PBKProfileBridge)PBKProfileBridge.commit();});e.addEventListener('change',function(){sync();if(global.PBKProfileBridge)PBKProfileBridge.commit();});});
+    document.addEventListener('change',sync);sync();
+  }
+  global.PBKProfileTextFinish={version:'20261024-2',ids:ids,defaults:defaults,read:read,forLoop:forLoop,motion:motion,fill:fill,restorePresetDefaults:restorePresetDefaults,sync:sync};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount);else mount();
+})(window);
