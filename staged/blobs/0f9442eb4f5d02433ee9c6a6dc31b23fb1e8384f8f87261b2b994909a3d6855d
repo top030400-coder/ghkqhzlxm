@@ -1,0 +1,189 @@
+/* Personal trial: editable lookbook presentation, independent from existing layouts.
+   All render paths (preview / native PNG / standalone HTML) share the same wrapper.
+   A generated sample image is never used as an editable template or bundled person. */
+(function () {
+  'use strict';
+  var B=window.PBK, A=window.PBKLookbookStudio, bridge=window.PBKLookbookStudioBridge;
+  if(!B||!A||!bridge||window.PBKLookbookStudioEditor)return;
+  var baseRender=B.render, cache=Object.create(null), selected='', selecting=false, lastPage=null, drag=null;
+  var paletteKeys=['paper','panel','ink','accent','detail'];
+  var paletteLabels={paper:'바탕',panel:'사진틀·패널',ink:'기본 글자',accent:'포인트',detail:'선·작은 장식'};
+  var ranges={dx:[-1800,1800,0],dy:[-2400,2400,0],sx:[5,400,100],sy:[5,400,100],rot:[-180,180,0],opacity:[0,100,100],z:[-100,100,0],borderWidth:[0,40,0],radius:[0,180,0]};
+  var keyOK=/^[a-zA-Z0-9_-]{1,80}$/, colorOK=/^#[0-9a-f]{6}$/i;
+  function studio(pg){return !!pg&&/^lookbook-studio-(blue|rose|club|velvet)-(cover|costume|hair|menu|lens|face)$/.test(pg.layout||'')&&!!B.byId(pg.layout);}
+  function plain(o){return o&&typeof o==='object'&&!Array.isArray(o);}
+  function num(v,a,b,d){var n=Number(v);return Number.isFinite(n)?Math.round(Math.max(a,Math.min(b,n))*100)/100:d;}
+  function own(o,k){return Object.prototype.hasOwnProperty.call(o,k);}
+  function color(v){return typeof v==='string'&&colorOK.test(v)?v.toLowerCase():null;}
+  function sanitize(value,allowed){
+    var out={v:1,palette:{},parts:{}};if(!plain(value))return out;
+    if(plain(value.palette))paletteKeys.forEach(function(k){var c=color(value.palette[k]);if(c)out.palette[k]=c;});
+    if(plain(value.parts))Object.keys(value.parts).slice(0,150).forEach(function(k){
+      if(!keyOK.test(k)||k==='__proto__'||k==='constructor'||k==='prototype'||(allowed&&!allowed[k]))return;
+      var item=value.parts[k];if(!plain(item))return;var p={};
+      Object.keys(ranges).forEach(function(n){if(own(item,n)&&item[n]!==null&&item[n]!==''&&Number.isFinite(Number(item[n]))){var r=ranges[n];p[n]=num(item[n],r[0],r[1],r[2]);}});
+      ['color','borderColor'].forEach(function(n){var c=color(item[n]);if(c)p[n]=c;});
+      if(item.hide===true||item.hide===1)p.hide=true;
+      if(Object.keys(p).length)out.parts[k]=p;
+    });return out;
+  }
+  function parse(html){var host=document.createElement('template');host.innerHTML=html;return host;}
+  function getParts(pg){
+    if(!studio(pg))return [];
+    if(cache[pg.layout])return cache[pg.layout];
+    var host=parse(baseRender(pg,{mode:'edit',src:function(){return null;}})), seen=Object.create(null), out=[];
+    host.content.querySelectorAll('[data-lbs-part]').forEach(function(el){var k=el.getAttribute('data-lbs-part');if(!keyOK.test(k)||seen[k])return;seen[k]=true;out.push({key:k,label:el.getAttribute('data-lbs-label')||k,kind:el.getAttribute('data-lbs-kind')||'decoration',field:el.getAttribute('data-lbs-field')||'',photo:el.hasAttribute('data-lbs-photo')?Number(el.getAttribute('data-lbs-photo')):null,z:num(el.getAttribute('data-lbs-z')||el.style.zIndex,-100,100,0)});});
+    cache[pg.layout]=out;return out;
+  }
+  function state(pg){var allowed=Object.create(null);getParts(pg).forEach(function(p){allowed[p.key]=true;});return sanitize(pg&&pg.lookbookStudioSettings,allowed);}
+  function themeId(pg){return String(pg.lookbookTheme||'studio-'+pg.layout.split('-')[2]);}
+  function palette(pg){
+    var id=themeId(pg), defaults=(A.palettes||{})[id]||(A.palettes||{})[id.replace('studio-','')]||{};
+    var t=(A.themes||[]).find(function(t){return t.id===id;});if(t&&t.palette)defaults=t.palette;
+    var pal=Object.assign({paper:'#f5f0e6',panel:'#fffdf7',ink:'#203650',accent:'#aa4336',detail:'#758594'},defaults,state(pg).palette);
+    if(pg.bg&&color(pg.bg.c))pal.paper=color(pg.bg.c);
+    return pal;
+  }
+  function applyToHTML(pg,html){
+    if(!studio(pg))return html;
+    var host=parse(html), root=host.content.querySelector('.lbs');if(!root)return html;
+    var nodes=Object.create(null);root.querySelectorAll('[data-lbs-part]').forEach(function(el){nodes[el.getAttribute('data-lbs-part')]=el;});
+    var s=sanitize(pg.lookbookStudioSettings,nodes);
+    paletteKeys.forEach(function(k){if(s.palette[k])root.style.setProperty('--ls-'+k,s.palette[k]);});
+    if(pg.bg&&color(pg.bg.c))root.style.setProperty('--ls-paper',color(pg.bg.c));
+    Object.keys(s.parts).forEach(function(k){
+      var el=nodes[k],p=s.parts[k];if(!el)return;
+      /* Individual transform properties compose with theme transforms and native
+         pg.els transforms instead of replacing either. Units follow 900px design. */
+      if(own(p,'dx')||own(p,'dy')){
+        var nativeTranslate=(el.style.getPropertyValue('translate')||'').trim();
+        var nativeMatch=/^(-?[\d.]+(?:cqw|px|%))(?:\s+(-?[\d.]+(?:cqw|px|%)))?$/.exec(nativeTranslate);
+        var nativeX=nativeMatch?nativeMatch[1]:'0px',nativeY=nativeMatch&&nativeMatch[2]?nativeMatch[2]:'0px';
+        el.style.setProperty('translate','calc('+nativeX+' + '+((p.dx||0)/9)+'cqw) calc('+nativeY+' + '+((p.dy||0)/9)+'cqw)');
+      }
+      if(own(p,'rot'))el.style.setProperty('rotate',p.rot+'deg');
+      if(own(p,'sx')||own(p,'sy'))el.style.setProperty('scale',(own(p,'sx')?p.sx/100:1)+' '+(own(p,'sy')?p.sy/100:1));
+      if(own(p,'opacity'))el.style.opacity=String(p.opacity/100);
+      if(own(p,'z'))el.style.zIndex=String(p.z);
+      if(p.hide)el.style.setProperty('display','none','important');
+      if(p.color){
+        el.style.color=p.color;
+        var kind=el.getAttribute('data-lbs-kind');
+        if(kind==='panel'||kind==='photo')el.style.backgroundColor=p.color;
+        if(kind==='text')el.querySelectorAll('[data-cf]').forEach(function(w){w.style.color=p.color;});
+      }
+      if(own(p,'borderWidth')){el.style.borderWidth=(p.borderWidth/9)+'cqw';el.style.borderStyle=p.borderWidth?'solid':'none';el.style.boxSizing='border-box';}
+      if(p.borderColor)el.style.borderColor=p.borderColor;
+      if(own(p,'radius')){el.style.borderRadius=(p.radius/9)+'cqw';if(el.getAttribute('data-lbs-kind')==='photo'||el.getAttribute('data-lbs-kind')==='panel')el.style.overflow='hidden';}
+    });
+    return host.innerHTML;
+  }
+  B.render=function(pg,options){var html=baseRender.call(this,pg,options);return studio(pg)?applyToHTML(pg,html):html;};
+  function page(){return bridge.page();}
+  function write(pg,s){pg.lookbookStudioSettings=sanitize(s);}
+  function begin(){if(studio(page()))bridge.begin();}
+  function update(fn,live){var pg=page();if(!studio(pg))return;begin();var s=state(pg);fn(s,pg);write(pg,s);if(live)bridge.preview();else bridge.commit();}
+  function setPalette(k,v,live){if(paletteKeys.indexOf(k)<0)return;var c=color(v);if(!c)return;update(function(s,pg){s.palette[k]=c;if(k==='paper'){pg.bg=pg.bg||{};pg.bg.c=c;}},!!live);}
+  function patchPart(k,patch,live){if(!getParts(page()).some(function(p){return p.key===k;}))return;update(function(s){s.parts[k]=Object.assign({},s.parts[k]||{},patch);},!!live);}
+  function resetPart(){if(!selected)return;update(function(s){delete s.parts[selected];});}
+  function resetPage(){var pg=page();if(!studio(pg))return;begin();delete pg.lookbookStudioSettings;if(pg.bg){delete pg.bg.c;if(!Object.keys(pg.bg).length)delete pg.bg;}bridge.commit();}
+  function applyPaletteToTheme(){var pg=page();if(!studio(pg))return;var pal=palette(pg),id=themeId(pg),n=0;begin();bridge.pages().forEach(function(p){if(studio(p)&&themeId(p)===id){var s=state(p);s.palette=Object.assign({},pal);p.bg=p.bg||{};p.bg.c=pal.paper;write(p,s);n++;}});bridge.refreshAll();status('같은 테마 '+n+'쪽의 색상을 맞췄어요. 사진·문구·위치는 유지돼요.');}
+  function $(id){return document.getElementById(id);}
+  function status(text){var e=$('lbsStatus');if(e)e.textContent=text;}
+  function button(id,label,handler){var b=document.createElement('button');b.type='button';b.id=id;b.textContent=label;b.onclick=handler;return b;}
+  function labeled(label,control){var w=document.createElement('label');w.className='lbs-control';var n=document.createElement('span');n.textContent=label;w.append(n,control);return w;}
+  function input(id,type){var i=document.createElement('input');i.id=id;i.type=type;return i;}
+  function prepareColorRevert(control,pg,key,partKey){
+    /* A default swatch is not an override. Esc restores both its value and absence. */
+    var original=state(pg),item=partKey?(original.parts[partKey]||{}):original.palette;
+    var existed=own(item,key),value=item[key],hadBg=!!pg.bg&&own(pg.bg,'c'),bgColor=pg.bg&&pg.bg.c;
+    control.pbkCpRevert=function(){
+      if(page()!==pg)return;
+      update(function(s,p){
+        var target=partKey?(s.parts[partKey]||(s.parts[partKey]={})):s.palette;
+        if(existed)target[key]=value;else delete target[key];
+        if(!partKey&&key==='paper'){
+          if(hadBg){p.bg=p.bg||{};p.bg.c=bgColor;}
+          else if(p.bg){delete p.bg.c;if(!Object.keys(p.bg).length)delete p.bg;}
+        }
+      });
+    };
+  }
+  function mount(){
+    var old=$('lbsEditor');if(old)return old;
+    var box=document.createElement('section');box.id='lbsEditor';box.hidden=true;
+    var intro=document.createElement('div');intro.className='lbs-head';intro.innerHTML='<strong>룩북 자유 편집</strong><span>개인 시험판</span>';box.appendChild(intro);
+    var hint=document.createElement('p');hint.className='lbs-hint';hint.textContent='사진·문구는 아래 기존 편집 기능으로도 바꿀 수 있어요. 틀과 장식은 여기서 조절해요.';box.appendChild(hint);
+    var colors=document.createElement('details');colors.open=true;colors.id='lbsColors';colors.innerHTML='<summary>테마 색상</summary>';var grid=document.createElement('div');grid.className='lbs-palette';
+    paletteKeys.forEach(function(k){var c=input('lbsPalette-'+k,'color');c.setAttribute('aria-label',paletteLabels[k]);c.oninput=function(){setPalette(k,c.value,true);};c.onchange=function(){setPalette(k,c.value);};grid.appendChild(labeled(paletteLabels[k],c));});colors.appendChild(grid);
+    var cb=document.createElement('div');cb.className='lbs-buttons';cb.appendChild(button('lbsApplyPalette','같은 테마 모든 쪽에 적용',applyPaletteToTheme));cb.appendChild(button('lbsResetPalette','색상 기본값',function(){update(function(s,pg){s.palette={};if(pg.bg){delete pg.bg.c;if(!Object.keys(pg.bg).length)delete pg.bg;}});}));colors.appendChild(cb);box.appendChild(colors);
+    var head=document.createElement('div');head.className='lbs-buttons';head.appendChild(button('lbsPick','페이지에서 요소 선택',function(){selecting=!selecting;if(selecting)bridge.clearNativeSelection();refreshPanel();refreshSelection();}));box.appendChild(head);
+    var sel=document.createElement('select');sel.id='lbsPartSelect';sel.setAttribute('aria-label','편집할 요소');sel.onchange=function(){selectPart(sel.value);};box.appendChild(sel);
+    var empty=document.createElement('p');empty.id='lbsEmpty';empty.className='lbs-hint';empty.textContent='목록에서 요소를 고르거나 선택 모드를 켜고 페이지를 누르세요.';box.appendChild(empty);
+    var controls=document.createElement('div');controls.id='lbsPartControls';
+    var textWrap=document.createElement('div');textWrap.id='lbsTextWrap';var tx=document.createElement('textarea');tx.id='lbsText';tx.rows=2;tx.setAttribute('aria-label','선택한 문구');tx.oninput=function(){var meta=getParts(page()).find(function(p){return p.key===selected;});if(!meta||!meta.field)return;update(function(s,pg){pg.texts=pg.texts||{};pg.texts[meta.field]=tx.value;},true);};tx.onchange=function(){bridge.commit();};textWrap.appendChild(tx);textWrap.appendChild(button('lbsTextDetails','이 문구의 폰트·효과 편집',function(){var p=getParts(page()).find(function(p){return p.key===selected;});if(p&&p.field)bridge.focusField(p.field);}));controls.appendChild(textWrap);
+    controls.appendChild(button('lbsPhotoDetails','이 사진 교체·크롭·회전',function(){var p=getParts(page()).find(function(p){return p.key===selected;});if(p&&p.photo!==null)bridge.focusPhoto(p.photo);}));
+    var ng=document.createElement('div');ng.className='lbs-numbers';
+    [['dx','가로 이동'],['dy','세로 이동'],['sx','가로 크기 %'],['sy','세로 크기 %'],['rot','회전 °'],['opacity','불투명도 %'],['z','앞뒤 순서'],['borderWidth','테두리 두께'],['radius','모서리 둥글기']].forEach(function(row){var k=row[0],i=input('lbs-'+k,'number'),r=ranges[k];i.min=r[0];i.max=r[1];i.step=k==='dx'||k==='dy'||k==='rot'?1:1;i.oninput=function(){if(i.value===''||!Number.isFinite(Number(i.value)))return;var p={};p[k]=Number(i.value);patchPart(selected,p,true);};i.onchange=function(){if(i.value==='')return;var p={};p[k]=Number(i.value);patchPart(selected,p);};ng.appendChild(labeled(row[1],i));});controls.appendChild(ng);
+    var cg=document.createElement('div');cg.className='lbs-palette';[['color','요소 색'],['borderColor','테두리 색']].forEach(function(row){var k=row[0],c=input('lbs-'+k,'color');c.oninput=function(){var p={};p[k]=c.value;patchPart(selected,p,true);};c.onchange=function(){var p={};p[k]=c.value;patchPart(selected,p);};cg.appendChild(labeled(row[1],c));});controls.appendChild(cg);
+    var restoreColor=button('lbsResetColor','이 요소 색상 기본값',function(){update(function(s){var p=s.parts[selected];if(p){delete p.color;delete p.borderColor;}});});controls.appendChild(restoreColor);
+    var hide=input('lbs-hide','checkbox');hide.onchange=function(){patchPart(selected,{hide:hide.checked});};controls.appendChild(labeled('이 요소 숨기기',hide));
+    var reset=document.createElement('div');reset.className='lbs-buttons';reset.appendChild(button('lbsResetPart','선택 요소 복원',resetPart));reset.appendChild(button('lbsResetPage','이 페이지 틀 설정 초기화',resetPage));controls.appendChild(reset);box.appendChild(controls);
+    var st=document.createElement('p');st.id='lbsStatus';st.className='lbs-hint';st.setAttribute('role','status');box.appendChild(st);
+    var target=$('inspector');if(target){var title=target.querySelector('.insTitle');title.insertAdjacentElement('afterend',box);}return box;
+  }
+  function refreshPanel(){
+    var pg=page(),box=mount();box.hidden=!studio(pg);if(!studio(pg)){selecting=false;selected='';lastPage=null;document.body.classList.remove('lbs-selecting');return;}
+    if(lastPage!==pg){lastPage=pg;selected='';selecting=false;}
+    var ps=getParts(pg),s=state(pg),pal=palette(pg),select=$('lbsPartSelect');
+    if(selected&&!ps.some(function(p){return p.key===selected;}))selected='';
+    select.replaceChildren();var opt=document.createElement('option');opt.value='';opt.textContent='편집할 사진틀·문구·장식을 선택하세요';select.appendChild(opt);
+    ps.forEach(function(p){var o=document.createElement('option');o.value=p.key;o.textContent=(s.parts[p.key]&&s.parts[p.key].hide?'[숨김] ':'')+p.label;select.appendChild(o);});select.value=selected;
+    paletteKeys.forEach(function(k){var c=$('lbsPalette-'+k);c.value=color(pal[k])||'#ffffff';prepareColorRevert(c,pg,k);});
+    var pick=$('lbsPick');pick.classList.toggle('on',selecting);pick.setAttribute('aria-pressed',String(selecting));pick.textContent=selecting?'요소 선택 중 · 눌러 종료':'페이지에서 요소 선택';
+    document.body.classList.toggle('lbs-selecting',selecting);
+    $('lbsEmpty').hidden=!!selected;$('lbsPartControls').hidden=!selected;
+    if(selected){var meta=ps.find(function(p){return p.key===selected;}),p=s.parts[selected]||{};
+      Object.keys(ranges).forEach(function(k){$('lbs-'+k).value=own(p,k)?p[k]:(k==='z'?meta.z:ranges[k][2]);});
+      $('lbs-color').value=p.color||pal.ink;$('lbs-borderColor').value=p.borderColor||pal.detail;$('lbs-hide').checked=!!p.hide;
+      prepareColorRevert($('lbs-color'),pg,'color',selected);prepareColorRevert($('lbs-borderColor'),pg,'borderColor',selected);
+      $('lbsTextWrap').hidden=meta.kind!=='text'||!meta.field;$('lbsPhotoDetails').hidden=meta.photo===null;
+      if(meta.field){var def=B.byId(pg.layout),f=(def.tx||[]).find(function(f){return f.k===meta.field;});$('lbsText').value=pg.texts&&own(pg.texts,meta.field)?pg.texts[meta.field]:(f&&f.d||'');}
+      status(selecting?'선택 요소를 끌어서 이동할 수 있어요. Delete는 숨기기, Esc는 선택 모드 종료입니다.':'이동은 900×1200 기준 값입니다. 같은 테마 색상 적용은 사진과 위치를 바꾸지 않아요.');
+    }else status('새 문구·소품은 아래 글자 항목의 추가 기능을 이용하세요.');
+    refreshSelection();
+  }
+  function selectPart(k){selected=getParts(page()).some(function(p){return p.key===k;})?k:'';refreshPanel();}
+  function refreshSelection(){
+    document.querySelectorAll('#spread .lbs-part-selected').forEach(function(e){e.classList.remove('lbs-part-selected');});
+    if(!selected||!studio(page()))return;
+    document.querySelectorAll('#spread .pv.sel [data-lbs-part]').forEach(function(e){if(e.getAttribute('data-lbs-part')===selected)e.classList.add('lbs-part-selected');});
+  }
+  function stopDrag(commit){if(!drag)return;drag=null;if(commit)bridge.commit();}
+  document.addEventListener('pointerdown',function(ev){
+    if(!selecting||!studio(page())||ev.button!==0)return;
+    var el=ev.target.closest&&ev.target.closest('#spread .pv.sel [data-lbs-part]');if(!el)return;
+    ev.preventDefault();ev.stopImmediatePropagation();selected=el.getAttribute('data-lbs-part');refreshPanel();
+    var pg=page(),s=state(pg),p=s.parts[selected]||{},root=el.closest('.pg'),r=root.getBoundingClientRect();begin();
+    drag={page:pg,key:selected,x:ev.clientX,y:ev.clientY,dx:p.dx||0,dy:p.dy||0,ratio:r.width/900,pointer:ev.pointerId};
+  },true);
+  document.addEventListener('pointermove',function(ev){if(!drag||ev.pointerId!==drag.pointer)return;if(page()!==drag.page){stopDrag(true);return;}ev.preventDefault();ev.stopImmediatePropagation();var p={dx:drag.dx+(ev.clientX-drag.x)/drag.ratio,dy:drag.dy+(ev.clientY-drag.y)/drag.ratio};patchPart(drag.key,p,true);$('lbs-dx').value=Math.round(p.dx);$('lbs-dy').value=Math.round(p.dy);},true);
+  document.addEventListener('pointerup',function(ev){if(drag&&ev.pointerId===drag.pointer){ev.preventDefault();ev.stopImmediatePropagation();stopDrag(true);}},true);
+  document.addEventListener('pointercancel',function(){stopDrag(true);},true);
+  document.addEventListener('click',function(ev){if(selecting&&ev.target.closest&&ev.target.closest('#spread .pv.sel')){ev.preventDefault();ev.stopImmediatePropagation();}},true);
+  document.addEventListener('keydown',function(ev){if(!selecting||/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName))return;if(ev.key==='Escape'){selecting=false;refreshPanel();ev.preventDefault();}else if(ev.key==='Delete'&&selected){patchPart(selected,{hide:true});ev.preventDefault();ev.stopImmediatePropagation();}},true);
+  var oldParts=$('btnParts');if(oldParts)oldParts.addEventListener('click',function(){selecting=false;refreshPanel();});
+  window.addEventListener('blur',function(){if(drag)stopDrag(true);bridge.endLive();});
+  var css=document.createElement('style');css.id='lbsEditorCss';css.textContent=`
+    #lbsEditor{margin:12px 0 18px;padding:13px;border:1px solid #c8c8bb;border-radius:8px;background:#fffefa;font-size:12px;color:#3e403a}#lbsEditor[hidden],#lbsEditor [hidden]{display:none!important}
+    #lbsEditor .lbs-head{display:flex;justify-content:space-between;gap:8px;align-items:center}#lbsEditor .lbs-head strong{font-size:14px}#lbsEditor .lbs-head span{font-size:10px;border:1px solid #c7bda1;border-radius:4px;padding:2px 5px;color:#7e6b3e}
+    #lbsEditor .lbs-hint{font-size:11px;line-height:1.65;color:#7c7a70;margin:8px 0}#lbsEditor details{border-top:1px solid #e5e0d4;padding:9px 0}#lbsEditor summary{cursor:pointer;font-weight:700}#lbsEditor .lbs-palette{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:8px 0}
+    #lbsEditor .lbs-control{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;font-size:11px}#lbsEditor input[type=color]{width:40px;height:29px;border:1px solid #cac5b5;border-radius:4px;padding:2px;background:white}#lbsEditor .lbs-numbers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:9px 0}
+    #lbsEditor input[type=number]{width:63px;min-width:0;border:1px solid #cac5b5;border-radius:4px;padding:5px;font-size:11px;color:inherit;background:white}#lbsEditor button{font-size:11px;border:1px solid #c7c4b8;border-radius:5px;background:#fff;padding:7px 9px;color:inherit;cursor:pointer}#lbsEditor button.on{background:#404d7e;color:white}#lbsEditor .lbs-buttons{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}
+    #lbsPartSelect{width:100%;max-width:100%;border:1px solid #cac5b5;padding:7px 4px;border-radius:4px;background:white;font-size:12px}#lbsText{width:100%;box-sizing:border-box;margin:9px 0 4px;border:1px solid #cac5b5;border-radius:4px;padding:7px;resize:vertical;font:12px/1.5 inherit}#lbsPhotoDetails{margin-top:8px}
+    #spread .lbs-part-selected{outline:1.5px dashed #627dce!important;outline-offset:3px}body.lbs-selecting #spread .pv.sel,body.lbs-selecting #spread .pv.sel *{cursor:move!important;touch-action:none}body.lbs-selecting #spread .pv.sel [data-lbs-part]{pointer-events:auto!important}
+    @media(max-width:1100px){#lbsEditor{padding:10px}#lbsEditor .lbs-numbers{grid-template-columns:1fr}#lbsEditor input[type=number]{width:90px}}
+  `;document.head.appendChild(css);
+  window.PBKLookbookStudioEditor={version:1,sanitize:sanitize,applyToHTML:applyToHTML,parts:getParts,palette:palette,refreshPanel:refreshPanel,refreshSelection:refreshSelection,patchPart:patchPart,setPalette:setPalette,resetPart:resetPart,resetPage:resetPage,applyPaletteToTheme:applyPaletteToTheme,selectPart:selectPart,selectedPart:function(){return selected;}};
+  refreshPanel();
+})();

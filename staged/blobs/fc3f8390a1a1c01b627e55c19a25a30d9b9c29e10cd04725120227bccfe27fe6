@@ -1,0 +1,313 @@
+/* Independent local lookbook drafts. Native book.pages is never an editor buffer. */
+(function(){
+ 'use strict';
+ var B=window.PBK,L=window.PBKLookbook,bridge=window.PBKLookbookWorkspaceBridge;
+ if(!B||!L||!bridge||window.PBKLookbookWorkspace)return;
+ var sections=L.sections.slice(),themes=(window.PBKLookbookThemes?PBKLookbookThemes.themes:[]).slice();
+ themes=themes.filter(function(t){return t.id.indexOf('studio-')===0;}).concat(themes.filter(function(t){return t.id.indexOf('studio-')!==0;}));themes.push({id:'classic',name:'기본 룩북'});
+ var theme=themes[0].id,section='cover',active=false,detail=false,editing=false,mounted=false,rendering=false,saving=false;
+ var tool='photo',photo=0,text='',part='',pending=null,drag=null,lastBook=null,lastJSON='',factories={},partCache={};
+ var selected=null,advancedOpen=false,uploading=false;
+ var paletteLabels={paper:'바탕',panel:'사진틀·패널',ink:'기본 글자',accent:'포인트',detail:'선·작은 장식'};
+ var ranges={dx:[-1800,1800,0],dy:[-2400,2400,0],sx:[5,400,100],sy:[5,400,100],rot:[-180,180,0],opacity:[0,100,100],z:[-100,100,0],borderWidth:[0,40,0],radius:[0,180,0]};
+ function $(id){return document.getElementById(id);}function copy(v){return JSON.parse(JSON.stringify(v));}function own(o,k){return Object.prototype.hasOwnProperty.call(o||{},k);}
+ function num(v,a,b,d){var n=Number(v);return Number.isFinite(n)?Math.max(a,Math.min(b,n)):d;}function color(v,d){return /^#[0-9a-f]{6}$/i.test(v||'')?v:d||'#333333';}
+ function make(tag,cls,value){var e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=value;return e;}
+ function button(id,value,fn,cls){var e=make('button',cls,value);e.type='button';if(id)e.id=id;e.onclick=function(ev){flush();fn(ev);};return e;}
+ function field(label,e){var w=make('label','lbw-field');w.append(make('span','',label),e);e.setAttribute('aria-label',label);return w;}
+ function input(id,type){var e=document.createElement('input');e.id=id;e.type=type||'text';return e;}function select(id){var e=make('select');e.id=id;return e;}
+ function option(e,v,label){var o=make('option','',label);o.value=v;e.appendChild(o);}
+ function book(){return bridge.book()||{pages:[]};}function themeName(id){var t=themes.find(function(x){return x.id===id;});return t?t.name.replace(/\s*·\s*편집형$/,''):'룩북';}
+ function sectionName(id){var s=sections.find(function(x){return x.id===id;});return s?s.name:'페이지';}
+ function studio(pg){return !!(window.PBKLookbookStudio&&PBKLookbookStudio.isStudio(pg));}
+ function factory(id){if(!factories[id])factories[id]=L.buildPages({theme:id,sections:sections.map(function(s){return s.id;})});return factories[id];}
+ function draft(ensure){return bridge.draft(theme,!!ensure);}function pages(id){var d=bridge.draft(id,false);return d&&d.pages||factory(id);}
+ function page(ensure){return bridge.page(theme,section,!!ensure)||pages(theme).find(function(p){return p.lookbookSection===section;});}
+ function summary(){var b=book();return JSON.stringify([b.lookbookDrafts||null,(b.pages||[]).filter(function(p){return /^lookbook-/.test(p.layout||'');})]);}
+ function remember(){lastBook=book();lastJSON=summary();}
+ function status(s,error){var e=$('lbwStatus');if(e){e.textContent=s;e.classList.toggle('lbw-error',!!error);}}
+ function preview(pg,annotate){var had=document.body.classList.contains('partsOn');if(annotate&&!had)document.body.classList.add('partsOn');try{return bridge.preview(pg);}finally{if(annotate&&!had)document.body.classList.remove('partsOn');}}
+ function sheet(pg,cls){var e=make('div','lbw-sheet'+(cls?' '+cls:''));e.innerHTML=preview(pg,false);return e;}
+ function edit(fn,controls){bridge.change(theme,section,fn);remember();if(editing){renderCanvas();if(controls)renderControls();else if(tool==='photo')syncPhotoInputs();}else renderCards();refreshResume();status('수정 내용은 상단 저장 버튼으로 프로젝트에 보관할 수 있습니다.');}
+ function flush(){var p=pending;pending=null;if(p&&p.book===book()&&p.theme===theme&&p.section===section)p.commit();}
+ function bind(e,key,fn,read){
+  var committedColor=e.type==='color'?e.value.toLowerCase():null;
+  e.oninput=function(){var value=read?read(e):e.value;if(value===null)return;if(committedColor!==null&&String(value).toLowerCase()===committedColor){if(pending&&pending.key===key)pending=null;renderCanvas();return;}pending={book:book(),theme:theme,section:section,key:key,color:e.type==='color',commit:function(){edit(function(pg,d){fn(pg,value,d);});if(committedColor!==null)committedColor=String(value).toLowerCase();}};if(editing){var pg=copy(page(false));fn(pg,value,copy(draft(false)||{}));renderCanvas(pg);}};
+  e.onchange=function(){if(committedColor!==null&&e.value.toLowerCase()===committedColor){if(pending&&pending.key===key)pending=null;return;}if(pending&&pending.key===key)flush();else if(!pending){var v=read?read(e):e.value;if(v!==null){edit(function(pg,d){fn(pg,v,d);});if(committedColor!==null)committedColor=String(v).toLowerCase();}}};
+ }
+ function number(id,label,value,a,b,fn,step){var e=input(id,'number');e.min=a;e.max=b;e.step=step||1;e.value=Number.isFinite(Number(value))?Math.round(Number(value)*100)/100:value;bind(e,id,fn,function(x){return x.value===''||!Number.isFinite(Number(x.value))?null:num(x.value,a,b,value);});return field(label,e);}
+ function swatch(id,label,value,fn){var e=input(id,'color');e.value=color(value);bind(e,id,fn);e.pbkCpRevert=function(){if(pending&&pending.key===id)pending=null;renderCanvas();};return field(label,e);}
+ function panel(label,id){var e=make('details','lbw-control-section');e.open=true;if(id)e.id=id;e.appendChild(make('summary','',label));return e;}
+ function top(){if($('lookbookWorkspace'))$('lookbookWorkspace').scrollTop=0;}
+ function reset(){photo=0;text='';part='';tool='photo';selected=null;advancedOpen=false;}
+ function chooseTheme(id){if(!themes.some(function(t){return t.id===id;}))return;flush();theme=id;section='cover';detail=true;editing=false;reset();render();top();}
+ function openEditor(id){flush();section=id;bridge.page(theme,section,true);detail=true;editing=true;reset();remember();render();top();}
+ function openThemes(){flush();editing=false;detail=false;render();top();}function openPages(){flush();editing=false;detail=true;render();top();}
+ function existingTheme(){var root=book().lookbookDrafts,d=root&&root.themes||{};if(d[theme])return theme;var id=Object.keys(d).find(function(k){return themes.some(function(t){return t.id===k;});});if(id)return id;var p=(book().pages||[]).find(function(q){return /^lookbook-/.test(q.layout||'');});return p&&(p.lookbookTheme||'classic');}
+ function refreshResume(){if($('lbwResume'))$('lbwResume').hidden=!existingTheme();}
+ function disableSaves(value){if($('lookbookWorkspace'))$('lookbookWorkspace').querySelectorAll('[data-action="save"],#lbwSavePage').forEach(function(e){e.disabled=value;});}
+ async function saveSection(id){if(saving)return;flush();saving=true;disableSaves(true);status(sectionName(id)+' PNG를 준비하고 있습니다.');try{var r=await bridge.savePage(theme,id);if(r&&r.ok)status(sectionName(id)+' PNG를 저장했습니다.');else if(r&&r.cancel)status('PNG 저장을 취소했습니다.');else status(r&&r.error||'PNG를 저장하지 못했습니다.',true);}catch(e){status(e.message||'PNG 저장 중 오류가 발생했습니다.',true);}finally{saving=false;disableSaves(false);remember();refreshResume();}}
+ function mount(){
+  if(mounted)return;mounted=true;var hub=make('section');hub.id='lookbookWorkspace';hub.setAttribute('aria-label','룩북 테마 작업실');var shell=make('div','lbw-shell');hub.appendChild(shell);
+  var heading=make('div','lbw-heading'),intro=make('div');intro.append(make('h1','','룩북'),make('p','lbw-muted','테마 안에서 한 장씩 편집하고, 필요한 페이지만 PNG로 저장하세요.'));heading.append(intro,button('lbwResume','작업 중인 룩북 계속 편집',function(){var id=existingTheme();if(id){theme=id;openEditor(section);}}));shell.appendChild(heading);
+  var browser=make('div');browser.id='lbwThemeBrowser';var h=make('div','lbw-grid-heading');h.append(make('h2','','룩북 테마'),make('span','lbw-muted',(themes.length-1)+'개 테마 · 기본 룩북'));browser.appendChild(h);var grid=make('div','lbw-theme-grid');grid.id='lbwThemeGrid';
+  themes.forEach(function(t){var c=button('','',function(){chooseTheme(t.id);},'lbwThemeCard');c.dataset.theme=t.id;c.setAttribute('aria-label',themeName(t.id)+' 테마 선택');c.appendChild(sheet(factory(t.id)[0],'lbw-theme-cover'));var caption=make('div','lbw-theme-caption');caption.append(make('strong','',themeName(t.id)),make('span','lbw-muted','메인 · 의상 · 헤어 · 안내 · 렌즈 · 표정'));c.appendChild(caption);grid.appendChild(c);});browser.appendChild(grid);shell.appendChild(browser);
+  var details=make('div');details.id='lbwDetail';var crumb=make('div','lbw-detail-heading');crumb.appendChild(button('lbwBack','← 전체 테마',openThemes));var title=make('h2');title.id='lbwDetailTitle';crumb.appendChild(title);var themeSelect=select('lbwTheme');themes.forEach(function(t){option(themeSelect,t.id,themeName(t.id));});themeSelect.setAttribute('aria-label','룩북 테마');themeSelect.onchange=function(){chooseTheme(themeSelect.value);};crumb.appendChild(themeSelect);details.appendChild(crumb);
+  var cards=make('div');cards.id='lbwPageBrowser';var meta=make('div','lbw-meta');[['lbwName','룰렛 / 룩북 이름','이름 직접 입력','name'],['lbwPeriod','진행 기간','예: 10. 20 – 10. 31','period']].forEach(function(r){var e=input(r[0]);e.maxLength=150;e.placeholder=r[2];e.onchange=function(){updateMeta(r[3],e.value);};meta.appendChild(field(r[1],e));});meta.appendChild(make('p','lbw-muted','사진과 문구는 페이지별로 편집할 수 있습니다. 각 테마의 작업은 따로 유지됩니다.'));cards.appendChild(meta);var review=make('div','lbw-preview-grid');review.id='lbwReview';review.setAttribute('aria-label','테마 페이지 미리보기');cards.appendChild(review);details.appendChild(cards);
+  var editor=make('section');editor.id='lbwEditor';editor.setAttribute('aria-label','룩북 한 페이지 편집');var toolbar=make('div','lbw-editor-toolbar');toolbar.appendChild(button('lbwPages','← 이 테마의 모든 페이지',openPages));var current=make('strong');current.id='lbwCurrentPage';toolbar.appendChild(current);toolbar.appendChild(button('lbwSavePage','이 페이지 PNG 저장',function(){saveSection(section);},'primary'));editor.appendChild(toolbar);
+  var tabs=make('nav','lbw-page-tabs');tabs.id='lbwPageTabs';tabs.setAttribute('aria-label','편집할 룩북 페이지');sections.forEach(function(s){var b=button('',s.name,function(){openEditor(s.id);});b.dataset.section=s.id;tabs.appendChild(b);});editor.appendChild(tabs);
+  var mouseBar=make('div','lbw-mouse-bar');mouseBar.id='lbwMouseBar';mouseBar.append(button('lbwQuickPhoto','＋ 사진 불러오기',function(){pickSelectedPhoto();},'primary'),button('lbwQuickText','＋ 글자 추가',addText));mouseBar.appendChild(make('span','lbw-muted','빈 사진 칸 클릭 · 끌어서 이동 · 모서리로 크기 조절'));editor.appendChild(mouseBar);
+  var layout=make('div','lbw-editor-layout'),stage=make('div','lbw-stage'),hint=make('p','lbw-muted');hint.id='lbwCanvasHint';stage.appendChild(hint);var canvas=make('div','lbw-canvas');canvas.id='lbwCanvas';canvas.setAttribute('aria-label','현재 룩북 페이지');var wrap=make('div','lbw-canvas-wrap');wrap.id='lbwCanvasWrap';wrap.appendChild(canvas);var overlay=make('div');overlay.id='lbwSelectionOverlay';overlay.setAttribute('aria-label','선택 요소 크기 조절');wrap.appendChild(overlay);stage.appendChild(wrap);stage.appendChild(make('p','lbw-export-size','PNG 저장 크기 2400 × 3200 px · 현재 페이지만 저장'));layout.appendChild(stage);var inspector=make('aside','lbw-inspector');inspector.id='lbwInspector';inspector.setAttribute('aria-label','룩북 페이지 편집 도구');layout.appendChild(inspector);editor.appendChild(layout);details.appendChild(editor);shell.appendChild(details);var s=make('p','lbw-status');s.id='lbwStatus';s.setAttribute('role','status');shell.appendChild(s);$('main').insertAdjacentElement('beforebegin',hub);canvas.addEventListener('pointerdown',canvasDown);overlay.addEventListener('pointerdown',handleDown);canvas.addEventListener('dblclick',canvasDouble);canvas.addEventListener('dragover',canvasDragOver);canvas.addEventListener('dragleave',function(ev){if(!canvas.contains(ev.relatedTarget))canvas.classList.remove('lbw-drop-over');});canvas.addEventListener('drop',canvasDrop);
+ }
+ function updateMeta(key,value){flush();value=String(value).trim().slice(0,150);bridge.change(theme,'cover',function(pg,d){var before=L.buildPages({theme:theme,name:d.name||'',period:d.period||'',sections:['cover']})[0];d[key]=value;var after=L.buildPages({theme:theme,name:d.name||'',period:d.period||'',sections:['cover']})[0];pg.texts=pg.texts||{};Object.keys(after.texts||{}).forEach(function(k){if((before.texts||{})[k]!==after.texts[k])pg.texts[k]=after.texts[k];});if(key==='name'&&after.tsizes&&after.tsizes.title1){pg.tsizes=pg.tsizes||{};pg.tsizes.title1=after.tsizes.title1;}});remember();renderCards();refreshResume();status('이 테마의 메인 포스터에 반영했습니다.');}
+ function render(){if(rendering)return;rendering=true;try{mount();visibility();refreshResume();$('lbwThemeBrowser').hidden=detail;$('lbwDetail').hidden=!detail;if(detail){$('lbwTheme').value=theme;$('lbwDetailTitle').textContent=themeName(theme);$('lbwPageBrowser').hidden=editing;$('lbwEditor').hidden=!editing;if(editing){$('lbwCurrentPage').textContent=sectionName(section);$('lbwPageTabs').querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b.dataset.section===section);b.setAttribute('aria-current',b.dataset.section===section?'page':'false');});renderCanvas();renderControls();}else{var d=draft(false)||{};$('lbwName').value=d.name||'';$('lbwPeriod').value=d.period||'';renderCards();}}remember();disableSaves(saving);}finally{rendering=false;}}
+ function renderCards(){if(!$('lbwReview'))return;var root=$('lbwReview');root.replaceChildren();pages(theme).forEach(function(pg){var id=pg.lookbookSection,c=make('article','lbw-preview-card');c.dataset.section=id;var pb=button('','',function(){openEditor(id);},'lbw-open-preview');pb.setAttribute('aria-label',sectionName(id)+' 편집');pb.appendChild(sheet(pg));c.appendChild(pb);var caption=make('div','lbw-preview-caption');caption.append(make('strong','',sectionName(id)),make('span','lbw-muted','사진 '+(pg.photos||[]).length+'장'));c.appendChild(caption);var actions=make('div','lbw-card-actions'),eb=button('','이 페이지 편집',function(){openEditor(id);},'primary'),sb=button('','PNG 저장',function(){saveSection(id);});eb.dataset.action='edit';sb.dataset.action='save';actions.append(eb,sb);c.appendChild(actions);root.appendChild(c);});disableSaves(saving);}
+ function renderCanvas(temp){
+  if(!editing||!$('lbwCanvas'))return;var pg=temp||page(false);if(!pg)return;
+  $('lbwCanvas').innerHTML=preview(pg,true);
+  $('lbwCanvasHint').textContent='사진·글자·장식을 바로 누르세요. 끌어서 이동하고, 테두리의 점을 잡아 크기를 바꿀 수 있습니다.';
+  mark(pg);var canvas=$('lbwCanvas');canvas.querySelectorAll('img').forEach(function(im){im.addEventListener('load',function(){if(!drag)mark();},{once:true});});
+ }
+ function selectionNode(sel){
+  sel=sel||selected;var c=$('lbwCanvas');if(!sel||!c)return null;
+  if(sel.kind==='photo')return photoNode(sel.index);
+  if(sel.kind==='extra')return c.querySelector('[data-ti="'+sel.index+'"]');
+  if(sel.part)return Array.from(c.querySelectorAll('[data-lbs-part]')).find(function(e){return e.dataset.lbsPart===sel.part;})||null;
+  if(sel.path!=null)return Array.from(c.querySelectorAll('[data-elp]')).find(function(e){return e.dataset.elp===sel.path;})||null;
+  if(sel.field)return Array.from(c.querySelectorAll('[data-lbm-field]')).find(function(e){return e.dataset.lbmField===sel.field;})||null;
+  return null;
+ }
+ function rectOf(r){return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height,cx:(r.left+r.right)/2,cy:(r.top+r.bottom)/2};}
+ function intersect(a,b){var l=Math.max(a.left,b.left),t=Math.max(a.top,b.top),r=Math.min(a.right,b.right),z=Math.min(a.bottom,b.bottom);if(r-l<2||z-t<2)return null;return rectOf({left:l,top:t,right:r,bottom:z,width:r-l,height:z-t});}
+ function selectionRect(sel){
+  var node=selectionNode(sel),canvas=$('lbwCanvas');if(!node||!canvas)return null;
+  var cr=canvas.getBoundingClientRect(),r=rectOf(node.getBoundingClientRect());
+  if(sel.kind==='photo'){var pr=node.parentElement.getBoundingClientRect();r=intersect(r,pr)||rectOf(pr);}
+  return intersect(r,cr);
+ }
+ function controlRect(sel){var r=selectionRect(sel);if(!r)return null;var w=Math.max(44,r.width),h=Math.max(32,r.height);return rectOf({left:r.cx-w/2,top:r.cy-h/2,right:r.cx+w/2,bottom:r.cy+h/2,width:w,height:h});}
+ function labelOf(sel){if(!sel)return '페이지에서 편집할 항목을 눌러주세요';if(sel.kind==='photo')return '사진 '+(sel.index+1);if(sel.kind==='text'){var f=fields(page(false)).find(function(f){return f.key===sel.field;});return f?f.label:'글자';}if(sel.kind==='extra')return '추가 글자 '+(sel.index+1);var list=parts(page(false)),p=list.find(function(p){return p.key===(sel.part||sel.path);});return p?p.label:'장식';}
+ function mark(pg){
+  var overlay=$('lbwSelectionOverlay');if(!overlay)return;overlay.replaceChildren();if(!selected||!editing)return;
+  var node=selectionNode(selected),r=controlRect(selected),cr=$('lbwCanvas').getBoundingClientRect();if(!node||!r)return;
+  var box=make('div','lbw-selection-box');box.id='lbwSelectionBox';box.dataset.kind=selected.kind;box.style.cssText='left:'+(r.left-cr.left)+'px;top:'+(r.top-cr.top)+'px;width:'+r.width+'px;height:'+r.height+'px';
+  var label=make('span','lbw-selection-label',labelOf(selected));label.id='lbwSelectionLabel';box.appendChild(label);
+  var isEmpty=selected.kind==='photo'&&!((pg||page(false)).photos[selected.index]||{}).id;
+  if(!isEmpty){[['nw',0,0,'왼쪽 위'],['n',50,0,'위'],['ne',100,0,'오른쪽 위'],['e',100,50,'오른쪽'],['se',100,100,'오른쪽 아래'],['s',50,100,'아래'],['sw',0,100,'왼쪽 아래'],['w',0,50,'왼쪽']].forEach(function(h){var e=make('button','lbw-handle');e.type='button';e.dataset.handle=h[0];e.setAttribute('aria-label',h[3]+' 크기 조절');e.style.left=h[1]+'%';e.style.top=h[2]+'%';box.appendChild(e);});var line=make('span','lbw-rotate-line');box.appendChild(line);var rotate=make('button','lbw-handle lbw-rotate','↻');rotate.type='button';rotate.dataset.handle='rotate';rotate.setAttribute('aria-label','회전');box.appendChild(rotate);}
+  overlay.appendChild(box);
+ }
+ function selectItem(sel){selected=sel;advancedOpen=false;if(sel){if(sel.kind==='photo'){tool='photo';photo=sel.index;}else if(sel.kind==='text'||sel.kind==='extra'){tool='text';text=sel.kind==='extra'?'@'+sel.index:sel.field;}else{tool='part';part=sel.part||sel.path;}}renderControls();mark();}
+ function renderControls(){
+  var pg=page(false),box=$('lbwInspector');if(!pg||!box)return;box.replaceChildren();
+  var heading=make('div','lbw-context-heading');heading.append(make('strong','',labelOf(selected)));box.appendChild(heading);
+  if(!selected){box.appendChild(make('p','lbw-mouse-help','사진 칸을 누르면 불러오기 창이 열립니다. 사진이나 문구를 선택하면 크기 조절 테두리가 나타납니다.'));var tips=make('div','lbw-gesture-guide');tips.innerHTML='<span>↔ 끌어서 이동</span><span>□ 모서리로 크기</span><span>↻ 위쪽 점으로 회전</span>';box.appendChild(tips);}
+  var advanced=panel('상세 설정','lbwAdvanced');advanced.open=advancedOpen;advanced.ontoggle=function(){advancedOpen=advanced.open;};
+  if(selected){
+   if(tool==='photo'){
+    var actions=make('div','lbw-buttons');actions.append(button('lbwChangeSelectedPhoto','사진 교체',pickSelectedPhoto,'primary'),button('lbwDeleteSelected','사진 비우기',deleteSelected));box.appendChild(actions);
+    var fits=make('div','lbw-buttons');fits.append(button('lbwFitSelected','전체 보이기',function(){edit(function(p){fit(p,photo,'contain');},true);}),button('lbwFillSelected','칸 채우기',function(){edit(function(p){fit(p,photo,'cover');},true);}));box.appendChild(fits);box.appendChild(make('p','lbw-mouse-help','사진을 끌어 위치를 바꾸세요. 모서리를 잡으면 비율을 유지하며 커집니다. 사진을 두 번 누르면 교체할 수 있습니다.'));photoControls(pg,advanced);
+   }else if(tool==='text'){
+    var textBox=make('div');textControls(pg,textBox);
+    Array.from(textBox.children).forEach(function(child){if(child.querySelector('#lbwText')||child.querySelector('#lbwTextFont'))box.appendChild(child);else if(child.querySelector('#lbwTextColor')){var colorField=child.querySelector('#lbwTextColor').closest('label');box.appendChild(colorField);advanced.appendChild(child);}else advanced.appendChild(child);});
+    box.appendChild(make('p','lbw-mouse-help','글자를 끌어서 이동하고 모서리로 크기를 바꿀 수 있습니다. 페이지의 글자를 두 번 누르면 내용을 바로 수정합니다.'));
+   }else{box.appendChild(make('p','lbw-mouse-help','선택한 틀·장식을 끌어서 이동하세요. 모서리는 크기, 변의 가운데 점은 가로·세로 길이를 조절합니다.'));box.appendChild(button('lbwDeleteSelected','선택 요소 숨기기',deleteSelected));partControls(pg,advanced);}
+  }else{var picker=select('lbwObjectList');option(picker,'','숨긴 항목 / 목록에서 선택');(pg.photos||[]).forEach(function(x,i){option(picker,'photo:'+i,'사진 '+(i+1));});fields(pg).forEach(function(f){option(picker,'text:'+f.key,f.label);});parts(pg).forEach(function(x){option(picker,'part:'+x.key,x.label);});picker.onchange=function(){var value=picker.value,at=value.indexOf(':');if(at<0)return;var kind=value.slice(0,at),key=value.slice(at+1);if(kind==='photo')selectItem({kind:'photo',index:Number(key)});else if(kind==='text')selectItem(describeField(key));else selectItem({kind:'part',part:studio(pg)?key:null,path:studio(pg)?null:key});};advanced.appendChild(field('항목 목록',picker));}
+  box.appendChild(advanced);paletteControls(pg,box);if($('lbwColors'))$('lbwColors').open=false;
+ }
+ function describeField(key,node){
+  var pg=page(false);if(key[0]==='@')return {kind:'extra',index:Number(key.slice(1)),field:key};
+  var partMeta=studio(pg)?parts(pg).find(function(p){return p.field===key;}):null;
+  if(partMeta)return {kind:'text',field:key,part:partMeta.key};
+  if(!node)node=Array.from($('lbwCanvas').querySelectorAll('[data-lbm-field]')).find(function(e){return e.dataset.lbmField===key;});
+  var target=node;
+  if(target&&/^(SPAN|EM|STRONG|B|I)$/.test(target.tagName)&&target.parentElement&&target.parentElement.hasAttribute('data-elp')&&target.parentElement.querySelectorAll('[data-lbm-field]').length<=1)target=target.parentElement;
+  return {kind:'text',field:key,path:target&&target.getAttribute('data-elp')};
+ }
+ function addText(){edit(function(p){p.txts=p.txts||[];if(p.txts.length>=12){status('추가 글자는 12개까지 넣을 수 있습니다.',true);return;}p.txts.push({t:'새 문구',x:50,y:50,sc:4,rot:0,al:'c'});selected={kind:'extra',index:p.txts.length-1};tool='text';text='@'+selected.index;},true);focusText();}
+ function focusText(){var e=$('lbwText');if(e){e.focus({preventScroll:true});e.select();}}
+ async function pickSelectedPhoto(){
+  if(uploading)return;flush();var pg=page(false),slot=selected&&selected.kind==='photo'?selected.index:(pg.photos||[]).findIndex(function(p){return !p||!p.id;});if(slot<0)slot=0;
+  if(!(pg.photos||[]).length)return;var t=theme,se=section;uploading=true;
+  try{var ok=await bridge.pickPhoto(t,se,slot);if(ok&&t===theme&&se===section){selected={kind:'photo',index:slot};tool='photo';photo=slot;remember();renderCanvas();renderControls();status('사진을 넣었습니다. 테두리의 점을 잡아 크기를 바꿔보세요.');}}
+  catch(e){status(e.message||'사진을 불러오지 못했습니다.',true);}finally{uploading=false;}
+ }
+ function deleteSelected(){if(!selected)return;var sel=copy(selected);edit(function(p){if(sel.kind==='photo')p.photos[sel.index]={ox:50,oy:50};else if(sel.kind==='extra'){p.txts.splice(sel.index,1);['tfonts','tsizes','tcolors','tfx'].forEach(function(k){if(!p[k])return;for(var i=sel.index;i<12;i++){if(own(p[k],'@'+(i+1)))p[k]['@'+i]=p[k]['@'+(i+1)];else delete p[k]['@'+i];}});selected=null;}else if(sel.kind==='text'){p.texts=p.texts||{};p.texts[sel.field]='';}else patchPart(p,sel.part||sel.path,{hide:true});},true);}
+ function photoNode(i){var a=$('lbwCanvas').querySelectorAll('[data-pi="'+i+'"]');return a.length?a[a.length-1]:null;}
+ function fit(pg,index,mode){var p=pg.photos[index];if(!p||!p.id)return;var img=photoNode(index),slot=img&&img.parentElement,root=$('lbwCanvas').querySelector('.sheet'),iw=p.iw||img&&img.naturalWidth,ih=p.ih||img&&img.naturalHeight;if(!iw||!ih||!slot||!root||!root.clientWidth)return;var nw=iw/(B.PAGE_W||1200)*root.clientWidth;p.iw=iw;p.ih=ih;p.free=true;p.sc=num((mode==='contain'?Math.min:Math.max)(slot.clientWidth/nw,slot.clientHeight/(nw*ih/iw)),.05,8,1);p.px=0;p.py=0;p.rot=0;delete p.af;}
+ function toFree(pg,index){
+  var p=pg.photos[index];if(!p||!p.id||p.free)return;
+  var img=photoNode(index),slot=img&&img.parentElement,root=$('lbwCanvas').querySelector('.sheet');
+  var ox=num(p.ox,0,100,50),oy=num(p.oy,0,100,30);
+  /* During live numeric preview this DOM image may already be phFree although
+     the committed model still uses native cropping. Read the original theme
+     rule, not the free-placement rule introduced by our temporary preview. */
+  var wasFree=!!(img&&img.classList.contains('phFree')),mode='cover';
+  try{if(wasFree)img.classList.remove('phFree');mode=img&&getComputedStyle(img).objectFit==='contain'?'contain':'cover';}
+  finally{if(wasFree)img.classList.add('phFree');}
+  fit(pg,index,mode);
+  /* Preserve object-position when entering free placement. Explicit fit buttons
+     center by design; the first drag/size adjustment must keep the current crop. */
+  if(p.free&&slot&&root&&root.clientWidth&&p.iw&&p.ih){
+   var rw=p.iw/(B.PAGE_W||1200)*root.clientWidth*p.sc,rh=rw*p.ih/p.iw;
+   p.px=num((slot.clientWidth-rw)*(ox/100-.5)/root.clientWidth*100,-300,300,0);
+   p.py=num((slot.clientHeight-rh)*(oy/100-.5)/root.clientWidth*100,-300,300,0);
+  }
+ }
+ function syncPhotoInputs(){
+  var pg=page(false);if(!pg||(pg.photos[photo]||{}).id==null)return;
+  var fitted=copy(pg);toFree(fitted,photo);var p=fitted.photos[photo];
+  [['lbwPhotoScale',(p.sc||1)*100],['lbwPhotoX',p.px||0],['lbwPhotoY',p.py||0],['lbwPhotoRotate',p.rot||0]].forEach(function(r){var e=$(r[0]);if(e)e.value=Math.round(r[1]*100)/100;});
+ }
+ function photoControls(pg,box){
+  var def=B.byId(pg.layout)||{},photos=pg.photos||[],s=select('lbwPhotoSelect');photo=Math.max(0,Math.min(photos.length-1,photo));photos.forEach(function(p,i){option(s,String(i),def.ph&&def.ph[i]&&def.ph[i].n||'사진 '+(i+1));});s.value=String(photo);s.onchange=function(){flush();photo=Number(s.value);selected={kind:'photo',index:photo};renderControls();mark();};box.appendChild(field('편집할 사진',s));
+  var row=make('div','lbw-buttons');row.append(button('lbwPickPhoto','사진 불러오기 / 교체',async function(){var t=theme,se=section;try{var ok=await bridge.pickPhoto(t,se,photo);if(ok&&theme===t&&section===se){remember();renderCanvas();renderControls();status('사진을 넣었습니다. 크기와 위치를 조절해 보세요.');}}catch(e){status(e.message,true);}},'primary'),button('lbwRemovePhoto','사진 비우기',function(){edit(function(p){p.photos[photo]={ox:50,oy:50};},true);}));box.appendChild(row);
+  var p=photos[photo]||{},controls=make('div');controls.id='lbwPhotoControls';controls.hidden=!p.id;box.appendChild(controls);if(!p.id){box.appendChild(make('p','lbw-muted','사진을 불러온 뒤 크기·위치·회전을 조절할 수 있습니다.'));return;}
+  var fits=make('div','lbw-buttons');fits.append(button('lbwPhotoContain','사진 전체 보이기',function(){edit(function(p){fit(p,photo,'contain');},true);}),button('lbwPhotoCover','칸 꽉 채우기',function(){edit(function(p){fit(p,photo,'cover');},true);}));controls.appendChild(fits);var grid=make('div','lbw-number-grid');
+  var fitted=copy(pg);toFree(fitted,photo);var displayedScale=Math.round(((fitted.photos[photo]||{}).sc||1)*10000)/100;
+  [['lbwPhotoScale','크기 %','sc',displayedScale,5,800,.01,100],['lbwPhotoX','가로 이동 %','px',fitted.photos[photo].px||0,-300,300,.5,1],['lbwPhotoY','세로 이동 %','py',fitted.photos[photo].py||0,-300,300,.5,1],['lbwPhotoRotate','회전 °','rot',p.rot||0,-180,180,1,1]].forEach(function(r){grid.appendChild(number(r[0],r[1],r[3],r[4],r[5],function(q,v){toFree(q,photo);q.photos[photo][r[2]]=v/r[7];delete q.photos[photo].af;},r[6]));});controls.appendChild(grid);
+  var crop=panel('사진 자르기 위치'),cg=make('div','lbw-number-grid');[['lbwPhotoCropX','가로 초점 %','ox'],['lbwPhotoCropY','세로 초점 %','oy']].forEach(function(r){cg.appendChild(number(r[0],r[1],own(p,r[2])?p[r[2]]:50,0,100,function(q,v){q.photos[photo].free=false;q.photos[photo][r[2]]=v;}));});crop.append(cg,make('p','lbw-muted','자르기 위치를 조절하면 사진을 칸에 맞춰 표시합니다.'));controls.appendChild(crop);
+  var tone=panel('사진 밝기·색감'),tg=make('div','lbw-number-grid');[['fab','밝기 %'],['fac','대비 %'],['fas','채도 %']].forEach(function(r){tg.appendChild(number('lbwPhoto-'+r[0],r[1],p[r[0]]||100,30,300,function(q,v){q.photos[photo][r[0]]=v;}));});tone.appendChild(tg);controls.appendChild(tone);
+ }
+ function fields(pg){var def=B.byId(pg.layout)||{};return(def.tx||[]).map(function(f){return{key:f.k,label:f.n||f.k,value:own(pg.texts,f.k)?pg.texts[f.k]:f.d||''};}).concat((pg.txts||[]).map(function(t,i){return{key:'@'+i,label:'추가 글자 '+(i+1),value:t&&t.t||'',extra:i};}));}
+ function textControls(pg,box){
+  var fs=fields(pg);if(!fs.some(function(f){return f.key===text;}))text=fs.length?fs[0].key:'';var s=select('lbwTextSelect');fs.forEach(function(f){option(s,f.key,f.label);});s.value=text;s.onchange=function(){flush();text=s.value;selected=describeField(text);renderControls();mark();};box.appendChild(field('편집할 문구',s));var meta=fs.find(function(f){return f.key===text;});
+  if(meta){var tx=make('textarea');tx.id='lbwText';tx.rows=4;tx.maxLength=4000;tx.value=meta.value;bind(tx,'lbwText',function(p,v){if(text[0]==='@'){var i=Number(text.slice(1));if(p.txts&&p.txts[i])p.txts[i].t=v;}else{p.texts=p.texts||{};p.texts[text]=v;}});box.appendChild(field('문구 내용',tx));
+   var fonts=bridge.fonts?bridge.fonts():[],font=select('lbwTextFont');option(font,'','테마 기본 글꼴');fonts.forEach(function(f,i){option(font,String(i),f.label);});var current=pg.tfonts&&pg.tfonts[text],index=current?fonts.findIndex(function(f){return JSON.stringify(f.spec)===JSON.stringify(current);}):-1;if(current&&index<0){option(font,'current','현재 설정한 글꼴');font.value='current';}else font.value=index<0?'':String(index);font.onchange=function(){flush();if(font.value==='current')return;var spec=font.value===''?null:fonts[Number(font.value)].spec;edit(function(p){p.tfonts=p.tfonts||{};if(spec)p.tfonts[text]=copy(spec);else delete p.tfonts[text];});if(spec&&bridge.fontReady)Promise.resolve(bridge.fontReady(spec)).then(function(){if(editing)renderCanvas();});};box.appendChild(field('글꼴',font));
+   var grid=make('div','lbw-number-grid');grid.append(number('lbwTextSize','글자 크기 %',(pg.tsizes||{})[text]||100,1,500,function(p,v){p.tsizes=p.tsizes||{};p.tsizes[text]=v;}),swatch('lbwTextColor','글자 색',(pg.tcolors||{})[text]||'#333333',function(p,v){p.tcolors=p.tcolors||{};p.tcolors[text]=v;}));box.appendChild(grid);box.appendChild(button('lbwTextResetStyle','이 문구 글꼴·크기·색 기본값',function(){edit(function(p){['tfonts','tsizes','tcolors'].forEach(function(k){if(p[k])delete p[k][text];});},true);}));
+   if(meta.extra!==undefined){var extra=pg.txts[meta.extra]||{},eg=make('div','lbw-number-grid');[['lbwTextX','가로 위치 %','x',50,-60,160],['lbwTextY','세로 위치 %','y',50,-60,160],['lbwTextRotate','회전 °','rot',0,-180,180],['lbwTextWidth','글상자 폭 %','w',0,0,100]].forEach(function(r){eg.appendChild(number(r[0],r[1],own(extra,r[2])?extra[r[2]]:r[3],r[4],r[5],function(p,v){p.txts[meta.extra][r[2]]=v;}));});box.appendChild(eg);box.appendChild(button('lbwRemoveText','이 추가 글자 삭제',function(){edit(function(p){var old=meta.extra;p.txts.splice(old,1);['tfonts','tsizes','tcolors','tfx'].forEach(function(k){if(!p[k])return;for(var i=old;i<12;i++){if(own(p[k],'@'+(i+1)))p[k]['@'+i]=p[k]['@'+(i+1)];else delete p[k]['@'+i];}});text='';},true);}));}
+  }
+  var add=button('lbwAddText','＋ 글자 추가',function(){edit(function(p){p.txts=p.txts||[];if(p.txts.length>=12)return;p.txts.push({t:'새 문구',x:50,y:50,sc:4,rot:0,al:'c'});text='@'+(p.txts.length-1);},true);});add.disabled=(pg.txts||[]).length>=12;box.appendChild(add);
+ }
+ function parts(pg){if(studio(pg)&&window.PBKLookbookStudioEditor)return PBKLookbookStudioEditor.parts(pg);if(partCache[pg.layout])return partCache[pg.layout];var tmp=make('div');tmp.innerHTML=preview(B.newPage(pg.layout),true);var list=[];tmp.querySelectorAll('[data-elp]').forEach(function(e){if(list.length>=150||e.closest('svg')&&e.tagName.toLowerCase()!=='svg'||e.hasAttribute('data-cf')||e.tagName==='BR'||e.tagName==='SPAN'&&!e.className)return;var label=(e.getAttribute('data-lbs-label')||e.textContent||'').trim().replace(/\s+/g,' ').slice(0,30);if(!label)label=(typeof e.className==='string'?e.className:'').split(' ')[0]||'요소';list.push({key:e.dataset.elp,label:label+' · '+(list.length+1),kind:'native',z:0});});partCache[pg.layout]=list;return list;}
+ function settings(pg){return PBKLookbookStudioEditor.sanitize(pg.lookbookStudioSettings);}
+ function patchPart(pg,key,patch){if(studio(pg)){var s=settings(pg);s.parts[key]=Object.assign({},s.parts[key]||{},patch);pg.lookbookStudioSettings=PBKLookbookStudioEditor.sanitize(s);}else{pg.els=pg.els||{};pg.els[key]=Object.assign({},pg.els[key]||{},patch);}}
+ function partControls(pg,box){
+  var ps=parts(pg),is=studio(pg);if(!ps.some(function(p){return p.key===part;}))part=ps.length?ps[0].key:'';var state=is?settings(pg).parts:pg.els||{},s=select('lbwPartSelect');ps.forEach(function(p){option(s,p.key,(state[p.key]&&state[p.key].hide?'[숨김] ':'')+p.label);});s.value=part;s.onchange=function(){flush();part=s.value;selected={kind:'part',part:studio(page(false))?part:null,path:studio(page(false))?null:part};renderControls();mark();};box.appendChild(field('편집할 틀·장식',s));if(!part){box.appendChild(make('p','lbw-muted','편집할 요소가 없습니다.'));return;}
+  var p=state[part]||{},meta=ps.find(function(p){return p.key===part;})||{},grid=make('div','lbw-number-grid');[['dx',is?'가로 이동':'가로 이동 %'],['dy',is?'세로 이동':'세로 이동 %'],['sx','가로 크기 %'],['sy','세로 크기 %'],['rot','회전 °'],['opacity','불투명도 %'],['z','앞뒤 순서'],['borderWidth','테두리 두께'],['radius','모서리 둥글기']].forEach(function(row){var k=row[0];if(!is&&['dx','dy','sx','sy','rot'].indexOf(k)<0)return;var r=is?ranges[k]:(k==='dx'||k==='dy'?[-300,300,0]:ranges[k]);grid.appendChild(number('lbwPart-'+k,row[1],own(p,k)?p[k]:k==='z'?meta.z:r[2],r[0],r[1],function(pg,v){var patch={};patch[k]=v;patchPart(pg,part,patch);}));});box.appendChild(grid);
+  if(is){var colors=make('div','lbw-number-grid');[['color','요소 색'],['borderColor','테두리 색']].forEach(function(row){colors.appendChild(swatch('lbwPart-'+row[0],row[1],p[row[0]]||'#333333',function(pg,v){var patch={};patch[row[0]]=v;patchPart(pg,part,patch);}));});box.appendChild(colors);}
+  var hidden=input('lbwPart-hide','checkbox');hidden.checked=!!p.hide;hidden.onchange=function(){var v=hidden.checked;edit(function(pg){patchPart(pg,part,{hide:v});},true);};box.appendChild(field('선택 요소 숨기기',hidden));box.appendChild(button('lbwPartReset','선택 요소 설정 복원',function(){edit(function(pg){if(studio(pg)){var s=settings(pg);delete s.parts[part];pg.lookbookStudioSettings=s;}else if(pg.els)delete pg.els[part];},true);}));box.appendChild(make('p','lbw-muted',is?'이동·테두리는 900 × 1200 기준 값입니다. 선택한 요소를 끌어서 이동할 수 있습니다.':'목록에서 숨긴 요소도 다시 선택하여 표시할 수 있습니다.'));
+ }
+ function paletteControls(pg,box){var colors=panel('이 페이지 색상','lbwColors'),grid=make('div','lbw-number-grid');if(studio(pg)){var palette=PBKLookbookStudioEditor.palette(pg);Object.keys(paletteLabels).forEach(function(k){grid.appendChild(swatch('lbwPalette-'+k,paletteLabels[k],palette[k],function(p,v){var s=settings(p);s.palette[k]=v;p.lookbookStudioSettings=s;if(k==='paper'){p.bg=p.bg||{};p.bg.c=v;}}));});colors.appendChild(grid);colors.appendChild(button('lbwPaletteAll','같은 테마 모든 페이지에 적용',function(){var selected=PBKLookbookStudioEditor.palette(page(false));edit(function(p,d){d.pages.forEach(function(q){var s=settings(q);s.palette=Object.assign({},selected);q.lookbookStudioSettings=s;q.bg=q.bg||{};q.bg.c=selected.paper;});},true);}));colors.appendChild(button('lbwPaletteReset','이 페이지 색상 기본값',function(){edit(function(p){var s=settings(p);s.palette={};p.lookbookStudioSettings=s;if(p.bg){delete p.bg.c;if(!Object.keys(p.bg).length)delete p.bg;}},true);}));}else{grid.appendChild(swatch('lbwPalette-paper','페이지 바탕',pg.bg&&pg.bg.c||'#ffffff',function(p,v){p.bg=p.bg||{};p.bg.c=v;}));colors.appendChild(grid);colors.appendChild(button('lbwPaletteReset','바탕 기본값',function(){edit(function(p){if(p.bg){delete p.bg.c;if(!Object.keys(p.bg).length)delete p.bg;}},true);}));}box.appendChild(colors);}
+ function hitItem(target,x,y){
+  var c=$('lbwCanvas'),pg=page(false);if(!target||!c.contains(target))return null;
+  var extra=target.closest('[data-ti]');if(extra)return {kind:'extra',index:Number(extra.dataset.ti)};
+  var pi=target.closest('[data-pi]');if(pi)return {kind:'photo',index:Number(pi.dataset.pi)};
+  var frame=target.closest('[data-lbs-photo]');if(frame)return {kind:'photo',index:Number(frame.dataset.lbsPhoto)};
+  var textNode=target.closest('[data-lbs-field]');if(textNode)return describeField(textNode.dataset.lbsField,textNode);
+  var field=target.closest('[data-lbm-field]');if(field)return describeField(field.dataset.lbmField,field);
+  if(B.lookbookFieldAtPoint){var found=B.lookbookFieldAtPoint(c,x,y);if(found)return describeField(found.field,found.node);}
+  var partNode=target.closest(studio(pg)?'[data-lbs-part]':'[data-elp]');
+  if(partNode){if(!studio(pg)){if(partNode.closest('svg'))partNode=partNode.closest('svg');var r=partNode.getBoundingClientRect(),cr=c.getBoundingClientRect();if(r.width*r.height>cr.width*cr.height*.82&&partNode.querySelector('[data-pi],[data-lbm-field]'))return null;}
+   return {kind:'part',part:studio(pg)?partNode.dataset.lbsPart:null,path:studio(pg)?null:partNode.dataset.elp};}
+  return null;
+ }
+ function canvasDown(ev){
+  if(ev.button!==0||!editing||uploading||saving)return;flush();var sel=hitItem(ev.target,ev.clientX,ev.clientY);selectItem(sel);if(!sel)return;
+  ev.preventDefault();ev.stopPropagation();startGesture(ev,'move',sel,$('lbwCanvas'));
+ }
+ function handleDown(ev){var h=ev.target.closest('[data-handle]');if(!h||ev.button!==0||!selected)return;ev.preventDefault();ev.stopPropagation();flush();startGesture(ev,h.dataset.handle,selected,$('lbwSelectionOverlay'));}
+ function mul(a,b){return {a:a.a*b.a+a.c*b.b,b:a.b*b.a+a.d*b.b,c:a.a*b.c+a.c*b.d,d:a.b*b.c+a.d*b.d};}
+ function linear(node){var m={a:1,b:0,c:0,d:1},stop=$('lbwCanvas');for(var e=node;e&&e!==stop;e=e.parentElement){var cs=getComputedStyle(e),tr={a:1,b:0,c:0,d:1};try{var matrix=new DOMMatrix(cs.transform==='none'?undefined:cs.transform);tr={a:matrix.a,b:matrix.b,c:matrix.c,d:matrix.d};}catch(_){ }var angle=parseFloat(cs.rotate)||0,rr=angle*Math.PI/180,sc=String(cs.scale||'none').split(/\s+/),sx=parseFloat(sc[0]),sy=parseFloat(sc[1]);if(!Number.isFinite(sx))sx=1;if(!Number.isFinite(sy))sy=sx;var ind={a:Math.cos(rr)*sx,b:Math.sin(rr)*sx,c:-Math.sin(rr)*sy,d:Math.cos(rr)*sy};m=mul(mul(ind,tr),m);}return m;}
+ function inverseVector(m,x,y){var d=m.a*m.d-m.b*m.c;if(Math.abs(d)<1e-8)return{x:x,y:y};return{x:(m.d*x-m.c*y)/d,y:(-m.b*x+m.a*y)/d};}
+ function currentTransform(pg,sel){if(sel.kind==='photo')return pg.photos[sel.index]||{};if(sel.kind==='extra')return (pg.txts||[])[sel.index]||{};return sel.part?settings(pg).parts[sel.part]||{}:(pg.els||{})[sel.path]||{};}
+ function startGesture(ev,handle,sel,capture){
+  var node=selectionNode(sel),r=controlRect(sel),root=$('lbwCanvas').querySelector('.sheet');if(!node||!r||!root)return;
+  var snapshot=copy(page(false)),empty=sel.kind==='photo'&&!((snapshot.photos||[])[sel.index]||{}).id;
+  if(sel.kind==='photo'&&!empty)toFree(snapshot,sel.index);
+  var cr=root.getBoundingClientRect(),matrix=linear(node.parentElement),nr=rectOf(node.getBoundingClientRect()),center={x:nr.cx,y:nr.cy};
+  if(sel.kind==='photo'&&!empty){var p=snapshot.photos[sel.index],pr=node.parentElement.getBoundingClientRect(),vx=(p.px||0)*cr.width/100,vy=(p.py||0)*cr.width/100;center={x:(pr.left+pr.right)/2+matrix.a*vx+matrix.c*vy,y:(pr.top+pr.bottom)/2+matrix.b*vx+matrix.d*vy};}
+  var anchor={x:handle.indexOf('w')>=0?r.right:handle.indexOf('e')>=0?r.left:r.cx,y:handle.indexOf('n')>=0?r.bottom:handle.indexOf('s')>=0?r.top:r.cy};
+  drag={book:book(),theme:theme,section:section,sel:copy(sel),handle:handle,copy:snapshot,x:ev.clientX,y:ev.clientY,width:cr.width,height:cr.height,pointer:ev.pointerId,moved:false,result:null,r:r,center:center,anchor:anchor,matrix:matrix,empty:empty,capture:capture,angle:Math.atan2(ev.clientY-center.y,ev.clientX-center.x)};
+ }
+ function setTransform(pg,sel,patch){if(sel.kind==='photo'){Object.assign(pg.photos[sel.index],patch);delete pg.photos[sel.index].af;}else if(sel.kind==='extra')Object.assign(pg.txts[sel.index],patch);else patchPart(pg,sel.part||sel.path,patch);}
+ function gesturePatch(job,ev){
+  var sel=job.sel,p=currentTransform(job.copy,sel),dx=ev.clientX-job.x,dy=ev.clientY-job.y,local=inverseVector(job.matrix,dx,dy),scale=sel.part?900:100;
+  function translate(x,y){var v=inverseVector(job.matrix,x,y);if(sel.kind==='photo')return {px:num((p.px||0)+v.x/job.width*100,-300,300,0),py:num((p.py||0)+v.y/job.width*100,-300,300,0)};if(sel.kind==='extra')return {x:num((p.x==null?50:p.x)+v.x/job.width*100,-60,160,50),y:num((p.y==null?50:p.y)+v.y/job.height*100,-60,160,50)};return {dx:num((p.dx||0)+v.x/job.width*scale,sel.part?-1800:-300,sel.part?1800:300,0),dy:num((p.dy||0)+v.y/job.width*scale,sel.part?-2400:-300,sel.part?2400:300,0)};}
+  if(job.handle==='move')return translate(dx,dy);
+  if(job.handle==='rotate'){var delta=(Math.atan2(ev.clientY-job.center.y,ev.clientX-job.center.x)-job.angle)*180/Math.PI;var angle=(p.rot||0)+delta;if(ev.shiftKey)angle=Math.round(angle/15)*15;while(angle>180)angle-=360;while(angle< -180)angle+=360;return{rot:angle};}
+  var h=job.handle,fx=1,fy=1,hasX=/[we]/.test(h),hasY=/[ns]/.test(h),factor;
+  if(hasX)fx=num(1+dx*(h.indexOf('w')>=0?-1:1)/Math.max(10,job.r.width),.05,20,1);
+  if(hasY)fy=num(1+dy*(h.indexOf('n')>=0?-1:1)/Math.max(10,job.r.height),.05,20,1);
+  var uniform=sel.kind==='photo'||sel.kind==='extra'||hasX&&hasY&&!ev.altKey||ev.shiftKey;
+  if(uniform){factor=hasX&&hasY?(fx+fy)/2:hasX?fx:fy;if(sel.kind==='photo'){factor=num((p.sc||1)*factor,.05,8,p.sc||1)/(p.sc||1);}else if(sel.kind==='extra'){factor=num((p.sc||4)*factor,.5,40,p.sc||4)/(p.sc||4);}else{factor=Math.min(num((p.sx||100)*factor,5,400,100)/(p.sx||100),num((p.sy||100)*factor,5,400,100)/(p.sy||100));}fx=fy=factor;}
+  else{fx=num((p.sx||100)*fx,5,400,100)/(p.sx||100);fy=num((p.sy||100)*fy,5,400,100)/(p.sy||100);}
+  var nc={x:job.anchor.x+(job.center.x-job.anchor.x)*fx,y:job.anchor.y+(job.center.y-job.anchor.y)*fy},patch=translate(nc.x-job.center.x,nc.y-job.center.y);
+  if(sel.kind==='photo')patch.sc=(p.sc||1)*fx;else if(sel.kind==='extra')patch.sc=(p.sc||4)*fx;else{patch.sx=(p.sx||100)*fx;patch.sy=(p.sy||100)*fy;}
+  return patch;
+ }
+ function moveDrag(ev){
+  if(!drag||ev.pointerId!==drag.pointer)return;if(drag.book!==book()||drag.theme!==theme||drag.section!==section){endDrag(ev,true);return;}
+  var dx=ev.clientX-drag.x,dy=ev.clientY-drag.y;if(!drag.moved&&Math.abs(dx)+Math.abs(dy)<3)return;if(drag.empty){drag.moved=true;return;}
+  if(!drag.moved){try{drag.capture.setPointerCapture(ev.pointerId);}catch(_){ }}drag.moved=true;ev.preventDefault();var pg=copy(drag.copy),patch=gesturePatch(drag,ev);setTransform(pg,drag.sel,patch);drag.result=pg;renderCanvas(pg);
+ }
+ function endDrag(ev,cancel){
+  if(!drag||ev&&ev.pointerId!==drag.pointer)return;var job=drag;drag=null;try{job.capture.releasePointerCapture(job.pointer);}catch(_){ }
+  if(!cancel&&job.moved&&job.result&&job.book===book()&&job.theme===theme&&job.section===section){var transformed=currentTransform(job.result,job.sel);edit(function(pg){setTransform(pg,job.sel,copy(transformed));},true);}
+  else if(cancel)renderCanvas();else{mark();if(!job.moved&&job.empty&&job.book===book()&&job.theme===theme&&job.section===section)pickSelectedPhoto();}
+ }
+ function canvasDouble(ev){if(!editing)return;flush();var sel=hitItem(ev.target,ev.clientX,ev.clientY);if(!sel)return;selectItem(sel);if(sel.kind==='photo'){if((page(false).photos[sel.index]||{}).id)pickSelectedPhoto();}else if(sel.kind==='text'||sel.kind==='extra')focusText();}
+ function canvasDragOver(ev){if(!editing||!ev.dataTransfer)return;if(Array.from(ev.dataTransfer.types||[]).indexOf('Files')<0)return;ev.preventDefault();ev.dataTransfer.dropEffect='copy';$('lbwCanvas').classList.add('lbw-drop-over');}
+ async function canvasDrop(ev){
+  if(!editing||uploading||!ev.dataTransfer)return;ev.preventDefault();ev.stopPropagation();$('lbwCanvas').classList.remove('lbw-drop-over');flush();var sel=hitItem(ev.target,ev.clientX,ev.clientY),pg=page(false),slot=sel&&sel.kind==='photo'?sel.index:(pg.photos||[]).findIndex(function(p){return !p||!p.id;});if(slot<0)slot=selected&&selected.kind==='photo'?selected.index:0;var t=theme,se=section;uploading=true;
+  try{var ok=await bridge.dropPhotos(t,se,slot,Array.from(ev.dataTransfer.files));if(ok&&t===theme&&se===section){selected={kind:'photo',index:slot};tool='photo';photo=slot;remember();renderCanvas();renderControls();status('사진을 넣었습니다. 모서리를 잡아 크기를 바꿀 수 있습니다.');}}catch(e){status(e.message||'사진을 넣지 못했습니다.',true);}finally{uploading=false;}
+ }
+ document.addEventListener('pointermove',moveDrag,{passive:false});document.addEventListener('pointerup',function(ev){endDrag(ev,false);});document.addEventListener('pointercancel',function(ev){endDrag(ev,true);});window.addEventListener('blur',function(){if(!pending||!pending.color)flush();if(drag)endDrag(null,true);});
+ document.addEventListener('keydown',function(ev){if(!active||!editing)return;if(ev.key==='Escape'&&drag){ev.preventDefault();ev.stopImmediatePropagation();endDrag(null,true);return;}if(/^(INPUT|TEXTAREA|SELECT)$/.test((ev.target||{}).tagName))return;if(ev.key==='Escape'){selectItem(null);ev.preventDefault();}else if((ev.key==='Delete'||ev.key==='Backspace')&&selected){ev.preventDefault();ev.stopImmediatePropagation();deleteSelected();}},true);
+ window.addEventListener('resize',function(){if(editing)requestAnimationFrame(function(){mark();});});
+ function visibility(){var visible=active&&document.body.classList.contains('lookbookOn');document.body.classList.toggle('lookbookCatalog',visible);document.body.classList.toggle('lookbookDirectEditing',visible&&editing);document.body.classList.remove('lookbookEditing');if($('lookbookWorkspace'))$('lookbookWorkspace').setAttribute('aria-hidden',String(!visible));}
+ function onTab(which){if(which!=='lookbook'){flush();if(drag)endDrag(null,true);}active=which==='lookbook';if(active)render();else visibility();}
+ function sync(){if(!mounted)return;var b=book(),changed=b!==lastBook||summary()!==lastJSON;if(b!==lastBook){pending=null;if(drag)endDrag(null,true);lastBook=b;}if(changed&&active){if(editing&&!bridge.page(theme,section,false)){editing=false;detail=true;}render();}else{refreshResume();visibility();}}
+ function open(){flush();editing=false;detail=false;bridge.show();render();top();}function openPagePicker(){flush();var id=existingTheme();if(id)theme=id;detail=true;editing=false;bridge.show();render();top();}
+ document.addEventListener('click',function(ev){if(ev.target.closest&&ev.target.closest('#btnSave,#btnOpen,#btnNew,#modeTabs button'))flush();},true);
+ var tabs=$('modeTabs');if(tabs)tabs.addEventListener('click',function(ev){var e=ev.target.closest('button');if(e&&e.id!=='tabLookbook'){active=false;document.body.classList.remove('lookbookOn','lookbookCatalog','lookbookEditing','lookbookDirectEditing');if($('tabLookbook'))$('tabLookbook').classList.remove('on');visibility();}});
+ var css=make('style');css.id='pbkLookbookWorkspaceCss';css.textContent=`
+ #lookbookWorkspace{display:none}#lookbookWorkspace [hidden]{display:none!important}
+ body.lookbookOn:not(.sigOn):not(.motionOn) #lookbookWorkspace{display:block;flex:1;min-height:0;overflow:auto;background:#f5f3ec}
+ body.lookbookOn #main,body.lookbookOn #lookbookWorkbar{display:none!important}body.lookbookOn #top #palGroup,body.lookbookOn #top>.tgroup.right{display:none!important}
+ #lookbookWorkspace .lbw-shell{max-width:1440px;padding:24px 28px 30px;margin:0 auto;box-sizing:border-box}
+ #lookbookWorkspace .lbw-heading,#lookbookWorkspace .lbw-grid-heading,#lookbookWorkspace .lbw-detail-heading,#lookbookWorkspace .lbw-editor-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px}
+ #lookbookWorkspace .lbw-heading{margin-bottom:22px}#lookbookWorkspace h1{font-size:26px;margin:0 0 6px}#lookbookWorkspace h2{font-size:17px;margin:0}#lookbookWorkspace p{margin:0;line-height:1.65}
+ #lookbookWorkspace .lbw-muted{font-size:12px;color:#7b786d}#lookbookWorkspace .lbw-grid-heading{margin-bottom:13px}
+ #lookbookWorkspace .lbw-theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:18px}
+ #lookbookWorkspace .lbwThemeCard{display:block;text-align:left;min-width:0;overflow:hidden;padding:0;border:1px solid #d5d1c5;border-radius:10px;background:#fff;box-shadow:0 2px 9px #514b3f08}
+ #lookbookWorkspace .lbwThemeCard:hover{border-color:#63709c;box-shadow:0 4px 15px #414d7d20;transform:translateY(-2px)}
+ #lookbookWorkspace .lbw-sheet{position:relative;aspect-ratio:3/4;overflow:hidden;pointer-events:none;background:#fff;line-height:normal;text-align:left}
+ #lookbookWorkspace .lbw-sheet>.sheet,#lookbookWorkspace .lbw-canvas>.sheet{width:100%;height:100%;position:absolute;inset:0;line-height:normal;text-align:left}
+ #lookbookWorkspace .lbw-theme-cover{margin:10px 10px 0;box-shadow:0 1px 7px #514b3f16}#lookbookWorkspace .lbw-theme-caption{display:flex;flex-direction:column;gap:5px;padding:13px 12px 15px}#lookbookWorkspace .lbw-theme-caption strong{font-size:13px}
+ #lookbookWorkspace .lbw-detail-heading{justify-content:flex-start;margin-bottom:16px}#lookbookWorkspace #lbwTheme{margin-left:auto;max-width:260px}
+ #lookbookWorkspace .lbw-meta{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:20px;align-items:center;padding:17px 20px;margin-bottom:20px;background:#fffefa;border:1px solid #d7d3c7;border-radius:9px}
+ #lookbookWorkspace .lbw-field{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;margin-bottom:13px;min-width:0}#lookbookWorkspace .lbw-meta .lbw-field{margin-bottom:0}
+ #lookbookWorkspace .lbw-field input,#lookbookWorkspace .lbw-field select,#lookbookWorkspace .lbw-field textarea{width:100%;max-width:100%;box-sizing:border-box;font-weight:400;min-width:0}#lookbookWorkspace .lbw-field input[type=number]{height:34px;padding:6px 8px;border:1px solid #c8c3b7;border-radius:6px;background:#fff}
+ #lookbookWorkspace .lbw-field input[type=checkbox]{width:auto;align-self:flex-start}#lookbookWorkspace .lbw-field input[type=color]{height:34px;padding:3px;cursor:pointer}#lookbookWorkspace textarea{resize:vertical;font:inherit;line-height:1.6;padding:8px;border:1px solid #c8c3b7;border-radius:6px}
+ #lookbookWorkspace .lbw-preview-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;min-width:0}#lookbookWorkspace .lbw-preview-card{display:block;padding:10px;border:1px solid #d7d3c7;border-radius:9px;background:#fff;min-width:0}
+ #lookbookWorkspace .lbw-open-preview{width:100%;display:block;padding:0;border:0;border-radius:0;overflow:hidden;background:white}#lookbookWorkspace .lbw-preview-caption{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 3px 10px;font-size:13px}
+ #lookbookWorkspace .lbw-card-actions{display:flex;gap:8px}#lookbookWorkspace .lbw-card-actions button{flex:1;font-size:12px;padding:9px 5px}#lookbookWorkspace .primary{background:#424f80;border:1px solid #424f80;color:white}#lookbookWorkspace button:disabled{opacity:.5;cursor:default}
+ #lookbookWorkspace .lbw-editor-toolbar{padding:13px 15px;background:#fffefa;border:1px solid #d7d3c7;border-radius:9px}#lookbookWorkspace #lbwSavePage{margin-left:auto}
+ #lookbookWorkspace .lbw-page-tabs{display:flex;gap:7px;margin:14px 0 19px;flex-wrap:wrap}#lookbookWorkspace .lbw-page-tabs button{flex:1;min-width:95px;padding:9px 8px;font-size:12px}#lookbookWorkspace .lbw-page-tabs .on,#lookbookWorkspace .lbw-tool-tabs .on{background:#424f80;border-color:#424f80;color:#fff}
+ #lookbookWorkspace .lbw-editor-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:start;gap:22px}#lookbookWorkspace .lbw-stage{position:sticky;top:14px;min-width:0;padding:16px;background:#e7e8e2;border:1px solid #d3d5ce;border-radius:10px;box-sizing:border-box;text-align:center}
+ #lookbookWorkspace #lbwCanvasHint{margin-bottom:13px;text-align:left;color:#686b62;font-size:11px}#lookbookWorkspace .lbw-canvas{position:relative;aspect-ratio:3/4;overflow:hidden;background:#fff;line-height:normal;text-align:left;width:100%;min-width:0;margin:0;box-shadow:0 5px 20px #35352a22;touch-action:none;user-select:none}
+ #lookbookWorkspace .lbw-canvas [data-pi],#lookbookWorkspace .lbw-canvas [data-cf],#lookbookWorkspace .lbw-canvas [data-lbs-part]{cursor:pointer}#lookbookWorkspace .lbw-canvas .lbw-selected{outline:2px solid #526bce!important;outline-offset:-2px}#lookbookWorkspace .lbw-export-size{font-size:10px;color:#858577;margin-top:12px}
+ #lookbookWorkspace .lbw-inspector{padding:16px;background:#fffefa;border:1px solid #d7d3c7;border-radius:10px;min-width:0}#lookbookWorkspace .lbw-tool-tabs{display:flex;gap:6px;margin-bottom:17px}#lookbookWorkspace .lbw-tool-tabs button{flex:1;padding:8px 4px}
+ #lookbookWorkspace .lbw-buttons{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 13px}#lookbookWorkspace .lbw-buttons button{flex:1;min-width:100px;padding:9px 6px;font-size:11.5px}#lookbookWorkspace .lbw-number-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}#lookbookWorkspace .lbw-number-grid .lbw-field{margin-bottom:5px}
+ #lookbookWorkspace .lbw-control-section{border-top:1px solid #e1ddd1;padding-top:13px;margin-top:17px}#lookbookWorkspace .lbw-control-section summary{font-size:12px;font-weight:700;cursor:pointer;margin-bottom:13px}
+ #lookbookWorkspace .lbw-control-section>button,#lookbookWorkspace #lbwPartReset,#lookbookWorkspace #lbwTextResetStyle,#lookbookWorkspace #lbwAddText,#lookbookWorkspace #lbwRemoveText{width:100%;font-size:11px;padding:8px;margin-top:9px}
+ #lookbookWorkspace .lbw-status{font-size:12px;color:#6a6d78;margin-top:18px;min-height:20px}#lookbookWorkspace .lbw-status.lbw-error{color:#ad4139}
+ @media(max-width:1100px){#lookbookWorkspace .lbw-shell{padding:20px}#lookbookWorkspace .lbw-preview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#lookbookWorkspace .lbw-theme-grid{grid-template-columns:repeat(auto-fill,minmax(175px,1fr))}#lookbookWorkspace .lbw-editor-layout{grid-template-columns:minmax(0,1fr) 300px;gap:14px}#lookbookWorkspace .lbw-meta{grid-template-columns:1fr 1fr}#lookbookWorkspace .lbw-meta>p{grid-column:1/-1}}
+ @media(max-width:760px){#lookbookWorkspace .lbw-shell{padding:14px}#lookbookWorkspace .lbw-heading{align-items:flex-start;flex-direction:column;gap:10px}#lookbookWorkspace .lbw-editor-layout{grid-template-columns:1fr}#lookbookWorkspace .lbw-stage{position:static}#lookbookWorkspace .lbw-canvas{width:min(100%,450px);min-width:0}#lookbookWorkspace .lbw-theme-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#lookbookWorkspace .lbw-detail-heading{flex-wrap:wrap}#lookbookWorkspace #lbwTheme{max-width:100%;width:100%;margin-left:0}#lookbookWorkspace .lbw-editor-toolbar{flex-wrap:wrap}#lookbookWorkspace #lbwSavePage{width:100%}#lookbookWorkspace .lbw-meta{padding:13px;gap:12px}#lookbookWorkspace .lbw-card-actions{flex-wrap:wrap}#lookbookWorkspace .lbw-card-actions button{flex-basis:100%}}
+
+ body.lookbookDirectEditing #lookbookWorkspace .lbw-heading{display:none}
+ #lookbookWorkspace .lbw-canvas-wrap{position:relative;width:min(100%,calc((100vh - 410px)*.75));min-width:250px;margin:18px auto 12px;overflow:visible}
+ #lookbookWorkspace .lbw-mouse-bar{display:flex;align-items:center;gap:9px;margin:0 0 15px;flex-wrap:wrap}#lookbookWorkspace .lbw-mouse-bar>button{padding:9px 14px;font-size:12px}#lookbookWorkspace .lbw-mouse-bar>.lbw-muted{margin-left:8px}
+ #lookbookWorkspace .lbw-editor-layout{grid-template-columns:minmax(0,1fr) 290px}#lookbookWorkspace .lbw-context-heading{font-size:14px;padding-bottom:13px;margin-bottom:13px;border-bottom:1px solid #e1ddd1}#lookbookWorkspace .lbw-mouse-help{font-size:12px;line-height:1.8;color:#77776f;margin-bottom:16px}#lookbookWorkspace .lbw-gesture-guide{display:grid;gap:10px;font-size:12px;color:#4c587f;padding:12px;background:#eeefe8;border-radius:7px}
+ #lbwSelectionOverlay{position:absolute;inset:0;pointer-events:none;z-index:50}#lookbookWorkspace .lbw-selection-box{position:absolute;box-sizing:border-box;border:1.5px solid #526bce;pointer-events:none}
+ #lookbookWorkspace .lbw-selection-label{position:absolute;left:0;top:-23px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#526bce;color:#fff;border-radius:3px;padding:2px 5px;font-size:10px;line-height:15px}
+ #lookbookWorkspace .lbw-handle{position:absolute;width:12px;height:12px;min-width:12px;padding:0;border:1.5px solid #526bce;border-radius:2px;background:white;box-shadow:0 1px 3px #26355b33;transform:translate(-50%,-50%);pointer-events:auto;touch-action:none;z-index:2}
+ #lookbookWorkspace .lbw-handle:hover,#lookbookWorkspace .lbw-handle:focus-visible{background:#dce6ff;outline:2px solid #fff;outline-offset:2px}#lookbookWorkspace .lbw-handle[data-handle=nw],#lookbookWorkspace .lbw-handle[data-handle=se]{cursor:nwse-resize}#lookbookWorkspace .lbw-handle[data-handle=ne],#lookbookWorkspace .lbw-handle[data-handle=sw]{cursor:nesw-resize}#lookbookWorkspace .lbw-handle[data-handle=n],#lookbookWorkspace .lbw-handle[data-handle=s]{cursor:ns-resize}#lookbookWorkspace .lbw-handle[data-handle=e],#lookbookWorkspace .lbw-handle[data-handle=w]{cursor:ew-resize}
+ #lookbookWorkspace .lbw-rotate-line{position:absolute;left:50%;top:-28px;height:28px;width:1px;background:#526bce}#lookbookWorkspace .lbw-handle.lbw-rotate{left:50%;top:-28px;width:22px;height:22px;border-radius:50%;font-size:16px;color:#4260ad;line-height:18px;cursor:grab}
+ #lookbookWorkspace .lbw-canvas [data-pi],#lookbookWorkspace .lbw-canvas [data-lbm-field],#lookbookWorkspace .lbw-canvas [data-lbs-part],#lookbookWorkspace .lbw-canvas [data-ti]{cursor:move;pointer-events:auto}#lookbookWorkspace .lbw-canvas .phE{cursor:pointer!important}#lookbookWorkspace .lbw-canvas.lbw-drop-over{outline:4px solid #768bc9;outline-offset:5px}
+ #lookbookWorkspace #lbwAdvanced{margin-top:18px;border:1px solid #ddd8cc;border-radius:7px;padding:11px}#lookbookWorkspace #lbwAdvanced>summary{margin-bottom:0}#lookbookWorkspace #lbwAdvanced[open]>summary{margin-bottom:15px}#lookbookWorkspace #lbwAdvanced #lbwAddText{display:none}
+ @media(max-width:1100px){#lookbookWorkspace .lbw-editor-layout{grid-template-columns:minmax(0,1fr) 270px}}
+ @media(max-width:760px){#lookbookWorkspace .lbw-editor-layout{grid-template-columns:1fr}#lookbookWorkspace .lbw-canvas-wrap{width:min(100%,450px);min-width:0}#lookbookWorkspace .lbw-mouse-bar>.lbw-muted{margin-left:0;flex-basis:100%}}
+ `;document.head.appendChild(css);
+ window.PBKLookbookWorkspace={onTab:onTab,sync:sync,openPagePicker:openPagePicker,open:open,flush:flush,state:function(){return{active:active,editing:editing,detail:detail,mode:'direct',theme:theme,section:section,sections:sections.map(function(s){return s.id;}),tool:tool,selection:selected?copy(selected):null};}};
+})();
