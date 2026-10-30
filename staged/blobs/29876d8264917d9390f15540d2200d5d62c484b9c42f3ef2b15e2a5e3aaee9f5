@@ -1,0 +1,385 @@
+/* PhotobookKit — central widget export. Credentials never enter project data or browser storage. */
+(function () {
+  'use strict';
+  var bridge = window.PBKWidgetExportBridge;
+  if (!bridge || document.getElementById('pbwModal')) return;
+  var style = document.createElement('style');
+  style.textContent = '#btnExportWidget{white-space:nowrap}body.bannerOn #btnExportWidget,body.gifOn #btnExportWidget,body.sigOn #btnExportWidget,body.motionOn #btnExportWidget{display:none}' +
+    '#pbwModal{z-index:1200}#pbwModal .mbox{width:min(620px,94vw);height:auto;max-height:92vh}' +
+    '#pbwBody{overflow:auto;padding:20px;display:grid;gap:15px;min-height:0}#pbwBody p{margin:0;line-height:1.6}' +
+    '#pbwSummary{color:#6f6d63;overflow-wrap:anywhere}#pbwBody label{display:flex;flex-direction:column;gap:6px;font-weight:700}' +
+    '#pbwBody input,#pbwBody select,#pbwBody textarea{box-sizing:border-box;width:100%;min-width:0}' +
+    '#pbwBody input[type=number],#pbwName{font:inherit;padding:7px 9px;border:1px solid #d2d0c6;border-radius:7px;background:white}' +
+    '#pbwBody input:disabled{background:#eeede6}#pbwBody .pbwRow{display:flex;gap:10px;align-items:end}' +
+    '#pbwBody .pbwRow>label{flex:1}#pbwBody .pbwRow>button{flex-shrink:0;white-space:nowrap}#pbwBody .pbwRow>input{flex:1;width:0}' +
+    '#pbwBody .pbwHint{font-size:12px;font-weight:400;color:#78766b;line-height:1.6}' +
+    '#pbwBody .pbwPanel{padding:14px;border:1px solid #ddd9cd;border-radius:10px;display:grid;gap:12px;background:#f6f4ec}' +
+    '#pbwBody [hidden]{display:none!important}#pbwStatus{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;min-height:20px}' +
+    '#pbwStatus[data-error=true],#pbwSelectionError{color:#a8372b}#pbwResult{border-color:#b9c8a9!important;background:#f0f4e9!important}' +
+    '#pbwCode{height:90px;resize:vertical;font-family:Consolas,monospace;font-size:11px}#pbwPublish{min-height:42px}' +
+    '#pbwModal button:disabled{opacity:.5;cursor:default}#pbwProgress{width:100%;height:7px;accent-color:#424f80}' +
+    '#pbwBody details{border-top:1px solid #ddd9cd;padding-top:11px}#pbwBody summary{cursor:pointer;font-weight:600;font-size:12px;color:#625f57}#pbwBody details[open]>summary{margin-bottom:12px}' +
+    '#pbwPageModes{display:flex;gap:8px;flex-wrap:wrap}#pbwPageModes button[aria-pressed=true]{background:#424f80;border-color:#424f80;color:#fff}' +
+    '#pbwSelectionHeading{display:flex;justify-content:space-between;gap:10px;align-items:center}#pbwSelectionCount{font-size:12px;color:#424f80;white-space:nowrap}' +
+    '#pbwPageChoices{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:7px;max-height:180px;overflow:auto;padding:2px}' +
+    '#pbwPageChoices label{display:flex;flex-direction:row;align-items:center;gap:7px;padding:8px;border:1px solid #d9d5c9;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;font-weight:400;min-width:0}' +
+    '#pbwPageChoices label:has(input:checked){border-color:#6575b3;background:#eff1f9}#pbwPageChoices input{width:auto;flex-shrink:0;accent-color:#424f80}#pbwPageChoices span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '#pbwCustomPages{display:grid;gap:10px}#pbwSelectionError{font-size:12px}#pbwSelectionError:empty{display:none}#pbwRefresh{justify-self:start}' +
+    '@media(max-width:560px){#pbwBody{padding:14px}#pbwBody .pbwRow{flex-wrap:wrap}#pbwBody .pbwRow>label{min-width:100px}#pbwBody .pbwRow>button{flex:1}#pbwSelectionHeading{align-items:start}}';
+  document.head.appendChild(style);
+  var modal = document.createElement('div');
+  modal.id = 'pbwModal'; modal.className = 'modal hidden'; modal.tabIndex = -1;
+  modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-labelledby', 'pbwTitle');
+  modal.innerHTML = '<div class="mbox"><div class="mhead"><b id="pbwTitle">화보집 위젯 코드</b><button type="button" class="mclose" id="pbwClose" aria-label="닫기">✕ 닫기</button></div>' +
+    '<div id="pbwBody"><p id="pbwSummary"></p>' +
+    '<div class="pbwPanel"><div class="pbwRow"><label>위젯 이름<input id="pbwName" type="text" maxlength="50" autocomplete="off" spellcheck="false" placeholder="예: autumn_book" aria-describedby="pbwNameHelp"></label><button type="button" id="pbwNewWidget" hidden>새 위젯</button></div><p class="pbwHint" id="pbwNameHelp" aria-live="polite"></p></div>' +
+    '<div class="pbwPanel"><div id="pbwSelectionHeading"><b>내보낼 쪽</b><span id="pbwSelectionCount" aria-live="polite"></span></div>' +
+    '<div id="pbwPageModes" role="group" aria-label="내보낼 쪽 선택"><button type="button" id="pbwAllPages" aria-pressed="true">전체</button><button type="button" id="pbwChoosePages" aria-pressed="false">직접 선택</button></div>' +
+    '<div id="pbwCustomPages" hidden><label>쪽 번호<input id="pbwPageRange" type="text" inputmode="text" placeholder="예: 1-6, 8, 10-13" aria-describedby="pbwPageHelp pbwSelectionError"></label>' +
+    '<span class="pbwHint" id="pbwPageHelp">번호를 입력하거나 아래에서 고르세요. 원래 쪽 순서로 만들어집니다.</span><div id="pbwPageChoices"></div></div>' +
+    '<p id="pbwSelectionError" role="alert"></p></div>' +
+    '<p class="pbwHint">책 바깥 배경은 자동으로 투명하게 저장됩니다. 페이지 안의 배경은 유지됩니다.</p>' +
+    '<button type="button" id="pbwPublish" class="primary" disabled>위젯 만들고 코드 복사</button>' +
+    '<progress id="pbwProgress" max="100" hidden></progress><p id="pbwStatus" role="status" aria-live="polite"></p><button type="button" id="pbwRefresh" hidden>다시 연결</button>' +
+    '<div id="pbwResult" class="pbwPanel" hidden><b id="pbwResultTitle">코드 생성 완료</b>' +
+    '<label>SOOP 게시글 코드<textarea id="pbwCode" readonly spellcheck="false"></textarea></label><button type="button" id="pbwCopyCode">코드 복사</button>' +
+    '<p class="pbwHint">SOOP 게시글의 HTML 입력에 붙여 넣어 주세요.</p>' +
+    '<details><summary>공유 주소 보기</summary><div class="pbwRow"><input id="pbwUrl" type="text" aria-label="공유 주소" readonly><button type="button" id="pbwCopyUrl">주소 복사</button></div></details></div>' +
+    '<details id="pbwSizeSettings"><summary>크기 설정 · 기본 1000 × 700</summary><div class="pbwRow"><label>가로 (px)<input id="pbwWidth" type="number" value="1000" min="120" max="4096" step="1"></label><label>세로 (px)<input id="pbwHeight" type="number" value="700" min="120" max="4096" step="1"></label></div><p class="pbwHint">게시글 너비에 맞춰 비율이 유지됩니다.</p></details>' +
+    '<details id="pbwExisting"><summary>기존 위젯 업데이트</summary><label>업데이트할 위젯<select id="pbwTarget"><option value="">새 위젯 만들기</option></select></label><p class="pbwHint">기존 위젯을 고르면 같은 코드를 쓴 게시글에도 수정 내용이 반영됩니다.</p></details></div></div>';
+  document.body.appendChild(modal);
+  var el = function (id) { return document.getElementById(id); };
+  var state = { busy: false, connected: false, items: [], selected: null, generation: 0, poll: null, identity: null, authEpoch: null, lastFocus: null, result: null, name: '', pageItems: [], pageIndices: [], pageMode: 'all', selectionRevision: null, selectionError: '' };
+  function message(text, error) { el('pbwStatus').textContent = String(text || ''); el('pbwStatus').dataset.error = error ? 'true' : 'false'; el('pbwRefresh').hidden = !error; }
+  function defaultName() {
+    var now = new Date(), day = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('');
+    var bytes = new Uint8Array(5); window.crypto.getRandomValues(bytes);
+    return 'photobook_' + day + '_' + Array.from(bytes).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+  function updateNameControls() {
+    el('pbwName').value = state.selected ? state.selected.widgetName : state.name;
+    el('pbwName').readOnly = !!state.selected;
+    el('pbwNewWidget').hidden = !state.selected;
+    el('pbwNameHelp').textContent = state.selected ? '기존 위젯 ‘' + state.selected.widgetName + '’을 수정합니다. 이 코드를 쓴 게시글에도 반영됩니다. 별도로 만들려면 새 위젯을 누르세요.' : '새 위젯으로 저장됩니다. 영문·숫자·-·_로 1~50자까지 정해 주세요. 같은 이름이 있어도 덮어쓰지 않습니다.';
+  }
+  function startNewWidget() {
+    if (state.busy) return;
+    state.selected = null; state.name = defaultName(); state.result = null;
+    el('pbwTarget').value = ''; el('pbwResult').hidden = true; el('pbwCode').value = ''; el('pbwUrl').value = '';
+    updateNameControls(); updatePublishButton();
+    message('별도의 새 위젯을 만듭니다. 이름을 정해 주세요.');
+    el('pbwName').focus(); el('pbwName').select();
+  }
+  function updatePublishButton() {
+    el('pbwPublish').disabled = state.busy || !state.connected || !!state.selectionError || !state.pageIndices.length;
+    el('pbwPublish').textContent = state.selected ? '업데이트하고 코드 복사' : '위젯 만들고 코드 복사';
+  }
+  function setBusy(value) {
+    state.busy = value;
+    ['pbwClose','pbwTarget','pbwRefresh','pbwWidth','pbwHeight','pbwCopyCode','pbwCopyUrl','pbwAllPages','pbwChoosePages','pbwPageRange','pbwName','pbwNewWidget'].forEach(function (id) { el(id).disabled = value; });
+    el('pbwPageChoices').querySelectorAll('input').forEach(function (node) { node.disabled = value; });
+    updatePublishButton();
+    el('pbwProgress').hidden = !value;
+    if (!value) { clearTimeout(state.poll); state.poll = null; el('pbwProgress').removeAttribute('value'); }
+    modal.setAttribute('aria-busy', value ? 'true' : 'false');
+    if (value) modal.focus();
+  }
+  function clearOwnedWidgets() {
+    state.items = []; state.selected = null; state.result = null;
+    el('pbwTarget').replaceChildren(new Option('새 위젯 만들기', ''));
+    state.name = defaultName(); updateNameControls(); updatePublishButton();
+    el('pbwResult').hidden = true; el('pbwUrl').value = ''; el('pbwCode').value = '';
+  }
+  function pageRange(indices) {
+    var runs = [], start, end;
+    indices.forEach(function (index) {
+      var n = index + 1;
+      if (start === undefined) { start = end = n; }
+      else if (n === end + 1) end = n;
+      else { runs.push(start === end ? String(start) : start + '-' + end); start = end = n; }
+    });
+    if (start !== undefined) runs.push(start === end ? String(start) : start + '-' + end);
+    return runs.join(', ');
+  }
+  function parsePageRange(value) {
+    var text = String(value).trim().replace(/\s*-\s*/g, '-'), chosen = new Set();
+    if (!text) throw new Error('내보낼 쪽을 하나 이상 골라 주세요.');
+    var tokens = text.split(/[,\s]+/);
+    if (tokens.some(function (token) { return !token; })) throw new Error('쪽 번호는 1-6, 8처럼 입력해 주세요.');
+    tokens.forEach(function (token) {
+      var match = /^(\d+)(?:-(\d+))?$/.exec(token);
+      if (!match) throw new Error('쪽 번호는 1-6, 8처럼 입력해 주세요.');
+      var first = Number(match[1]), last = Number(match[2] || match[1]);
+      if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last) || first < 1 || last < first || last > state.pageItems.length) throw new Error('1~' + state.pageItems.length + '쪽 안에서 선택해 주세요.');
+      for (var n = first; n <= last; n++) chosen.add(n - 1);
+    });
+    return Array.from(chosen).sort(function (a, b) { return a - b; });
+  }
+  function renderPageSelection(syncRange) {
+    el('pbwAllPages').setAttribute('aria-pressed', state.pageMode === 'all' ? 'true' : 'false');
+    el('pbwChoosePages').setAttribute('aria-pressed', state.pageMode === 'custom' ? 'true' : 'false');
+    el('pbwCustomPages').hidden = state.pageMode !== 'custom';
+    el('pbwSelectionCount').textContent = state.selectionError ? '선택을 확인해 주세요' : state.pageIndices.length + ' / ' + state.pageItems.length + '쪽 선택';
+    el('pbwSelectionError').textContent = state.selectionError;
+    el('pbwPageRange').setAttribute('aria-invalid', state.selectionError ? 'true' : 'false');
+    if (syncRange) el('pbwPageRange').value = pageRange(state.pageIndices);
+    var chosen = new Set(state.pageIndices);
+    el('pbwPageChoices').querySelectorAll('input').forEach(function (node) { node.checked = chosen.has(Number(node.value)); });
+    updatePublishButton();
+  }
+  function selectionChanged() {
+    if (state.result) {
+      state.result = null; el('pbwResult').hidden = true; el('pbwCode').value = ''; el('pbwUrl').value = '';
+      message('쪽 선택이 바뀌었습니다. 다시 올리면 선택한 쪽으로 코드가 만들어집니다.');
+    }
+  }
+  function loadPageSelection(info) {
+    var same = state.identity === info.identity && state.selectionRevision === info.selectionRevision;
+    state.pageItems = Array.isArray(info.pageItems) ? info.pageItems.map(function (item, index) { return { index: index, label: String(item.label || (index + 1) + '쪽') }; }) : Array.from({ length: info.pages || 0 }, function (_, index) { return { index: index, label: (index + 1) + '쪽' }; });
+    if (!same) { state.pageMode = 'all'; state.selectionError = ''; state.pageIndices = state.pageItems.map(function (item) { return item.index; }); }
+    state.selectionRevision = info.selectionRevision;
+    el('pbwPageChoices').replaceChildren();
+    state.pageItems.forEach(function (item) {
+      var label = document.createElement('label'), input = document.createElement('input'), text = document.createElement('span');
+      input.type = 'checkbox'; input.value = item.index; input.setAttribute('aria-label', item.label); text.textContent = item.label; label.title = item.label;
+      label.append(input, text); el('pbwPageChoices').appendChild(label);
+      input.addEventListener('change', function () {
+        if (state.busy) return;
+        state.pageIndices = Array.from(el('pbwPageChoices').querySelectorAll('input:checked')).map(function (node) { return Number(node.value); });
+        state.selectionError = state.pageIndices.length ? '' : '내보낼 쪽을 하나 이상 골라 주세요.';
+        selectionChanged(); renderPageSelection(true);
+      });
+    });
+    renderPageSelection(!same || !state.selectionError);
+  }
+  function responseMessage(result) {
+    if (result.reason === 'authChanged') return '앱 인증 상태가 변경되었습니다. 다시 연결한 뒤 시도해 주세요.';
+    if (result.reason === 'authRejected') return '화보키트 인증 상태를 확인해 주세요. 이 창을 닫고 화보키트를 다시 실행해 주세요.';
+    if (result.reason === 'network') return (result.appAuthenticated === true ? '화보키트 앱 인증은 확인되었습니다. ' : '') + '위젯 서버에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 연결해 주세요.';
+    if (result.reason === 'serverUnavailable') return result.appAuthenticated === true ? '화보키트 앱 인증은 확인되었습니다. 위젯 서버 준비 또는 연결 문제로 현재 사용할 수 없습니다. 인증코드를 다시 입력할 필요는 없습니다.' : '화보집 위젯 서버가 아직 준비되지 않았거나 일시적으로 연결되지 않습니다. 서버 활성화 후 이용할 수 있습니다.';
+    if (result.reason === 'authRequired' || result.needsAppLicense || result.needsLicense) return '화보키트의 앱 인증이 필요합니다. 이 창을 닫고 화보키트를 다시 실행해 인증을 완료해 주세요.';
+    var detail = result.err || result.error || result.message;
+    if (detail && typeof detail === 'object') detail = detail.message;
+    return String(detail || '요청을 처리하지 못했습니다.').slice(0, 1000).replace(/\bPBKT?-[A-Za-z0-9-]+\b/g, '[인증 정보]');
+  }
+  async function request(action, payload) {
+    var sent = Object.assign({}, payload || {});
+    if ((action === 'list' || action === 'publish') && state.authEpoch) sent.expectedAuthEpoch = state.authEpoch;
+    var result = await bridge.request(action, sent);
+    if (typeof result === 'string') result = JSON.parse(result);
+    // Progress is advisory: a delayed poll must never replace a newer account state.
+    if (result && action !== 'progress') {
+      var nextEpoch = typeof result.authEpoch === 'string' ? result.authEpoch : null;
+      if (nextEpoch && state.authEpoch !== nextEpoch) {
+        var changed = state.authEpoch !== null;
+        state.authEpoch = nextEpoch;
+        if (changed) { clearOwnedWidgets(); state.connected = false; }
+        if (changed && action !== 'status') throw new Error(responseMessage({ reason: 'authChanged' }));
+      }
+      if (result.needsAppLicense || result.needsLicense || result.reason === 'authRequired' || result.reason === 'authRejected' || result.reason === 'authChanged') {
+        clearOwnedWidgets(); state.connected = false; el('pbwPublish').disabled = true;
+      }
+    }
+    if (!result || result.err || result.error || result.ok === false) {
+      throw new Error(responseMessage(result || {}));
+    }
+    if ((action === 'status' && result.authenticated || action === 'list' || action === 'publish') && !/^[a-f0-9]{32}$/.test(String(result.authEpoch || ''))) {
+      state.connected = false; clearOwnedWidgets();
+      throw new Error('앱의 위젯 연결 상태를 확인하지 못했습니다. 화보키트를 다시 실행하거나 업데이트를 확인해 주세요.');
+    }
+    return result;
+  }
+  function updateTargets(items) {
+    state.items = Array.isArray(items) ? items : [];
+    var select = el('pbwTarget'), previous = state.selected && state.selected.widgetName;
+    select.replaceChildren(new Option('새 위젯 만들기', ''));
+    state.items.forEach(function (item, index) {
+      var name = String(item.widgetName || item.name || '');
+      if (!/^[A-Za-z0-9_-]{1,50}$/.test(name) || !item.revision) return;
+      item.widgetName = name;
+      var option = new Option(name + (item.title && item.title !== name ? ' · ' + String(item.title) : ''), String(index)); select.appendChild(option);
+      if (name === previous) { select.value = String(index); state.selected = item; }
+    });
+    if (previous && select.value === '') { state.selected = null; state.name = defaultName(); updatePublishButton(); }
+    updateNameControls();
+  }
+  async function refresh() {
+    if (state.busy) return;
+    setBusy(true); message('화보키트 인증으로 연결하는 중입니다…');
+    try {
+      var status = await request('status');
+      state.connected = !!status.available && !!status.authenticated;
+      if (!state.connected) { message(responseMessage(status), true); return; }
+      var list = await request('list'); updateTargets(list.widgets);
+      message('화보키트 인증으로 연결되었습니다. 쪽을 고른 뒤 올려 주세요.');
+    } catch (error) { state.connected = false; message(error.message, true); }
+    finally { setBusy(false); }
+  }
+  function dimension(id) {
+    var value = Number(el(id).value);
+    if (!Number.isInteger(value) || value < 120 || value > 4096) throw new Error('위젯 가로와 세로는 120~4096 사이의 정수로 입력해 주세요.');
+    return value;
+  }
+  function updateSizeSummary() {
+    var label = '크기 설정';
+    try { label += ' · ' + dimension('pbwWidth') + ' × ' + dimension('pbwHeight'); } catch (_) { /* Invalid dimensions are explained on generation. */ }
+    el('pbwSizeSettings').querySelector('summary').textContent = label;
+  }
+  function watchProgress(generation) {
+    async function tick() {
+      if (!state.busy || state.generation !== generation) return;
+      try {
+        var progress = await request('progress');
+        if (!state.busy || state.generation !== generation) return;
+        if (progress.busy && progress.message) message(progress.message);
+        if (progress.busy && Number(progress.total) > 0) el('pbwProgress').value = Math.max(0, Math.min(99, Number(progress.current) / Number(progress.total) * 100));
+      } catch (_) { /* Final publish result is authoritative; a progress poll is optional. */ }
+      if (state.busy && state.generation === generation) state.poll = setTimeout(tick, 1100);
+    }
+    state.poll = setTimeout(tick, 1100);
+  }
+  function embedCode(content, width, height) {
+    var safe = content.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    var ratio = (height / width * 100).toFixed(6).replace(/\.?0+$/, '');
+    return '<div data-core="soop-custom-html-block-wrapper" data-paragraph-type="CUSTOM_HTML_BLOCK" data-soop-custom-block="true" style="display:block;width:100%;max-width:' + width + 'px;">' +
+      '<div data-soop-custom-block="true" style="position:relative;display:block;width:100%;height:0;padding-top:' + ratio + '%;overflow:hidden;">' +
+      '<iframe src="' + safe + '" width="' + width + '" height="' + height + '" frameborder="0" scrolling="no" allow="autoplay; fullscreen" allowfullscreen tabindex="0" style="position:absolute;inset:0;display:block;width:100%;height:100%;border:0;pointer-events:auto;touch-action:manipulation;"></iframe></div></div>';
+  }
+  function validResult(result) {
+    var url = new URL(result.publicUrl), content;
+    if (!result.embedUrl && /^\/w\/[A-Za-z0-9_-]+\/?$/.test(url.pathname) && /^[A-Za-z0-9._-]+$/.test(String(result.revision || ''))) {
+      result.embedUrl = url.origin + '/content/' + url.pathname.split('/')[2] + '/' + result.revision + '/index.html';
+    }
+    content = new URL(result.embedUrl);
+    if (url.username || url.password || content.username || content.password || url.hash || content.hash || content.search || url.origin !== 'https://bobobo-1yh.pages.dev' || content.origin !== url.origin || !/^\/w\/[A-Za-z0-9_-]+\/?$/.test(url.pathname) || !/^\/content\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+\/index\.html$/.test(content.pathname)) {
+      throw new Error('게시 결과의 공개 주소를 확인하지 못했습니다. 다시 연결해 주세요.');
+    }
+    if (!result.revision) throw new Error('위젯 코드를 확인하지 못했습니다. 다시 연결해 주세요.');
+    result.embedCode = embedCode(content.href, dimension('pbwWidth'), dimension('pbwHeight'));
+    return result;
+  }
+  function showResult(result, title) {
+    state.result = result;
+    el('pbwUrl').value = result.publicUrl; el('pbwCode').value = result.embedCode;
+    el('pbwResultTitle').textContent = '코드 생성 완료 · ' + String(result.widgetName || title || result.title || '화보집');
+    el('pbwResult').hidden = false;
+  }
+  async function publish() {
+    if (state.busy || !state.connected) return;
+    var options;
+    try {
+      var name = state.selected ? state.selected.widgetName : String(el('pbwName').value).trim();
+      if (!/^[A-Za-z0-9_-]{1,50}$/.test(name)) throw new Error('위젯 이름은 영문·숫자·-·_로 1~50자까지 입력해 주세요.');
+      if (!state.selected && state.items.some(function (item) { return String(item.widgetName || item.name || '').toLowerCase() === name.toLowerCase(); })) throw new Error('이미 사용 중인 위젯 이름입니다. 다른 이름을 입력하거나 기존 위젯 업데이트에서 대상을 선택해 주세요.');
+      state.name = name; updateNameControls();
+      if (state.selectionError || !state.pageIndices.length) throw new Error(state.selectionError || '내보낼 쪽을 하나 이상 골라 주세요.');
+      options = { widgetName: name, width: dimension('pbwWidth'), height: dimension('pbwHeight'), baseRevision: state.selected ? String(state.selected.revision) : '' };
+      if (state.selected && name !== state.selected.widgetName) throw new Error('선택한 위젯을 다시 확인해 주세요.');
+      if (state.selected && !confirm('‘' + name + '’ 위젯을 ' + state.pageIndices.length + '쪽으로 업데이트할까요?\n이 위젯을 사용 중인 게시글에도 새 내용이 반영됩니다.')) return;
+    } catch (error) { message(error.message, true); return; }
+    var generation = ++state.generation;
+    setBusy(true); message('사진과 글꼴을 준비하는 중입니다…');
+    try {
+      var payload = await bridge.prepare({ pageIndices: state.pageIndices.slice(), expectedIdentity: state.identity, expectedSelectionRevision: state.selectionRevision });
+      if (!payload) { message('게시를 취소했습니다.'); return; }
+      watchProgress(generation);
+      var result = validResult(await request('publish', Object.assign({}, payload, options)));
+      result.widgetName = options.widgetName; result.title = payload.title;
+      showResult(result, payload.title); state.selected = result;
+      updateTargets([result].concat(state.items.filter(function (item) { return item.widgetName !== result.widgetName; })));
+      updatePublishButton();
+      await copy('pbwCode', true);
+    } catch (error) { message(error.message, true); }
+    finally { ++state.generation; setBusy(false); }
+  }
+  async function copy(id, generated) {
+    var field = el(id), text = field.value;
+    if (!text) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
+      else { field.focus(); field.select(); if (!document.execCommand('copy')) throw new Error('copy unavailable'); }
+      message(id === 'pbwCode' ? '코드를 복사했습니다. SOOP 게시글의 HTML 입력에 붙여 넣어 주세요.' : '공유 주소를 복사했습니다.');
+    } catch (_) { field.focus(); field.select(); message((generated ? '위젯은 만들어졌습니다. ' : '') + '자동 복사를 사용할 수 없습니다. 선택된 내용을 Ctrl+C로 복사해 주세요.', true); }
+  }
+  function close() {
+    if (state.busy) return;
+    modal.classList.add('hidden');
+    if (state.lastFocus && state.lastFocus.isConnected) state.lastFocus.focus();
+  }
+  function open() {
+    if (state.busy) return;
+    var info = bridge.describe();
+    var draftName = state.identity === info.identity && !state.selected ? state.name : '';
+    loadPageSelection(info);
+    state.lastFocus = document.activeElement;
+    el('pbwSummary').textContent = info.title + ' · ' + info.pages + '쪽';
+    // Authentication may have changed while the dialog was closed.
+    clearOwnedWidgets(); state.connected = false; state.identity = info.identity;
+    if (draftName) state.name = draftName;
+    updateNameControls();
+    modal.classList.remove('hidden'); el('pbwClose').focus(); refresh();
+  }
+  el('btnExportWidget').addEventListener('click', open);
+  el('pbwClose').addEventListener('click', close);
+  el('pbwRefresh').addEventListener('click', refresh);
+  el('pbwPublish').addEventListener('click', publish);
+  el('pbwNewWidget').addEventListener('click', startNewWidget);
+  el('pbwName').addEventListener('input', function () { if (!state.busy && !state.selected) state.name = el('pbwName').value; });
+  el('pbwCopyCode').addEventListener('click', function () { copy('pbwCode'); });
+  el('pbwCopyUrl').addEventListener('click', function () { copy('pbwUrl'); });
+  el('pbwTarget').addEventListener('change', function () {
+    var value = el('pbwTarget').value; state.selected = value === '' ? null : state.items[Number(value)];
+    state.name = state.selected ? state.selected.widgetName : defaultName();
+    updateNameControls(); updatePublishButton();
+    if (state.selected) {
+      if (Number(state.selected.width) >= 120) el('pbwWidth').value = state.selected.width;
+      if (Number(state.selected.height) >= 120) el('pbwHeight').value = state.selected.height;
+      updateSizeSummary();
+      try { showResult(validResult(Object.assign({}, state.selected)), state.selected.title); el('pbwResultTitle').textContent = '기존 위젯 코드 · ' + state.selected.widgetName; }
+      catch (_) { el('pbwResult').hidden = true; state.result = null; }
+    } else { el('pbwResult').hidden = true; state.result = null; }
+  });
+  el('pbwAllPages').addEventListener('click', function () {
+    if (state.busy) return;
+    state.pageMode = 'all'; state.pageIndices = state.pageItems.map(function (item) { return item.index; }); state.selectionError = '';
+    selectionChanged(); renderPageSelection(true);
+  });
+  el('pbwChoosePages').addEventListener('click', function () { if (!state.busy) { state.pageMode = 'custom'; renderPageSelection(!state.selectionError); el('pbwPageRange').focus(); } });
+  el('pbwPageRange').addEventListener('input', function () {
+    if (state.busy) return;
+    try { state.pageIndices = parsePageRange(el('pbwPageRange').value); state.selectionError = ''; }
+    catch (error) { state.selectionError = error.message; }
+    selectionChanged(); renderPageSelection(false);
+  });
+  ['pbwWidth', 'pbwHeight'].forEach(function (id) {
+    el(id).addEventListener('input', updateSizeSummary);
+    el(id).addEventListener('change', function () {
+      updateSizeSummary();
+      if (!state.result) return;
+      try { el('pbwCode').value = validResult(state.result).embedCode; }
+      catch (error) { message(error.message, true); }
+    });
+  });
+  modal.addEventListener('keydown', function (event) {
+    // Keep editor shortcuts from changing pages or the book behind this dialog.
+    event.stopPropagation();
+    if (state.busy) {
+      event.preventDefault(); return;
+    }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
+    if (event.key === 'Tab') {
+      var nodes = Array.from(modal.querySelectorAll('button,input,select,textarea,summary')).filter(function (node) {
+        if (node.disabled || node.offsetParent === null) return false;
+        // Closed details can retain layout boxes, but their controls cannot receive focus.
+        for (var parent = node.parentElement; parent && parent !== modal; parent = parent.parentElement) {
+          if (parent.tagName === 'DETAILS' && !parent.open && node !== parent.querySelector('summary')) return false;
+        }
+        return true;
+      });
+      if (!nodes.length) { event.preventDefault(); return; }
+      var first = nodes[0], last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  });
+})();

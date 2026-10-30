@@ -1,0 +1,571 @@
+"""PhotobookKit hosted viewer adapter. No editor/project/licensing secrets enter a bundle."""
+import base64
+import hashlib
+import html.parser
+import io
+import json
+import os
+import platform
+import re
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from pathlib import Path
+
+HOST = 'https://bobobo-1yh.pages.dev'
+PRODUCT = 'photobook-kit'
+CLIENT = 'photobook-kit/2026.10.29'
+USER_AGENT = 'PhotobookKit/2026.10.30'
+_LICENSE_REJECTION_CODES = frozenset(('INVALID_LICENSE', 'LICENSE_EXPIRED'))
+MAX_FILE = 50 * 1024 * 1024
+MAX_TOTAL = 80 * 1024 * 1024
+MAX_HTML = 2 * 1024 * 1024
+MAX_FILES = 250
+_DATA = re.compile(r'data:([a-zA-Z0-9.+/-]+);base64,([A-Za-z0-9+/=]+)')
+_CSS_URL = re.compile(r'url\(\s*(?:"([^"]*)"|\'([^\']*)\'|([^)]*))\s*\)', re.I)
+_NAME = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
+_REV = re.compile(r'^rev_[a-f0-9]{32}$')
+_PUBLIC = re.compile(r'^[A-Za-z0-9_-]{6,120}$')
+_UPLOAD = re.compile(r'^[A-Za-z0-9_-]{6,180}$')
+_MIMES = {'image/png': ('media', 'png'), 'image/jpeg': ('media', 'jpg'),
+          'image/webp': ('media', 'webp'), 'image/gif': ('media', 'gif'),
+          'image/svg+xml': ('media', 'svg'), 'font/woff2': ('fonts', 'woff2'),
+          'font/woff': ('fonts', 'woff'), 'font/ttf': ('fonts', 'ttf'),
+          'font/truetype': ('fonts', 'ttf'), 'font/otf': ('fonts', 'otf'),
+          'font/opentype': ('fonts', 'otf'), 'application/font-woff': ('fonts', 'woff'),
+          'application/font-woff2': ('fonts', 'woff2'), 'application/x-font-ttf': ('fonts', 'ttf')}
+_UPLOAD_MIMES = {'html': 'text/html; charset=utf-8', 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                 'webp': 'image/webp', 'gif': 'image/gif', 'svg': 'image/svg+xml', 'ttf': 'font/ttf', 'otf': 'font/otf',
+                 'woff': 'font/woff', 'woff2': 'font/woff2'}
+
+
+class WidgetError(Exception):
+    def __init__(self, code, message, needs_license=False):
+        self.code, self.message, self.needs_license = code, message, needs_license
+        super().__init__(message)
+
+
+class HTTPFailure(Exception):
+    def __init__(self, status, code=''):
+        self.status, self.code = status, str(code)[:100]
+        super().__init__('Widget service request failed')
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise HTTPFailure(code, 'redirect_not_allowed')
+
+
+def _json_reply(raw):
+    if len(raw) > 2 * 1024 * 1024:
+        raise HTTPFailure(502, 'response_too_large')
+    try:
+        value = json.loads(raw.decode('utf-8')) if raw else {}
+    except (ValueError, UnicodeError):
+        raise HTTPFailure(502, 'invalid_response')
+    if not isinstance(value, dict):
+        raise HTTPFailure(502, 'invalid_response')
+    return value
+
+
+def _http(method, url, body=None, headers=None):
+    if not url.startswith(HOST + '/api/v1/'):
+        raise WidgetError('invalid_destination', '허용되지 않은 위젯 서버 주소입니다.')
+    request_headers = dict(headers or {})
+    # Identify the native application explicitly; generic Python clients may be
+    # rejected by the edge before the widget service handles the request.
+    request_headers['User-Agent'] = USER_AGENT
+    request_headers.setdefault('Accept', 'application/json')
+    request = urllib.request.Request(url, data=body, method=method, headers=request_headers)
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(request, timeout=90) as response:
+            return _json_reply(response.read(2 * 1024 * 1024 + 1))
+    except urllib.error.HTTPError as error:
+        try:
+            data = _json_reply(error.read(2 * 1024 * 1024 + 1))
+            code = data.get('code') or data.get('error') or ''
+            if isinstance(code, dict):
+                code = code.get('code', '')
+        except Exception:
+            code = ''
+        raise HTTPFailure(error.code, code) from None
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise WidgetError('network_error', '위젯 서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.') from None
+
+
+def _machine(context):
+    if callable(context.get('_machine_id')):
+        value = str(context['_machine_id']())
+        if re.fullmatch(r'[a-f0-9]{32}', value):
+            return value
+        raise WidgetError('device_error', '이 컴퓨터의 인증 정보를 확인하지 못했습니다.')
+    parts = []
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Cryptography') as key:
+            parts.append(str(winreg.QueryValueEx(key, 'MachineGuid')[0]))
+    except Exception:
+        pass
+    try:
+        parts.append(platform.node())
+    except Exception:
+        pass
+    raw = '|'.join([part for part in parts if part]) or ('fallback:' + str(uuid.getnode()))
+    return hashlib.sha256(('PBKIT1|' + raw).encode('utf-8')).hexdigest()[:32]
+
+
+def _license_code(value):
+    value = str(value or '').strip().upper()
+    if not re.fullmatch(r'[A-Z0-9][A-Z0-9_-]{5,127}', value):
+        raise WidgetError('invalid_license', '화보키트 인증 코드를 다시 확인해 주세요.', True)
+    return value
+
+
+class _References(html.parser.HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.refs, self.style, self.styles = [], False, []
+    def handle_starttag(self, tag, attrs):
+        if tag == 'style':
+            self.style = True
+        for key, value in attrs:
+            if key in ('src', 'href', 'poster', 'action', 'data') and value:
+                self.refs.append(value)
+            if key == 'style' and value:
+                self.styles.append(value)
+    def handle_endtag(self, tag):
+        if tag == 'style':
+            self.style = False
+    def handle_data(self, data):
+        if self.style:
+            self.styles.append(data)
+
+
+def _smaller_widget_webp(source, baseline, expected_size=None):
+    """Optional output copy: original pixels, high quality, no fitting/retry ladder.
+
+    The ordinary export/project helpers are unchanged. Unsupported codecs and
+    animations keep their existing bytes. WebP sources are never re-encoded.
+    """
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(source) as original:
+            if getattr(original, 'is_animated', False) or getattr(original, 'n_frames', 1) != 1:
+                return None
+            if original.info.get('icc_profile'):
+                # Keep existing color-managed rendering rather than discard a profile.
+                return None
+            if original.format == 'WEBP':
+                # A photo's legacy helper may have converted WebP to JPEG/PNG.
+                # Reuse the source only when its display geometry already matches.
+                if expected_size is None or original.size != expected_size or original.getexif().get(274, 1) != 1:
+                    return None
+                with open(source, 'rb') as stream:
+                    encoded = stream.read()
+            elif original.format in ('PNG', 'JPEG'):
+                with ImageOps.exif_transpose(original) as image:
+                    if expected_size is not None:
+                        image.thumbnail((2560, 2560))
+                    if expected_size is not None and image.size != expected_size:
+                        return None
+                    alpha = 'A' in image.getbands() or 'transparency' in image.info
+                    with image.convert('RGBA' if alpha else 'RGB') as pixels:
+                        stream = io.BytesIO()
+                        pixels.save(stream, 'WEBP', quality=92, method=4, exact=True)
+                        encoded = stream.getvalue()
+            else:
+                return None
+        if encoded[:4] == b'RIFF' and encoded[8:12] == b'WEBP' and len(encoded) * 10 <= len(baseline) * 9:
+            return encoded
+    except Exception:
+        # Compression must never make a previously exportable book fail.
+        pass
+    return None
+
+
+def _widget_photo(api, pid, name, data, cache):
+    extension = 'png' if name.lower().endswith('.png') else 'jpg'
+    source = getattr(api, 'photos', {}).get(pid)
+    if not source:
+        return extension, data
+    key = (os.path.normcase(os.path.abspath(source)), hashlib.sha256(data).digest())
+    if key not in cache:
+        try:
+            from PIL import Image
+            with Image.open(io.BytesIO(data)) as legacy:
+                size = legacy.size
+            smaller = _smaller_widget_webp(source, data, size)
+        except Exception:
+            smaller = None
+        cache[key] = ('webp', smaller) if smaller else (extension, data)
+    return cache[key]
+
+
+def prepare_bundle(api, payload, progress=lambda *args: None):
+    """Use original photo/font helpers without a dialog or mutation of book/editor state."""
+    text = payload.get('html')
+    ids = payload.get('ids')
+    if not isinstance(text, str) or len(text) > 128 * 1024 * 1024 or not isinstance(ids, list) or len(ids) > 240:
+        raise WidgetError('invalid_book', '화보집 내보내기 데이터가 올바르지 않습니다.')
+    if not ids == list(dict.fromkeys(ids)) or any(not isinstance(pid, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,160}', pid) for pid in ids):
+        raise WidgetError('invalid_book', '사진 연결 정보를 확인하지 못했습니다.')
+    if api._missing(ids):
+        raise WidgetError('missing_photos', '사진 원본이 이동되거나 삭제되었습니다. 해당 사진을 다시 넣은 뒤 만들어 주세요.')
+    if text.count('/*PBK_FONT_CSS*/') != 1 or not re.search(r'<head\b[^>]*>', text, re.I):
+        raise WidgetError('invalid_book', '화보집 내보내기 형식을 확인하지 못했습니다.')
+    fonts = payload.get('fonts') or {}
+    if not isinstance(fonts, dict) or not isinstance(fonts.get('extra') or {}, dict):
+        raise WidgetError('missing_font', '위젯에 사용할 글꼴을 확인하지 못했습니다. 글꼴을 다시 선택해 주세요.')
+    requested_fonts = [fonts.get('disp'), fonts.get('body')] + list((fonts.get('extra') or {}).values())
+    requested_fonts = [spec for spec in requested_fonts if spec is not None]
+    if requested_fonts:
+        try:
+            available = api.list_fonts()
+            available = json.loads(available) if isinstance(available, str) else available
+            valid_fonts = {(os.path.normcase(os.path.abspath(item['path'])), int(item.get('num') or 0)) for item in available if isinstance(item, dict) and item.get('path')}
+            for spec in requested_fonts:
+                if not isinstance(spec, dict) or not isinstance(spec.get('path'), str) or not spec['path']:
+                    raise ValueError('Invalid font specification')
+                identity = (os.path.normcase(os.path.abspath(spec['path'])), int(spec.get('num') or 0))
+                if identity not in valid_fonts or not os.path.isfile(spec['path']):
+                    raise ValueError('Font unavailable')
+        except Exception:
+            raise WidgetError('missing_font', '선택한 글꼴 파일을 찾지 못했습니다. 앱의 글꼴 목록에서 다시 선택한 뒤 위젯을 만들어 주세요.') from None
+    files = {}
+    def add(data, folder, extension):
+        if not data or len(data) > MAX_FILE:
+            raise WidgetError('file_limit', '위젯 파일 하나가 50MB를 넘습니다. 사진 용량을 줄여 다시 시도해 주세요.')
+        name = folder + '/' + hashlib.sha256(data).hexdigest() + '.' + extension
+        files[name] = data
+        if len(files) + 1 > MAX_FILES or sum(map(len, files.values())) > MAX_TOTAL:
+            raise WidgetError('bundle_limit', '위젯은 최대 80MB, 250개 파일까지 만들 수 있습니다. 페이지나 사진 용량을 줄여 주세요.')
+        return name
+    progress('prepare', 0, len(ids), '사진과 글꼴을 준비하고 있습니다.')
+    prepared = api._prep_images(ids)
+    if set(prepared) != set(ids):
+        raise WidgetError('missing_photos', '일부 사진 원본을 준비하지 못했습니다. 사진을 다시 넣은 뒤 만들어 주세요.')
+    replacements, photo_cache = {}, {}
+    for index, pid in enumerate(ids):
+        name, data = prepared.pop(pid)
+        extension, data = _widget_photo(api, pid, name, data, photo_cache)
+        replacements[pid] = add(data, 'media', extension)
+        progress('prepare', index + 1, len(ids), '사진과 글꼴을 준비하고 있습니다.')
+    text = re.sub(r'pbk://([A-Za-z0-9_-]+)', lambda match: replacements.get(match.group(1), match.group(0)), text)
+    if 'pbk://' in text:
+        raise WidgetError('missing_photos', '화보집에 연결되지 않은 사진이 있습니다. 다시 불러온 뒤 시도해 주세요.')
+    font_css = api._font_css(fonts, str(payload.get('all_text') or ''))
+    text = text.replace('/*PBK_FONT_CSS*/', font_css, 1)
+    inline_cache = {}
+    def inline(match):
+        kind = _MIMES.get(match.group(1).lower())
+        if kind is None:
+            raise WidgetError('unsupported_asset', '지원하지 않는 그림 또는 글꼴 형식이 포함되어 있습니다.')
+        try:
+            data = base64.b64decode(match.group(2), validate=True)
+        except ValueError:
+            raise WidgetError('invalid_asset', '그림 또는 글꼴 데이터를 읽지 못했습니다.') from None
+        if kind[0] == 'media' and kind[1] in ('png', 'jpg'):
+            key = hashlib.sha256(data).digest()
+            if key not in inline_cache:
+                inline_cache[key] = _smaller_widget_webp(io.BytesIO(data), data)
+            smaller = inline_cache[key]
+            if smaller:
+                data, kind = smaller, ('media', 'webp')
+        if kind[0] == 'fonts':
+            extension = {b'wOF2': 'woff2', b'wOFF': 'woff', b'\x00\x01\x00\x00': 'ttf', b'true': 'ttf', b'OTTO': 'otf'}.get(data[:4])
+            if not extension:
+                raise WidgetError('unsupported_font', '위젯에 포함할 글꼴 형식을 확인하지 못했습니다.')
+            kind = ('fonts', extension)
+        return add(data, *kind)
+    text = _DATA.sub(inline, text)
+    for name in files:
+        if name.startswith('fonts/'):
+            format_name = {'ttf': 'truetype', 'otf': 'opentype', 'woff': 'woff', 'woff2': 'woff2'}[name.rsplit('.', 1)[1]]
+            pattern = r'(url\([\'\"]?' + re.escape(name) + r'[\'\"]?\)\s*format\([\'\"])[^\'\"]+([\'\"]\))'
+            text = re.sub(pattern, lambda match: match.group(1) + format_name + match.group(2), text)
+    def svg_url(match):
+        value = next(part for part in match.groups() if part is not None).strip()
+        if not re.match(r'^data:image/svg\+xml(?:;utf8|;charset=utf-8)?,', value, re.I):
+            return match.group(0)
+        data = urllib.parse.unquote_to_bytes(value.split(',', 1)[1])
+        decoded = data.decode('utf-8')
+        if re.search(r'<\s*(?:script|foreignObject|iframe|object|embed)|<!DOCTYPE|<!ENTITY|\bon[a-z]+\s*=|(?:href|src)\s*=\s*[\'"]\s*(?!#)', decoded, re.I):
+            raise WidgetError('unsupported_asset', '외부 내용을 불러오는 SVG 그림은 위젯에 사용할 수 없습니다.')
+        return 'url("' + add(data, 'media', 'svg') + '")'
+    text = _CSS_URL.sub(svg_url, text)
+    if 'name="photobook-widget"' not in text and "name='photobook-widget'" not in text:
+        text = re.sub(r'(<head\b[^>]*>)', r'\1<meta name="photobook-widget" content="static-v1">', text, count=1, flags=re.I)
+    # Leave room for navigation inside small embedded frames; regular HTML/EXE output is unchanged.
+    widget_css = '<style id="pbk-widget-layout">html,body{background:transparent}#stage{bottom:64px}#book{height:min(calc(100svh - 80px),58vw)}.ctrl{white-space:nowrap;max-width:calc(100% - 16px);box-sizing:border-box}.count{white-space:nowrap;flex-shrink:0}.navbtn,.playbtn{flex-shrink:0}.firsttip{max-width:calc(100% - 24px);white-space:normal;text-align:center;box-sizing:border-box}@media(max-width:239px){.ctrl{width:114px;max-width:calc(100% - 4px);padding:4px;gap:2px;flex-wrap:wrap;justify-content:center;bottom:4px}.count{flex-basis:100%;order:2;margin:0;text-align:center}.firsttip{display:none}}</style>'
+    text = re.sub(r'</head\s*>', lambda match: widget_css + match.group(0), text, count=1, flags=re.I)
+    parser = _References()
+    parser.feed(text)
+    references = list(parser.refs)
+    for css in parser.styles:
+        references.extend(next(part for part in match.groups() if part is not None) for match in _CSS_URL.finditer(css))
+    for ref in references:
+        ref = ref.strip()
+        if ref.startswith('#'):
+            continue
+        if ref not in files:
+            raise WidgetError('unresolved_asset', '화보집 그림 또는 글꼴을 모두 포함하지 못했습니다. 다시 내보내 주세요.')
+    data = text.encode('utf-8')
+    if len(data) > MAX_HTML:
+        raise WidgetError('html_limit', '화보집 페이지 정보가 2MB를 넘습니다. 페이지 수를 줄여 주세요.')
+    files['index.html'] = data
+    if len(files) > MAX_FILES or sum(map(len, files.values())) > MAX_TOTAL:
+        raise WidgetError('bundle_limit', '위젯은 최대 80MB, 250개 파일까지 만들 수 있습니다. 페이지나 사진 용량을 줄여 주세요.')
+    return files
+
+
+class WidgetClient:
+    def __init__(self, api, context):
+        self.api, self.context = api, context
+        self.device = _machine(context)
+        base = os.environ.get('APPDATA') or os.environ.get('LOCALAPPDATA')
+        self.cache_dir = Path(base) / 'PhotobookKit' if base else Path(context['exe_dir']()) / 'PhotobookKit'
+        self.token, self.token_until, self.credential = '', 0, None
+        self.identity, self.operation_identity = None, None
+        self.auth_epoch = uuid.uuid4().hex
+        self.lock = threading.Lock()
+        self.progress = {'busy': False, 'stage': 'idle', 'current': 0, 'total': 0, 'message': ''}
+
+    def _progress(self, stage, current=0, total=0, message=''):
+        self.progress = {'busy': stage not in ('idle', 'done', 'error'), 'stage': stage, 'current': current, 'total': total, 'message': message}
+
+    def _credentials(self):
+        # Only the main application's cache may supply a license. Never activate
+        # a device or fall back to the obsolete separate widget credential file.
+        code, identity = None, None
+        try:
+            device = _machine(self.context)
+            if callable(self.context.get('_lic_cache_read')):
+                data = self.context['_lic_cache_read']()
+            else:
+                data = json.loads((self.cache_dir / 'license.json').read_text('utf-8'))
+            last_ok = data.get('last_ok') if isinstance(data, dict) else None
+            # Match the shipped app's 14-day cache grace, including its strict
+            # timestamp validation. Online exchange still verifies the license.
+            valid_time = type(last_ok) is int and last_ok > 0 and 0 <= int(time.time()) - last_ok < 14 * 86400
+            if isinstance(data, dict) and data.get('device') == device and data.get('ok') is True and valid_time:
+                code = _license_code(data.get('key'))
+                identity = (code, device)
+        except Exception:
+            pass
+        if identity != self.identity:
+            self.token, self.token_until = '', 0
+            self.identity, self.auth_epoch = identity, uuid.uuid4().hex
+        self.credential = code
+        if identity:
+            self.device = identity[1]
+        return code
+
+    def _assert_identity(self):
+        self._credentials()
+        if self.operation_identity is not None and self.identity != self.operation_identity:
+            raise WidgetError('auth_changed', '화보키트 인증이 변경되었습니다. 위젯 목록을 다시 불러온 뒤 시도해 주세요.')
+
+    def _exchange(self, code):
+        identity = self.identity
+        response = _http('POST', HOST + '/api/v1/auth/exchange', json.dumps({'licenseCode': code, 'deviceId': self.device, 'productId': PRODUCT}).encode('utf-8'), {'Content-Type': 'application/json', 'X-MotionKit-Client': CLIENT})
+        self._credentials()
+        if identity is None or self.identity != identity:
+            raise WidgetError('auth_changed', '화보키트 인증이 변경되었습니다. 위젯 목록을 다시 불러온 뒤 시도해 주세요.')
+        token = response.get('accessToken') or response.get('token')
+        if not isinstance(token, str) or not 10 <= len(token) <= 8192:
+            raise HTTPFailure(502, 'invalid_token')
+        self.token = token
+        lifetime = response.get('expiresIn', 600)
+        try:
+            lifetime = max(10, min(600, float(lifetime)))
+        except (ValueError, TypeError):
+            lifetime = 600
+        self.token_until = time.monotonic() + lifetime - 5
+
+    def _auth(self):
+        code = self._credentials()
+        self._assert_identity()
+        if not code:
+            raise WidgetError('license_required', '화보키트 앱의 인증 상태를 확인해 주세요. 앱에서 인증을 완료하면 위젯도 자동으로 연결됩니다.', True)
+        if self.token and time.monotonic() < self.token_until:
+            return
+        try:
+            self._exchange(code)
+        except HTTPFailure as failure:
+            if failure.status in (401, 403):
+                self.token, self.token_until = '', 0
+                if failure.code in _LICENSE_REJECTION_CODES:
+                    raise WidgetError('license_rejected', '화보키트 앱의 인증 상태를 확인하지 못했습니다. 앱에서 인증 상태를 확인한 뒤 다시 시도해 주세요.', True) from None
+                # An edge/proxy rejection is not a verdict about the app license.
+                raise WidgetError('server_unavailable', '위젯 서버에 연결할 수 없습니다. 잠시 뒤 다시 시도해 주세요.') from None
+            if failure.status == 400 and failure.code in ('INVALID_PRODUCT', 'INVALID_PHOTOBOOK_CLIENT', 'INVALID_LICENSE_REQUEST'):
+                raise WidgetError('server_unavailable', '위젯 서버의 연결 준비가 완료되지 않았습니다. 잠시 뒤 다시 시도해 주세요.') from None
+            raise
+
+    def _request(self, method, path, data=None, raw=False, headers=None):
+        self._auth()
+        body = data if raw else (json.dumps(data).encode('utf-8') if data is not None else None)
+        def call():
+            self._assert_identity()
+            values = {'Authorization': 'Bearer ' + self.token, 'X-MotionKit-Client': CLIENT}
+            if body is not None:
+                values['Content-Type'] = 'application/octet-stream' if raw else 'application/json'
+            values.update(headers or {})
+            return _http(method, HOST + '/api/v1/' + path, body, values)
+        try:
+            return call()
+        except HTTPFailure as failure:
+            if failure.status != 401:
+                raise
+            self.token, self.token_until = '', 0
+            self._auth()
+            return call()
+
+    def _widget(self, data, name=None, width=1000, height=700):
+        item = data.get('widget') if isinstance(data.get('widget'), dict) else data
+        widget_name = str(item.get('name') or item.get('widgetName') or name or '')
+        public_id = str(item.get('publicId') or '')
+        revision = str(item.get('revision') or '')
+        if not _NAME.fullmatch(widget_name) or not _PUBLIC.fullmatch(public_id) or not _REV.fullmatch(revision):
+            raise HTTPFailure(502, 'invalid_widget_response')
+        public_url = HOST + '/w/' + public_id + '/?v=' + revision
+        embed_url = HOST + '/content/' + public_id + '/' + revision + '/index.html'
+        width = max(120, min(4096, int(width)))
+        height = max(120, min(4096, int(height)))
+        ratio = ('%.6f' % (height / width * 100)).rstrip('0').rstrip('.')
+        code = ('<div data-core="soop-custom-html-block-wrapper" data-paragraph-type="CUSTOM_HTML_BLOCK" data-soop-custom-block="true" style="display:block;width:100%;max-width:' + str(width) + 'px;">'
+                + '<div data-soop-custom-block="true" style="position:relative;display:block;width:100%;height:0;padding-top:' + ratio + '%;overflow:hidden;">'
+                + '<iframe src="' + embed_url + '" width="' + str(width) + '" height="' + str(height) + '" frameborder="0" scrolling="no" allow="autoplay; fullscreen" allowfullscreen tabindex="0" style="position:absolute;inset:0;display:block;width:100%;height:100%;border:0;pointer-events:auto;touch-action:manipulation;"></iframe></div></div>')
+        return {'widgetName': widget_name, 'publicId': public_id, 'revision': revision, 'publicUrl': public_url, 'embedUrl': embed_url, 'embedCode': code, 'width': width, 'height': height, 'updatedAt': item.get('updatedAt'), 'sizeBytes': item.get('sizeBytes'), 'fileCount': item.get('fileCount')}
+
+    def _list(self):
+        widgets, offset = [], 0
+        for unused in range(10):
+            response = self._request('GET', 'widgets?limit=100&offset=' + str(offset))
+            rows = response.get('widgets')
+            if not isinstance(rows, list):
+                raise HTTPFailure(502, 'invalid_widget_list')
+            widgets.extend(self._widget(row) for row in rows if isinstance(row, dict) and row.get('revision') is not None)
+            next_offset = response.get('nextOffset')
+            if next_offset is None:
+                return {'ok': True, 'widgets': widgets}
+            if not isinstance(next_offset, int) or next_offset <= offset:
+                raise HTTPFailure(502, 'invalid_widget_pagination')
+            offset = next_offset
+        raise WidgetError('widget_list_limit', '위젯 목록이 너무 많습니다. 관리 페이지에서 정리한 뒤 다시 시도해 주세요.')
+
+    def _publish(self, request):
+        name = str(request.get('widgetName') or '')
+        base = request.get('baseRevision')
+        if not _NAME.fullmatch(name):
+            raise WidgetError('invalid_name', '위젯 이름은 영문·숫자·-·_로 1~50자까지 입력해 주세요.')
+        if not isinstance(base, str) or (base and not _REV.fullmatch(base)):
+            raise WidgetError('invalid_revision', '기존 위젯 목록을 다시 불러온 뒤 선택해 주세요.')
+        width, height = request.get('width', 1000), request.get('height', 700)
+        if isinstance(width, bool) or isinstance(height, bool) or not isinstance(width, int) or not isinstance(height, int) or not 120 <= width <= 4096 or not 120 <= height <= 4096:
+            raise WidgetError('invalid_size', '위젯 가로·세로 크기를 확인해 주세요.')
+        self._auth()
+        files = prepare_bundle(self.api, request, self._progress)
+        entries = [{'path': path, 'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()} for path, raw in sorted(files.items())]
+        self._progress('upload', 0, len(entries), '위젯 파일을 업로드하고 있습니다.')
+        created = self._request('POST', 'uploads', {'widgetName': name, 'files': entries, 'baseRevision': base or None})
+        upload_id = str(created.get('uploadId') or '')
+        expected_revision = str(created.get('revision') or '')
+        expected_public_id = str(created.get('publicId') or '')
+        if not _UPLOAD.fullmatch(upload_id) or not _REV.fullmatch(expected_revision) or not _PUBLIC.fullmatch(expected_public_id):
+            raise HTTPFailure(502, 'invalid_upload_response')
+        attempted_commit = False
+        definite_commit_rejection = False
+        try:
+            for index, entry in enumerate(entries):
+                self._request('PUT', 'uploads/' + upload_id + '/files/' + str(index), files[entry['path']], True, {'Content-Type': _UPLOAD_MIMES[entry['path'].rsplit('.', 1)[1]], 'X-Content-SHA256': entry['sha256'], 'X-MotionKit-File-Path': urllib.parse.quote(entry['path'], safe='')})
+                self._progress('upload', index + 1, len(entries), '위젯 파일을 업로드하고 있습니다.')
+            self._progress('publish', len(entries), len(entries), '업로드한 내용을 검증하고 위젯 코드를 만들고 있습니다.')
+            attempted_commit = True
+            try:
+                result = self._request('POST', 'uploads/' + upload_id + '/commit', {'baseRevision': base or None})
+            except (HTTPFailure, WidgetError) as original:
+                if isinstance(original, HTTPFailure) and original.status < 500:
+                    definite_commit_rejection = True
+                    raise
+                try:
+                    checked = self._request('GET', 'uploads/' + upload_id)
+                    if str(checked.get('state') or checked.get('status') or '').lower() not in ('committed', 'complete', 'published'):
+                        raise original
+                    result = checked.get('result') if isinstance(checked.get('result'), dict) else checked
+                except Exception:
+                    raise WidgetError('publish_uncertain', '서버 응답이 끊겼습니다. 기존 위젯 목록을 새로고침해 게시 여부를 먼저 확인해 주세요.') from None
+            published = self._widget(result, name, width, height)
+            if published['revision'] != expected_revision or published['publicId'] != expected_public_id or published['widgetName'] != name:
+                raise WidgetError('publish_uncertain', '게시 결과가 요청한 위젯과 다릅니다. 위젯 목록을 새로고침해 확인해 주세요.')
+            published.update({'ok': True, 'files': len(entries), 'bytes': sum(entry['size'] for entry in entries)})
+            return published
+        except Exception:
+            if not attempted_commit or definite_commit_rejection:
+                try:
+                    self._request('DELETE', 'uploads/' + upload_id)
+                except Exception:
+                    pass
+            raise
+
+    def handle(self, request):
+        action = request.get('widget_action')
+        if action == 'progress':
+            return dict(self.progress, ok=True)
+        # Compatibility with older clients: connect now means automatic status;
+        # any caller-supplied licenseCode is intentionally ignored.
+        if action == 'connect':
+            action = 'status'
+        if action not in ('status', 'connect', 'list', 'publish'):
+            return {'ok': False, 'code': 'invalid_action', 'err': '지원하지 않는 위젯 요청입니다.'}
+        if not self.lock.acquire(blocking=False):
+            return {'ok': False, 'code': 'busy', 'err': '위젯 작업이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.'}
+        try:
+            present = bool(self._credentials())
+            expected = request.get('expectedAuthEpoch')
+            if action in ('list', 'publish') and expected is not None and expected != self.auth_epoch:
+                raise WidgetError('auth_changed', '화보키트 인증이 변경되었습니다. 위젯 목록을 다시 불러온 뒤 시도해 주세요.')
+            if action == 'status' and not present:
+                return {'ok': True, 'available': True, 'authenticated': False, 'appAuthenticated': False, 'needsLicense': True, 'needsAppLicense': True,
+                        'reason': 'authRequired', 'authEpoch': self.auth_epoch,
+                        'message': '화보키트 앱의 인증 상태를 확인해 주세요. 앱에서 인증을 완료하면 위젯도 자동으로 연결됩니다.'}
+            self.operation_identity = self.identity
+            self._progress('connect' if action != 'publish' else 'prepare', message='위젯 서버에 연결하고 있습니다.')
+            if action == 'status':
+                self._auth()
+                result = {'ok': True, 'available': True, 'authenticated': True, 'needsLicense': False, 'needsAppLicense': False, 'reason': '', 'message': ''}
+            else:
+                result = self._list() if action == 'list' else self._publish(request)
+            self._assert_identity()
+            result['authEpoch'] = self.auth_epoch
+            result['appAuthenticated'] = bool(self.identity)
+            self._progress('done', message='완료했습니다.')
+            return result
+        except WidgetError as error:
+            self._progress('error', message=error.message)
+            reason = {'license_required': 'authRequired', 'license_rejected': 'authRejected', 'auth_changed': 'authChanged', 'network_error': 'network', 'server_unavailable': 'serverUnavailable'}.get(error.code, '')
+            return {'ok': False, 'code': error.code, 'err': error.message, 'needsLicense': error.needs_license,
+                    'needsAppLicense': error.needs_license, 'reason': reason, 'authEpoch': self.auth_epoch,
+                    'appAuthenticated': bool(self.identity) and reason not in ('authRequired', 'authRejected', 'authChanged')}
+        except HTTPFailure as error:
+            messages = {400: '위젯 데이터를 확인하지 못했습니다. 다시 내보내 주세요.', 401: '화보키트 앱의 인증 상태를 확인한 뒤 다시 시도해 주세요.', 403: '위젯을 사용할 수 있는 인증인지 확인해 주세요.', 404: '위젯을 찾지 못했습니다. 목록을 새로고침해 주세요.', 409: '다른 곳에서 수정된 위젯입니다. 목록을 새로고침한 뒤 다시 선택해 주세요.', 413: '위젯 용량 또는 파일 개수 한도를 넘었습니다.', 422: '위젯의 그림·글꼴 또는 페이지 형식을 확인하지 못했습니다.', 429: '요청이 많습니다. 잠시 뒤 다시 시도해 주세요.', 503: '위젯 서버의 연결 준비가 완료되지 않았거나 일시적으로 연결할 수 없습니다. 잠시 뒤 다시 시도해 주세요.', 507: '위젯 저장 공간이 부족합니다. 사용하지 않는 위젯을 정리해 주세요.'}
+            message = messages.get(error.status, '위젯 서버에서 요청을 처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.')
+            authorization_failure = error.status in (401, 403)
+            rejected = authorization_failure and error.code in _LICENSE_REJECTION_CODES
+            if authorization_failure:
+                self.token, self.token_until = '', 0
+            if authorization_failure and not rejected:
+                message = '위젯 서버에 연결할 수 없습니다. 잠시 뒤 다시 시도해 주세요.'
+            self._progress('error', message=message)
+            return {'ok': False, 'code': 'service_' + str(error.status), 'err': message, 'needsLicense': rejected, 'needsAppLicense': rejected,
+                    'reason': 'authRejected' if rejected else 'serverUnavailable' if authorization_failure or error.status >= 500 else '',
+                    'authEpoch': self.auth_epoch, 'appAuthenticated': bool(self.identity) and not rejected}
+        except Exception:
+            self._progress('error', message='위젯을 만들지 못했습니다.')
+            return {'ok': False, 'code': 'widget_error', 'err': '위젯을 만들지 못했습니다. 사진과 글꼴을 확인한 뒤 다시 시도해 주세요.', 'authEpoch': self.auth_epoch}
+        finally:
+            self.operation_identity = None
+            self.lock.release()
